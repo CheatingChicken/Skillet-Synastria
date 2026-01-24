@@ -49,12 +49,12 @@ Powerful filtering options for crafted equipment:
 
 1. Download or clone this repository
 2. Copy the `Skillet - Synastria` folder from the `src` directory to your WoW `Interface\AddOns\` folder
-3. Restart WoW or type `/reload` in-game
+3. Restart WoW
 
 ## Credits
 
 - **Original Skillet** - Created by Likelyhood and maintained by the Skillet development team
-- **ScootsCraft** - Profession selector and filter concepts adapted from ScootsCraft
+- **ScootsCraft** - Profession selector and filter concepts adapted from ScootsCraft by [SynScoots](https://github.com/SynScoots/ScootsCraft)
 - **Synastria Integration** - Custom server feature integration
 
 ## License
