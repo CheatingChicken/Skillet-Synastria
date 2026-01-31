@@ -75,25 +75,24 @@ end
 
 -- Figures out how to display the craftable counts for a recipe.
 -- Returns: num, num_with_bank, num_with_resbank, num_with_alts
--- Synastria: Added resource bank count
+-- Synastria: Default to resource bank count as primary display
 local function get_craftable_counts(recipe)
     local factor = 1
     if Skillet.db.profile.show_craft_counts then
         factor = recipe.nummade or 1
     end
 
-    local num      = math.floor(recipe.numcraftable / factor)
+    -- numcraftable now includes resource bank (bags+resbank)
+    -- numcraftablewbank includes bags+bank+resbank
+    local num = math.floor(recipe.numcraftable / factor)
     local numwbank = math.floor(recipe.numcraftablewbank / factor)
-    local numwresbank = nil
-    if recipe.numcraftablewresbank then
-        numwresbank = math.floor(recipe.numcraftablewresbank / factor)
-    end
+    
     local numwalts = nil
     if recipe.numcraftablewalts then
         numwalts = math.floor(recipe.numcraftablewalts / factor)
     end
 
-    return num, numwbank, numwresbank, numwalts
+    return num, numwbank, numwalts
 end
 
 function Skillet:CreateTradeSkillWindow()
@@ -148,9 +147,6 @@ function Skillet:CreateTradeSkillWindow()
 
     local label = getglobal("SkilletFilterLabel");
     label:SetText(L["Filter"]);
-    
-    local label = getglobal("SkilletSortLabel");
-    label:SetText(L["Sorting"]);
 
     SkilletCreateAllButton:SetText(L["Create All"])
     SkilletQueueAllButton:SetText(L["Queue All"])
@@ -161,6 +157,32 @@ function Skillet:CreateTradeSkillWindow()
     SkilletShowOptionsButton:SetText(L["Options"])
     SkilletRescanButton:SetText(L["Rescan"])
     SkilletRecipeNotesButton:SetText(L["Notes"])
+    
+    -- Synastria: Create Debug button below Notes button
+    if not SkilletDebugButton then
+        local debugButton = CreateFrame("Button", "SkilletDebugButton", SkilletFrame, "UIPanelButtonTemplate")
+        debugButton:SetWidth(60)
+        debugButton:SetHeight(22)
+        debugButton:SetPoint("TOP", SkilletRecipeNotesButton, "BOTTOM", 0, -5)
+        debugButton:SetText("Debug")
+        debugButton:SetNormalFontObject("GameFontNormalSmall")
+        debugButton:SetScript("OnClick", function()
+            Skillet:DebugSelectedRecipe()
+        end)
+    end
+    
+    -- Synastria: Create Resource Bank Test button below Debug button
+    if not SkilletRBankTestButton then
+        local rbankButton = CreateFrame("Button", "SkilletRBankTestButton", SkilletFrame, "UIPanelButtonTemplate")
+        rbankButton:SetWidth(60)
+        rbankButton:SetHeight(22)
+        rbankButton:SetPoint("TOP", SkilletDebugButton, "BOTTOM", 0, -5)
+        rbankButton:SetText("RBank")
+        rbankButton:SetNormalFontObject("GameFontNormalSmall")
+        rbankButton:SetScript("OnClick", function()
+            Skillet:TestResourceBank()
+        end)
+    end
     SkilletRecipeNotesButton:SetNormalFontObject("GameFontNormalSmall")
     SkilletRecipeNotesFrameLabel:SetText(L["Notes"])
     SkilletShoppingListButton:SetText(L["Shopping List"])
@@ -217,6 +239,13 @@ function Skillet:CreateTradeSkillWindow()
     -- Synastria: Create profession selector buttons (from ScootsCraft)
     self:CreateProfessionSelector(frame)
     
+    -- Synastria: Create equipment slot filter (must be before attunability filters)
+    if self.CreateSlotFilter then
+        self:CreateSlotFilter(frame)
+    else
+        self:Print("Warning: CreateSlotFilter function not found. SlotFilter.lua may not be loaded.")
+    end
+    
     -- Synastria: Create attunability and forge level filters (from ScootsCraft)
     self:CreateAttunabilityFilters(frame)
 
@@ -240,7 +269,7 @@ function Skillet:CreateTradeSkillWindow()
                SKILLET_REAGENT_MIN_WIDTH + -- reagent window (fixed width)
                10                          -- padding about window borders
 
-    self:EnableResize(frame, minwidth, 480, Skillet.UpdateTradeSkillWindow)
+    self:EnableResize(frame, minwidth, 680, Skillet.UpdateTradeSkillWindow)
 
     -- Set up the sorting methods here
     self:InitializeSorting()
@@ -257,13 +286,55 @@ function Skillet:ResetTradeSkillWindow()
     -- Reset all the added buttons so that they look OK.
     local buttons = SkilletFrame.added_buttons
     if buttons then
-        local last_button = SkilletRescanButton
+        -- Synastria: Changed from SkilletRescanButton to SkilletScanAllButton
+        -- since ScanAll is now the leftmost button in the top row
+        local last_button = SkilletScanAllButton
         for i=1, #buttons, 1 do
             local button = buttons[i]
             if button then
                 button:ClearAllPoints()
                 button:SetParent("SkilletFrame")
                 button:SetPoint("TOPRIGHT", last_button, "TOPLEFT", -5, 0)
+                
+                -- Synastria: Reskin external buttons to match our style
+                button:SetWidth(100)
+                button:SetHeight(22)
+                
+                -- Apply UIPanelButtonTemplate styling
+                local buttonName = button:GetName()
+                if buttonName then
+                    -- Set the button textures to match UIPanelButtonTemplate
+                    _G[buttonName.."Left"]:Hide()
+                    _G[buttonName.."Middle"]:Hide()
+                    _G[buttonName.."Right"]:Hide()
+                end
+                
+                -- Apply our texture style
+                button:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
+                button:SetPushedTexture("Interface\\Buttons\\UI-Panel-Button-Down")
+                button:SetHighlightTexture("Interface\\Buttons\\UI-Panel-Button-Highlight")
+                button:SetDisabledTexture("Interface\\Buttons\\UI-Panel-Button-Disabled")
+                
+                -- Set proper texture coordinates
+                local normalTexture = button:GetNormalTexture()
+                if normalTexture then
+                    normalTexture:SetTexCoord(0, 0.625, 0, 0.6875)
+                end
+                local pushedTexture = button:GetPushedTexture()
+                if pushedTexture then
+                    pushedTexture:SetTexCoord(0, 0.625, 0, 0.6875)
+                end
+                local highlightTexture = button:GetHighlightTexture()
+                if highlightTexture then
+                    highlightTexture:SetTexCoord(0, 0.625, 0, 0.6875)
+                    highlightTexture:SetBlendMode("ADD")
+                end
+                
+                -- Set font
+                button:SetNormalFontObject("GameFontNormal")
+                button:SetHighlightFontObject("GameFontHighlight")
+                button:SetDisabledFontObject("GameFontDisable")
+                
                 last_button = button
             end
         end
@@ -398,6 +469,11 @@ local function is_hidden_skill(parent, skill_index)
     
     -- Synastria: Check forge level filter
     if not parent:MatchesForgeFilter(skill_index) then
+        return true
+    end
+    
+    -- Synastria: Check equipment slot filter
+    if parent.MatchesSlotFilter and not parent:MatchesSlotFilter(skill_index) then
         return true
     end
 
@@ -541,6 +617,7 @@ function Skillet:internal_UpdateTradeSkillWindow()
     -- for this player. This is used to ajust the craftable item
     -- count
     local queued_reagents = self:GetReagentsForQueuedRecipes(UnitName("player"));
+    
     -- Tell the Stitch library about the queued items so it knows how
     -- to adjust its item counts.
     self.stitch:SetReservedReagentsList(queued_reagents);
@@ -696,18 +773,14 @@ function Skillet:internal_UpdateTradeSkillWindow()
                     end
 
                     text = text .. s.name
-                    -- Synastria: Include resource bank in craftable counts
-                    local num, numwbank, numwresbank, numwalts = get_craftable_counts(s)
-                    if num > 0 or numwbank > 0 or (numwresbank and numwresbank > 0) or (numwalts and numwalts > 0) then
+                    -- Synastria: num already includes resource bank
+                    local num, numwbank, numwalts = get_craftable_counts(s)
+                    if num > 0 or numwbank > 0 or (numwalts and numwalts > 0) then
                         local count = "[" .. num
                         -- only show bank and alt counts if it has been enabled
                         -- through the options.
                         if self.db.profile.show_bank_alt_counts then
                             count = count .. "/" .. numwbank
-                            -- Synastria: Show resource bank count in green if different from bank
-                            if numwresbank and numwresbank > numwbank then
-                                count = count .. "|cff90EE90/" .. numwresbank .. "|r"
-                            end
                             if numwalts then
                                 -- only show this if there is a mod installed that
                                 -- allows Stitch to collect the information.
@@ -831,33 +904,42 @@ function Skillet:DisplayTradeskillTooltip(id)
         return
     end
 
-    -- Hyper link for the recipe name, allows a full view of the item without
-    -- having to mouse over the item in the detail pane.
-    SkilletTradeskillTooltip:SetHyperlink(s.link)
+    -- Synastria: Show appropriate tooltip based on link type
+    local itemLink = s.link
+    if itemLink then
+        -- Only convert to simple item link if it's actually an item (not enchant/spell)
+        if string.match(itemLink, "^item:") then
+            -- It's an item link - extract the item ID to remove craft data
+            local itemID = self:GetItemIDFromLink(itemLink)
+            if itemID then
+                -- Construct a clean item link without craft data
+                local cleanLink = "item:" .. itemID
+                SkilletTradeskillTooltip:SetHyperlink(cleanLink)
+            else
+                -- Fallback to original link if extraction fails
+                SkilletTradeskillTooltip:SetHyperlink(itemLink)
+            end
+        else
+            -- It's an enchant/spell/other link - use it directly
+            SkilletTradeskillTooltip:SetHyperlink(itemLink)
+        end
+    end
 
-    -- Synastria: Include resource bank in counts
-    local num, numwbank, numwresbank, numwalts = get_craftable_counts(s)
+    -- Synastria: num already includes resource bank (bags+resbank)
+    local num, numwbank, numwalts = get_craftable_counts(s)
 
-    -- how many can be created with the reagents in the inventory
+    -- how many can be created with the reagents in your inventory (includes resource bank)
     if num > 0 then
         local text = "\n" .. num .. " " .. L["can be created from reagents in your inventory"];
         SkilletTradeskillTooltip:AddLine(text, 1, 1, 1, 0); -- (text, r, g, b, wrap)
     end
-    -- how many can be created with the reagent in your inv + bank
+    -- how many can be created with the reagent in your inv + bank + resource bank
     if self.db.profile.show_bank_alt_counts and numwbank > 0 and numwbank ~= num then
         local text = numwbank .. " " .. L["can be created from reagents in your inventory and bank"];
         if num == 0 then
             text = "\n" .. text;
         end
         SkilletTradeskillTooltip:AddLine(text, 1, 1, 1, 0); -- (text, r, g, b, wrap)
-    end
-    -- Synastria: how many can be created with resource bank included
-    if self.db.profile.show_bank_alt_counts and numwresbank and numwresbank > 0 and numwresbank ~= numwbank then
-        local text = numwresbank .. " " .. L["can be created including Resource Bank"];
-        if num == 0 and numwbank == 0 then
-            text = "\n" .. text;
-        end
-        SkilletTradeskillTooltip:AddLine(text, 0.56, 0.93, 0.56, 0); -- (text, r, g, b, wrap) - light green
     end
     -- how many can be crafted with reagents on *all* alts, including this one.
     if self.db.profile.show_bank_alt_counts and numwalts and numwalts > 0 and numwalts ~= num then
@@ -878,11 +960,10 @@ function Skillet:DisplayTradeskillTooltip(id)
         end
 
         local text = "  " .. reagent.needed .. " x " .. reagent.name;
+        -- Synastria: Updated for new architecture where num always includes resource bank
+        -- Display format: (bags+resbank / bank)
         local reagent_counts = GRAY_FONT_COLOR_CODE .. " (" .. reagent.num .. " / " .. (reagent.numwbank - reagent.num)
-        -- Synastria: Add resource bank count
-        if reagent.numwresbank then
-            reagent_counts = reagent_counts .. " / " .. math.max(0, reagent.numwresbank - reagent.numwbank)
-        end
+        
         if reagent.numwalts then
             -- numwalts includes this character, we want only alts
             reagent_counts = reagent_counts .. " / " .. math.max(0, reagent.numwalts - reagent.numwbank)
@@ -1035,14 +1116,14 @@ function Skillet:UpdateDetailsWindow(skill_index)
         local reagent = s[i];
 
         if reagent then
-            -- Synastria: Use combined count (inventory + resource bank)
-            local num = reagent.numwresbank or reagent.num
+            -- Synastria: reagent.num now always includes resource bank
+            local num = reagent.num
             
             local count_text = string.format("%d/%d", num, reagent.needed)
             
-            -- Check if we can craft with resource bank included
+            -- Check if we have enough reagents
             if ( num < reagent.needed ) then
-                -- grey it out if we don't have it even with resource bank.
+                -- grey it out if we don't have enough
                 count:SetText(GRAY_FONT_COLOR_CODE .. count_text .. FONT_COLOR_CODE_CLOSE)
                 text:SetText(GRAY_FONT_COLOR_CODE .. reagent.name .. FONT_COLOR_CODE_CLOSE)
             else
@@ -1164,7 +1245,13 @@ function Skillet:UpdateQueueWindow()
             local s = self.stitch:GetQueueItemInfo(itemIndex)
 
             if s then
-                queueName:SetText(s.name)
+                -- Synastria: Add profession indicator to queue item display
+                local professionText = ""
+                if queue[itemIndex]["profession"] then
+                    professionText = "|cFF00FF00[" .. queue[itemIndex]["profession"] .. "]|r "
+                end
+                
+                queueName:SetText(professionText .. s.name)
                 queueCount:SetText(queue[itemIndex]["numcasts"]) --ick, can't find an API call for this.
             end
 
@@ -1207,9 +1294,17 @@ function Skillet:SkillButton_OnClick(button)
             -- skill clicked
             self:SetSelectedSkill(id, true);
 
+            -- Synastria: Ctrl+Click to queue item directly
+            if IsControlKeyDown() then
+                local recipe = self.stitch:GetItemDataByIndex(self.currentTrade, id)
+                if recipe then
+                    -- Queue 1 of this item
+                    self:QueueItems(1)
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Added to queue: " .. (recipe.name or "Unknown") .. "|r")
+                end
             -- if it was shift-left clicked *and* there is a chat edit
             -- window open, insert the recipe link.
-            if IsShiftKeyDown() and (ChatFrameEditBox:IsVisible() or WIM_EditBoxInFocus ~= nil) then
+            elseif IsShiftKeyDown() and (ChatFrameEditBox:IsVisible() or WIM_EditBoxInFocus ~= nil) then
                 ChatEdit_InsertLink(self:GetTradeSkillRecipeLink(id));
             end
         end
@@ -1286,8 +1381,11 @@ function Skillet:StartQueue_OnClick(button)
         self.stitch:CancelCast() -- next update will reset the text
         button:Disable()
     else
-        button:SetText(L["Pause"])
-        self:ProcessQueue()
+        -- Synastria: Show the unified crafting prompt dialog
+        -- It will handle both profession switching and crafting
+        if self.stitch.queue and self.stitch.queue[1] then
+            self:ShowStartCraftingPrompt()
+        end
     end
 end
 

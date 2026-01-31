@@ -22,6 +22,30 @@ local AceEvent = AceLibrary("AceEvent-2.0")
 
 local QUEUE_DEBUG = false
 
+-- Synastria: Helper function to find which profession a recipe belongs to
+local function find_profession_for_recipe(item)
+    if not item or not item.index then
+        return nil
+    end
+    
+    -- Search through all professions by checking each one
+    -- We'll use GetItemDataByIndex to verify the recipe exists in that profession
+    local knownProfessions = {
+        "Alchemy", "Blacksmithing", "Enchanting", "Engineering", 
+        "Jewelcrafting", "Leatherworking", "Tailoring", "Cooking", 
+        "First Aid", "Smelting", "Mining"
+    }
+    
+    for _, profession in ipairs(knownProfessions) do
+        local recipeData = Skillet.stitch:GetItemDataByIndex(profession, item.index)
+        if recipeData and recipeData.link == item.link then
+            return profession
+        end
+    end
+    
+    return nil
+end
+
 -- Adds the recipe to the queue of recipes to be processed. If the recipe
 -- is already in the queue, then the count of items to be created is increased,
 -- otherwise the recipe is added it the end
@@ -29,8 +53,13 @@ local QUEUE_DEBUG = false
 -- If there are item needs to make the recipe that are not currently in your
 -- inventory, but you can craft them, then they are added to the queue before the
 -- requested recipe.
-local function add_items_to_queue(skillIndex, recipe, count)
-    assert(tonumber(skillIndex) and recipe and tonumber(count),"Usage: add_items_to_queue(skillIndex, recipe, count)")
+local function add_items_to_queue(skillIndex, recipe, count, profession)
+    assert(tonumber(skillIndex) and recipe and tonumber(count),"Usage: add_items_to_queue(skillIndex, recipe, count, profession)")
+
+    -- Synastria: Ensure queue is loaded before adding items
+    if not Skillet.stitch.queue then
+        Skillet:LoadQueue(Skillet.db.server.queues, profession or Skillet.currentTrade)
+    end
 
     -- if we need mats that are not in the inventory, but are craftable, add
     -- the mats to the queue first
@@ -59,32 +88,55 @@ local function add_items_to_queue(skillIndex, recipe, count)
                 end
             end
 
-            if QUEUE_DEBUG then
-                Skillet:Print("  have " .. have .. "x" .. reagent.link .. ", need " .. needed)
-            end
-
             if have < needed then
-				-- see if we can make this! only scan current trade though.  (adding items to OTHER trades might also be interesting, but needs a bit of rewriting /mikk)
-                local item = Skillet.stitch:GetItemDataByName(reagent.name, Skillet.currentTrade)
+                -- Synastria: Check if we can satisfy this need through conversion
+                -- BUT: Don't queue conversions for ingredients when we're currently 
+                -- queueing a conversion itself (prevents infinite loops)
+                local isQueuingConversion = recipe.isVirtualConversion
+                if not isQueuingConversion then
+                    local conversionQueued = Skillet:QueueConversionsIfNeeded(reagent, needed)
+                end
+                
+                -- Synastria: Search all professions (with profession priority in GetItemDataByName)
+                -- This ensures smelting recipes are preferred over transmutes
+                local item = Skillet.stitch:GetItemDataByName(reagent.name, nil)
 
-                if item and item.link == reagent.link then
-                    -- we can craft this
-                    -- the extra check for an exact name match is because the
-                    -- Stitch search will fall back on a wild card across all
-                    -- skills if an exact match is not found
+                if item then
+                    -- Compare item IDs instead of full links (links may have different color codes)
+                    local itemId = tonumber((item.link or ""):match("item:(%d+)"))
+                    local reagentId = tonumber((reagent.link or ""):match("item:(%d+)"))
+                    
+                    if itemId and reagentId and itemId == reagentId then
+                        -- Verify item has the necessary structure
+                        if not item.index then
+                            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[QUEUE ERROR] Item missing index: " .. reagent.name .. "|r")
+                        elseif type(item) ~= "table" then
+                            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[QUEUE ERROR] Item is not a table: " .. reagent.name .. "|r")
+                        else
+                            -- we can craft this
+                            -- the extra check for an exact name match is because the
+                            -- Stitch search will fall back on a wild card across all
+                            -- skills if an exact match is not found
 
-                    -- Try and guard against infinite recursion here. This will
-                    -- not prevent the error, but will help detect it and generate
-                    -- more meaningful error
-                    assert(recipe.link ~= item.link, "Recursive loop detected Recipe item: " ..
-                                                     recipe.link .. " has reagent " .. reagent.link)
-                    add_items_to_queue(item.index, item, (needed - have))
+                            -- Try and guard against infinite recursion here. This will
+                            -- not prevent the error, but will help detect it and generate
+                            -- more meaningful error
+                            local recipeId = tonumber((recipe.link or ""):match("item:(%d+)"))
+                            assert(recipeId ~= itemId, "Recursive loop detected: Recipe item ID " ..
+                                                             recipeId .. " has reagent with same ID " .. itemId)
+                            
+                            -- Synastria: Find which profession this recipe belongs to
+                            local itemProfession = find_profession_for_recipe(item)
+                            
+                            add_items_to_queue(item.index, item, (needed - have), itemProfession)
+                        end
+                    end
                 end
             end
         end
     end
 
-	Skillet.stitch:AddToQueue(skillIndex, count)
+	Skillet.stitch:AddToQueue(skillIndex, count, profession)
 
     -- XXX: This is a bit hacky, try to think of something smarter
     Skillet:SaveQueue(Skillet.db.server.queues, Skillet.currentTrade)
@@ -95,8 +147,13 @@ function Skillet:SaveQueue(db, tradeskill)
     if not db[UnitName("player")] then
         db[UnitName("player")] = {}
     end
+    
+    -- Synastria: Use unified queue across all professions
+    if not db[UnitName("player")]["AllProfessions"] then
+        db[UnitName("player")]["AllProfessions"] = {}
+    end
 
-    db[UnitName("player")][tradeskill] = self.stitch.queue
+    db[UnitName("player")]["AllProfessions"] = self.stitch.queue
 end
 
 -- Loads the queue for the provided tradeskill name from the database
@@ -104,11 +161,15 @@ function Skillet:LoadQueue(db, tradeskill)
     if not db[UnitName("player")] then
         db[UnitName("player")] = {}
     end
-    if not db[UnitName("player")][tradeskill] then
-        db[UnitName("player")][tradeskill] = {}
+    
+    -- Synastria: Use unified queue across all professions
+    -- Always use the same table reference from the database
+    if not db[UnitName("player")]["AllProfessions"] then
+        db[UnitName("player")]["AllProfessions"] = {}
     end
 
-    self.stitch.queue = db[UnitName("player")][tradeskill]
+    -- Always point to the database table to maintain a single unified queue
+    self.stitch.queue = db[UnitName("player")]["AllProfessions"]
 
     AceEvent:TriggerEvent("SkilletStitch_Queue_Add")
 end
@@ -281,18 +342,26 @@ function Skillet:GetReagentsForQueuedRecipes(playername)
     local list = {}
 
     for player,playerqueues in pairs(self:GetAllQueues()) do
-        -- check the queues for all professions
+        -- check the unified queue
         if not playername or playername == player then
-            for _,queue in pairs(playerqueues) do
-                -- this is what we need
-                if queue and #queue > 0 then
-                    for i=1,#queue,1 do
-                        local recipe = self.stitch:DecodeRecipe(queue[i].recipe)
-                        local count = queue[i]["numcasts"]
-
-                        for i=1, 8, 1 do
+            -- Synastria: Use unified "AllProfessions" queue
+            local queue = playerqueues["AllProfessions"]
+            if queue and #queue > 0 then
+                for i=1,#queue,1 do
+                    local queueItem = queue[i]
+                    local profession = queueItem.profession
+                    local index = queueItem.index
+                    local count = queueItem.numcasts
+                    
+                    -- Synastria: Fetch the actual recipe data from the profession cache
+                    -- The queue only stores {profession, index, numcasts, recipe={name,link}}
+                    -- We need the full recipe with reagents
+                    local recipe = self.stitch:GetItemDataByIndex(profession, index)
+                    
+                    if recipe then
+                        for j=1, 8, 1 do
                             -- no recipes have more than 8 reagents
-                            local reagent = recipe[i]
+                            local reagent = recipe[j]
                             if reagent then
                                 local needed = (count * reagent.needed)
                                 if needed > 0 then
@@ -300,8 +369,8 @@ function Skillet:GetReagentsForQueuedRecipes(playername)
                                 end
                             end
                         end
-
                     end
+
                 end
             end
         end

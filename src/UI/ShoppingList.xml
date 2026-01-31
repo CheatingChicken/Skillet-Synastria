@@ -216,6 +216,41 @@
         </Button>
 
         <!--
+        #
+        # Synastria: Button to export shopping list to ResourceTracker
+        #
+        -->
+        <Button name="SkilletShoppingListExportRTButton" inherits="UIPanelButtonTemplate" text="Export to RT" parent="SkilletShoppingList">
+            <Size>
+                <AbsDimension x="90" y="22"/>
+            </Size>
+            <Anchors>
+                <Anchor point="BOTTOMLEFT" relativeTo="SkilletShoppingListRetrieveButton" relativePoint="BOTTOMRIGHT">
+                    <Offset>
+                        <AbsDimension x="5" y="0"/>
+                    </Offset>
+                </Anchor>
+            </Anchors>
+            <Scripts>
+                <OnClick>
+                    Skillet:ExportToResourceTrackerCommand()
+                </OnClick>
+                <OnEnter>
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText("Export Shopping List to ResourceTracker")
+                    GameTooltip:AddLine("Sends all items from your shopping list to ResourceTracker for tracking.", 1, 1, 1, true)
+                    if not Skillet:IsResourceTrackerAvailable() then
+                        GameTooltip:AddLine("|cFFFF0000ResourceTracker not installed!|r", 1, 0.3, 0.3)
+                    end
+                    GameTooltip:Show()
+                </OnEnter>
+                <OnLeave>
+                    GameTooltip:Hide()
+                </OnLeave>
+            </Scripts>
+        </Button>
+
+        <!--
             #
             # Check boxes for various recipe filtering options.
             #

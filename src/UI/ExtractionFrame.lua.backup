@@ -1,0 +1,627 @@
+--[[
+Skillet: Extraction Frame
+Shows prospecting and milling data organized by target items
+]]--
+
+local L = AceLibrary("AceLocale-2.2"):new("Skillet")
+
+-- Stolen from the Waterfall Ace2 addon.
+local ControlBackdrop  = {
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left = 3, right = 3, top = 3, bottom = 3 }
+}
+
+local FrameBackdrop = {
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left = 3, right = 3, top = 30, bottom = 3 }
+}
+
+-- Current tab: "MILLING" or "PROSPECTING"
+local currentTab = "MILLING"
+
+-- Track if frame has been initialized
+local frameInitialized = false
+
+-- Bulk mode flag (default true)
+local bulkMode = true
+
+-- ========================================
+-- BUILD REVERSE MAPS
+-- ========================================
+
+-- Build map of pigment -> herbs
+local function buildMillingMap()
+	local pigmentToHerbs = {}
+	
+	for herbId, data in pairs(Skillet.MILLING_DATA) do
+		-- Add to common pigments map
+		if data.commonPigments then
+			for _, pigmentId in ipairs(data.commonPigments) do
+				pigmentToHerbs[pigmentId] = pigmentToHerbs[pigmentId] or {
+					type = "common",
+					herbs = {}
+				}
+				table.insert(pigmentToHerbs[pigmentId].herbs, herbId)
+				
+				-- Track rare pigments that come from same herb
+				if data.rarePigments and #data.rarePigments > 0 then
+					pigmentToHerbs[pigmentId].rarePigments = data.rarePigments
+				end
+			end
+		end
+		
+		-- Add to rare pigments map
+		if data.rarePigments then
+			for _, pigmentId in ipairs(data.rarePigments) do
+				pigmentToHerbs[pigmentId] = pigmentToHerbs[pigmentId] or {
+					type = "rare",
+					herbs = {}
+				}
+				table.insert(pigmentToHerbs[pigmentId].herbs, herbId)
+			end
+		end
+	end
+	
+	return pigmentToHerbs
+end
+
+-- Build map of gem -> ores
+local function buildProspectingMap()
+	local gemToOres = {}
+	
+	for oreId, data in pairs(Skillet.PROSPECTING_DATA) do
+		-- Add to common gems map
+		if data.commonGems then
+			for _, gemId in ipairs(data.commonGems) do
+				gemToOres[gemId] = gemToOres[gemId] or {
+					type = "common",
+					ores = {}
+				}
+				table.insert(gemToOres[gemId].ores, oreId)
+			end
+		end
+		
+		-- Add to uncommon gems map
+		if data.uncommonGems then
+			for _, gemId in ipairs(data.uncommonGems) do
+				gemToOres[gemId] = gemToOres[gemId] or {
+					type = "uncommon",
+					ores = {}
+				}
+				table.insert(gemToOres[gemId].ores, oreId)
+			end
+		end
+	end
+	
+	return gemToOres
+end
+
+-- ========================================
+-- UI CREATION
+-- ========================================
+
+local function createExtractionFrame(self)
+	local frame = SkilletExtractionFrame
+	if not frame then
+		DEFAULT_CHAT_FRAME:AddMessage("ERROR: SkilletExtractionFrame not found!")
+		return nil
+	end
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Initializing Extraction Frame...")
+	
+	frame:SetBackdrop(FrameBackdrop)
+	frame:SetBackdropColor(0.1, 0.1, 0.1)
+	
+	-- Title bar
+	local r,g,b = 0, 0.7, 0
+	local titlebar = frame:CreateTexture(nil,"BACKGROUND")
+	local titlebar2 = frame:CreateTexture(nil,"BACKGROUND")
+	
+	titlebar:SetPoint("TOPLEFT",frame,"TOPLEFT",3,-4)
+	titlebar:SetPoint("TOPRIGHT",frame,"TOPRIGHT",-3,-4)
+	titlebar:SetHeight(13)
+	
+	titlebar2:SetPoint("TOPLEFT",titlebar,"BOTTOMLEFT",0,0)
+	titlebar2:SetPoint("TOPRIGHT",titlebar,"BOTTOMRIGHT",0,0)
+	titlebar2:SetHeight(13)
+	
+	titlebar:SetGradientAlpha("VERTICAL",r*0.6,g*0.6,b*0.6,1,r,g,b,1)
+	titlebar:SetTexture(r,g,b,1)
+	titlebar2:SetGradientAlpha("VERTICAL",r*0.9,g*0.9,b*0.9,1,r*0.6,g*0.6,b*0.6,1)
+	titlebar2:SetTexture(r,g,b,1)
+	
+	local title = CreateFrame("Frame",nil,frame)
+	title:SetPoint("TOPLEFT",titlebar,"TOPLEFT",0,0)
+	title:SetPoint("BOTTOMRIGHT",titlebar2,"BOTTOMRIGHT",0,0)
+	
+	local titletext = title:CreateFontString("SkilletExtractionTitleText", "OVERLAY", "GameFontNormalLarge")
+	titletext:SetPoint("TOPLEFT",title,"TOPLEFT",0,0)
+	titletext:SetPoint("TOPRIGHT",title,"TOPRIGHT",0,0)
+	titletext:SetHeight(26)
+	titletext:SetShadowColor(0,0,0)
+	titletext:SetShadowOffset(1,-1)
+	titletext:SetTextColor(1,1,1)
+	titletext:SetText("Skillet: Extraction")
+	
+	-- Scroll frame backdrop
+	local backdrop = SkilletExtractionListParent
+	if backdrop then
+		DEFAULT_CHAT_FRAME:AddMessage("Setting backdrop on SkilletExtractionListParent...")
+		backdrop:SetBackdrop(ControlBackdrop)
+		backdrop:SetBackdropBorderColor(0.6, 0.6, 0.6)
+		backdrop:SetBackdropColor(0.05, 0.05, 0.05)
+	else
+		DEFAULT_CHAT_FRAME:AddMessage("ERROR: SkilletExtractionListParent not found!")
+	end
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Extraction Frame initialized.")
+	
+	-- Initialize bulk mode checkbox to checked state
+	if SkilletExtractionBulkModeCheckbox then
+		DEFAULT_CHAT_FRAME:AddMessage("=== BULK MODE CHECKBOX DEBUG ===")
+		DEFAULT_CHAT_FRAME:AddMessage("Frame name: SkilletExtractionBulkModeCheckbox")
+		DEFAULT_CHAT_FRAME:AddMessage("Frame exists: true")
+		DEFAULT_CHAT_FRAME:AddMessage("IsVisible: " .. tostring(SkilletExtractionBulkModeCheckbox:IsVisible()))
+		DEFAULT_CHAT_FRAME:AddMessage("IsShown: " .. tostring(SkilletExtractionBulkModeCheckbox:IsShown()))
+		
+		local width, height = SkilletExtractionBulkModeCheckbox:GetSize()
+		DEFAULT_CHAT_FRAME:AddMessage("Size: " .. tostring(width) .. " x " .. tostring(height))
+		
+		local numPoints = SkilletExtractionBulkModeCheckbox:GetNumPoints()
+		DEFAULT_CHAT_FRAME:AddMessage("Number of anchor points: " .. tostring(numPoints))
+		
+		for i = 1, numPoints do
+			local point, relativeTo, relativePoint, xOfs, yOfs = SkilletExtractionBulkModeCheckbox:GetPoint(i)
+			local relativeToName = relativeTo and relativeTo:GetName() or "nil"
+			DEFAULT_CHAT_FRAME:AddMessage("  Anchor " .. i .. ": point=" .. tostring(point) .. ", relativeTo=" .. relativeToName .. ", relativePoint=" .. tostring(relativePoint) .. ", offset=(" .. tostring(xOfs) .. ", " .. tostring(yOfs) .. ")")
+		end
+		
+		local label = getglobal("SkilletExtractionBulkModeCheckboxText")
+		if label then
+			DEFAULT_CHAT_FRAME:AddMessage("Label exists: true")
+			DEFAULT_CHAT_FRAME:AddMessage("Label text: '" .. tostring(label:GetText()) .. "'")
+			DEFAULT_CHAT_FRAME:AddMessage("Label visible: " .. tostring(label:IsVisible()))
+			local labelWidth, labelHeight = label:GetSize()
+			DEFAULT_CHAT_FRAME:AddMessage("Label size: " .. tostring(labelWidth) .. " x " .. tostring(labelHeight))
+		else
+			DEFAULT_CHAT_FRAME:AddMessage("ERROR: Label frame 'SkilletExtractionBulkModeCheckboxText' not found!")
+		end
+		
+		SkilletExtractionBulkModeCheckbox:SetChecked(true)
+		DEFAULT_CHAT_FRAME:AddMessage("Checkbox set to checked")
+		DEFAULT_CHAT_FRAME:AddMessage("=================================")
+	else
+		DEFAULT_CHAT_FRAME:AddMessage("ERROR: SkilletExtractionBulkModeCheckbox not found!")
+	end
+	
+	return frame
+end
+
+-- ========================================
+-- SCROLL LIST POPULATION
+-- ========================================
+
+local ITEM_HEIGHT = 150 -- Height for each result group (68px result + 68px sources + 14px padding)
+local scrollData = {}
+
+local function createMillingScrollData()
+	local data = {}
+	local pigmentMap = buildMillingMap()
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Building milling data...")
+	
+	-- Sort pigments by ID for consistent display
+	local pigmentIds = {}
+	for pigmentId in pairs(pigmentMap) do
+		table.insert(pigmentIds, pigmentId)
+	end
+	table.sort(pigmentIds)
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Found " .. #pigmentIds .. " pigments")
+	
+	for _, pigmentId in ipairs(pigmentIds) do
+		local info = pigmentMap[pigmentId]
+		local pigmentName = GetItemInfo(pigmentId) or ("Pigment "..pigmentId)
+		
+		DEFAULT_CHAT_FRAME:AddMessage("  Pigment: " .. pigmentName .. " with " .. #info.herbs .. " herbs")
+		
+		-- Create group entry with result and sources
+		table.insert(data, {
+			type = "group",
+			result = {
+				itemId = pigmentId,
+				name = pigmentName,
+				rarity = info.type,
+				rarePigments = info.rarePigments
+			},
+			sources = info.herbs
+		})
+	end
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Created " .. #data .. " milling groups")
+	return data
+end
+
+local function createProspectingScrollData()
+	local data = {}
+	local gemMap = buildProspectingMap()
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Building prospecting data...")
+	
+	-- Sort gems by ID for consistent display
+	local gemIds = {}
+	for gemId in pairs(gemMap) do
+		table.insert(gemIds, gemId)
+	end
+	table.sort(gemIds)
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Found " .. #gemIds .. " gems")
+	
+	for _, gemId in ipairs(gemIds) do
+		local info = gemMap[gemId]
+		local gemName = GetItemInfo(gemId) or ("Gem "..gemId)
+		
+		DEFAULT_CHAT_FRAME:AddMessage("  Gem: " .. gemName .. " with " .. #info.ores .. " ores")
+		
+		-- Create group entry with result and sources
+		table.insert(data, {
+			type = "group",
+			result = {
+				itemId = gemId,
+				name = gemName,
+				rarity = info.type
+			},
+			sources = info.ores
+		})
+	end
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Created " .. #data .. " prospecting groups")
+	return data
+end
+
+function Skillet:UpdateExtractionList()
+	if currentTab == "MILLING" then
+		scrollData = createMillingScrollData()
+	else
+		scrollData = createProspectingScrollData()
+	end
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Extraction list updated: " .. #scrollData .. " items for " .. currentTab)
+	
+	-- Update scroll frame
+	local scrollFrame = SkilletExtractionListScrollFrame
+	if scrollFrame then
+		FauxScrollFrame_Update(scrollFrame, #scrollData, 30, ITEM_HEIGHT)
+		self:UpdateExtractionListDisplay()
+	end
+end
+
+function Skillet:UpdateExtractionListDisplay()
+	local scrollFrame = SkilletExtractionListScrollFrame
+	local offset = FauxScrollFrame_GetOffset(scrollFrame)
+	
+	DEFAULT_CHAT_FRAME:AddMessage("Display update: " .. #scrollData .. " groups, offset=" .. offset)
+	
+	-- Hide all boxes first
+	for i = 1, 30 do
+		local button = getglobal("SkilletExtractionListButton"..i)
+		if button then button:Hide() end
+	end
+	
+	local boxIndex = 1
+	local currentY = -5 -- Start with small negative offset
+	
+	for groupIndex = 1, #scrollData do
+		if groupIndex > offset and boxIndex <= 30 then
+			local group = scrollData[groupIndex]
+			
+			if not group or not group.result then
+				DEFAULT_CHAT_FRAME:AddMessage("ERROR: Invalid group at index " .. groupIndex)
+				break
+			end
+			
+			-- Debug output for first two groups
+			if groupIndex <= 2 then
+				DEFAULT_CHAT_FRAME:AddMessage("========== GROUP " .. groupIndex .. " DEBUG ==========")
+				if groupIndex <= 2 then
+					DEFAULT_CHAT_FRAME:AddMessage("--- Result Box (Button" .. boxIndex .. ") ---")
+				end
+				
+				resultBox:Show()
+				resultBox:ClearAllPoints()
+				resultBox:SetPoint("TOPLEFT", SkilletExtractionListScrollFrame, "TOPLEFT", 5, currentY)
+				
+				if groupIndex <= 2 then
+					DEFAULT_CHAT_FRAME:AddMessage("Frame: SkilletExtractionListButton" .. boxIndex)
+					DEFAULT_CHAT_FRAME:AddMessage("Anchor: TOPLEFT -> SkilletExtractionListScrollFrame TOPLEFT at offset (5, " .. currentY .. ")")
+					DEFAULT_CHAT_FRAME:AddMessage("IsShown: " .. tostring(resultBox:IsShown()))
+					DEFAULT_CHAT_FRAME:AddMessage("IsVisible: " .. tostring(resultBox:IsVisible()))
+					local width, height = resultBox:GetSize()
+					DEFAULT_CHAT_FRAME:AddMessage("Size: " .. tostring(width) .. " x " .. tostring(height))
+				end
+				
+				local icon = getglobal("SkilletExtractionListButton"..boxIndex.."Icon")
+				local label = getglobal("SkilletExtractionListButton"..boxIndex.."Label")
+				local countOwned = getglobal("SkilletExtractionListButton"..boxIndex.."CountOwned")
+				local countNeeded = getglobal("SkilletExtractionListButton"..boxIndex.."CountNeeded")
+				
+				if icon then
+					local itemTexture = GetItemIcon(group.result.itemId)
+					if itemTexture then 
+						icon:SetTexture(itemTexture) 
+						if groupIndex <= 2 then
+							DEFAULT_CHAT_FRAME:AddMessage("Icon texture set: " .. tostring(itemTexture))
+						end
+					end
+				end
+				
+				if label then 
+					label:SetText("Result") 
+					if groupIndex <= 2 then
+						DEFAULT_CHAT_FRAME:AddMessage("Label set to: 'Result'")
+					end
+				end
+				
+				local owned = GetItemCount(group.result.itemId, false)
+				if countOwned then
+					countOwned:SetText(owned > 0 and owned or "")
+					countOwned:SetTextColor(0.25, 0.75, 0.25)
+					if groupIndex <= 2 then
+						DEFAULT_CHAT_FRAME:AddMessage("Count owned: " .. tostring(owned))
+					if groupIndex <= 2 then
+						DEFAULT_CHAT_FRAME:AddMessage("--- Secondary Result Box (Button" .. boxIndex .. ") ---")
+					end
+					
+					rareBox:Show()
+					rareBox:ClearAllPoints()
+					local prevBox = getglobal("SkilletExtractionListButton"..(boxIndex-1))
+					rareBox:SetPoint("LEFT", prevBox, "RIGHT", 10, 0)
+					
+					if groupIndex <= 2 then
+						local prevBoxName = prevBox and prevBox:GetName() or "nil"
+						DEFAULT_CHAT_FRAME:AddMessage("Frame: SkilletExtractionListButton" .. boxIndex)
+						DEFAULT_CHAT_FRAME:AddMessage("Anchor: LEFT -> " .. prevBoxName .. " RIGHT at offset (10, 0)")
+						DEFAULT_CHAT_FRAME:AddMessage("IsShown: " .. tostring(rareBox:IsShown()))
+						DEFAULT_CHAT_FRAME:AddMessage("IsVisible: " .. tostring(rareBox:IsVisible()))
+						local width, height = rareBox:GetSize()
+						DEFAULT_CHAT_FRAME:AddMessage("Size: " .. tostring(width) .. " x " .. tostring(height))
+					end
+					
+					local icon = getglobal("SkilletExtractionListButton"..boxIndex.."Icon")
+					local label = getglobal("SkilletExtractionListButton"..boxIndex.."Label")
+					local countOwned = getglobal("SkilletExtractionListButton"..boxIndex.."CountOwned")
+					
+					local rareId = group.result.rarePigments[1]
+					if icon then
+						local itemTexture = GetItemIcon(rareId)
+						if itemTexture then 
+							icon:SetTexture(itemTexture) 
+							if groupIndex <= 2 then
+								DEFAULT_CHAT_FRAME:AddMessage("Secondary icon texture: " .. tostring(itemTexture))
+							end
+						end
+					eif groupIndex <= 2 then
+							DEFAULT_CHAT_FRAME:AddMessage("--- Source " .. sourceIdx .. " Box (Button" .. boxIndex .. ") ---")
+						end
+						
+						sourceBox:Show()
+						sourceBox:ClearAllPoints()
+						
+						if sourceIdx == 1 then
+							-- First source below result
+							local resultBoxIdx = boxIndex - (group.result.rarePigments and #group.result.rarePigments > 0 and 2 or 1)
+							local refBox = getglobal("SkilletExtractionListButton"..resultBoxIdx)
+							sourceBox:SetPoint("TOPLEFT", refBox, "BOTTOMLEFT", 0, -5)
+							
+							if groupIndex <= 2 then
+								local refBoxName = refBox and refBox:GetName() or "nil"
+								DEFAULT_CHAT_FRAME:AddMessage("Frame: SkilletExtractionListButton" .. boxIndex)
+								DEFAULT_CHAT_FRAME:AddMessage("Anchor: TOPLEFT -> " .. refBoxName .. " BOTTOMLEFT at offset (0, -5)")
+							end
+						else
+							-- Subsequent sources in row
+							local prevBox = getglobal("SkilletExtractionListButton"..(boxIndex-1))
+							sourceBox:SetPoint("LEFT", prevBox, "RIGHT", 10, 0)
+							
+							if groupIndex <= 2 then
+								local prevBoxName = prevBox and prevBox:GetName() or "nil"
+								DEFAULT_CHAT_FRAME:AddMessage("Frame: SkilletExtractionListButton" .. boxIndex)
+								DEFAULT_CHAT_FRAME:AddMessage("Anchor: LEFT -> " .. prevBoxName .. " RIGHT at offset (10, 0)")
+							end
+						end
+						
+						if groupIndex <= 2 then
+							DEFAULT_CHAT_FRAME:AddMessage("IsShown: " .. tostring(sourceBox:IsShown()))
+							DEFAULT_CHAT_FRAME:AddMessage("IsVisible: " .. tostring(sourceBox:IsVisible()))
+							local width, height = sourceBox:GetSize()
+							DEFAULT_CHAT_FRAME:AddMessage("Size: " .. tostring(width) .. " x " .. tostring(height))
+						end
+						
+						local icon = getglobal("SkilletExtractionListButton"..boxIndex.."Icon")
+						local label = getglobal("SkilletExtractionListButton"..boxIndex.."Label")
+						local countOwned = getglobal("SkilletExtractionListButton"..boxIndex.."CountOwned")
+						local countNeeded = getglobal("SkilletExtractionListButton"..boxIndex.."CountNeeded")
+						
+						if icon then
+							local itemTexture = GetItemIcon(sourceId)
+							if itemTexture then 
+								icon:SetTexture(itemTexture) 
+								if groupIndex <= 2 then
+									DEFAULT_CHAT_FRAME:AddMessage("Source icon texture: " .. tostring(itemTexture))
+								end
+							end
+						end
+					
+						if label then 
+							label:SetText("Source") 
+							if groupIndex <= 2 then
+								DEFAULT_CHAT_FRAME:AddMessage("Label set to: 'Source'")
+							end
+						end
+					
+						local owned = GetItemCount(sourceId, false)
+						if countOwned then
+							countOwned:SetText(owned > 0 and owned or "")
+							countOwned:SetTextColor(0.25, 0.75, 0.25)
+							if groupIndex <= 2 then
+								DEFAULT_CHAT_FRAME:AddMessage("Source count owned: " .. tostring(owned))
+							end
+						end
+					
+						if countNeeded then
+							countNeeded:SetText("")
+						end
+					
+						sourceBox.itemId = sourceId
+						boxIndex = boxIndex + 1
+					else
+						if groupIndex <= 2 then
+							DEFAULT_CHAT_FRAME:AddMessage("ERROR: Source box button" .. boxIndex .. " not found!")
+						end
+					end
+				end
+			end
+			
+			if groupIndex <= 2 then
+				DEFAULT_CHAT_FRAME:AddMessage("======================================")cal countOwned = getglobal("SkilletExtractionListButton"..boxIndex.."CountOwned")
+					
+					local rareId = group.result.rarePigments[1]
+					if icon then
+						local itemTexture = GetItemIcon(rareId)
+						if itemTexture then icon:SetTexture(itemTexture) end
+					end
+					
+					if label then label:SetText("Secondary") end
+					
+					local owned = GetItemCount(rareId, false)
+					if countOwned then
+						countOwned:SetText(owned)
+						countOwned:SetTextColor(0.12, 0.8, 1)
+					end
+					
+					rareBox.itemId = rareId
+					boxIndex = boxIndex + 1
+					end
+			end
+			
+			-- Show source items in row below
+			for sourceIdx, sourceId in ipairs(group.sources) do
+				if boxIndex <= 30 then
+					local sourceBox = getglobal("SkilletExtractionListButton"..boxIndex)
+					if sourceBox then
+						sourceBox:Show()
+						sourceBox:ClearAllPoints()
+						
+						if sourceIdx == 1 then
+							-- First source below result
+							local resultBoxIdx = boxIndex - (group.result.rarePigments and #group.result.rarePigments > 0 and 2 or 1)
+							sourceBox:SetPoint("TOPLEFT", getglobal("SkilletExtractionListButton"..resultBoxIdx), "BOTTOMLEFT", 0, -5)
+						else
+							-- Subsequent sources in row
+							sourceBox:SetPoint("LEFT", getglobal("SkilletExtractionListButton"..(boxIndex-1)), "RIGHT", 10, 0)
+						end
+						
+						local icon = getglobal("SkilletExtractionListButton"..boxIndex.."Icon")
+						local label = getglobal("SkilletExtractionListButton"..boxIndex.."Label")
+						local countOwned = getglobal("SkilletExtractionListButton"..boxIndex.."CountOwned")
+						local countNeeded = getglobal("SkilletExtractionListButton"..boxIndex.."CountNeeded")
+						
+						if icon then
+							local itemTexture = GetItemIcon(sourceId)
+							if itemTexture then icon:SetTexture(itemTexture) end
+					end
+					
+					if label then label:SetText("Source") end
+					
+					local owned = GetItemCount(sourceId, false)
+					if countOwned then
+						countOwned:SetText(owned > 0 and owned or "")
+						countOwned:SetTextColor(0.25, 0.75, 0.25)
+					end
+					
+					if countNeeded then
+						countNeeded:SetText("")
+					end
+					
+					sourceBox.itemId = sourceId
+					boxIndex = boxIndex + 1
+				end
+			end
+		end
+		
+		-- Move Y position down for next group (result height + source height + padding)
+		currentY = currentY - 150
+	end
+end
+
+-- ========================================
+-- TAB SWITCHING
+-- ========================================
+
+function Skillet:SetExtractionTab(tab)
+	currentTab = tab
+	
+	-- Update mode buttons with visual highlighting
+	if tab == "MILLING" then
+		-- Highlight milling button
+		if SkilletExtractionMillingButton then
+			SkilletExtractionMillingButton:LockHighlight()
+		end
+		if SkilletExtractionProspectingButton then
+			SkilletExtractionProspectingButton:UnlockHighlight()
+		end
+	else
+		-- Highlight prospecting button
+		if SkilletExtractionMillingButton then
+			SkilletExtractionMillingButton:UnlockHighlight()
+		end
+		if SkilletExtractionProspectingButton then
+			SkilletExtractionProspectingButton:LockHighlight()
+		end
+	end
+	
+	-- Refresh display
+	self:UpdateExtractionList()
+end
+
+-- ========================================
+-- SHOW/HIDE
+-- ========================================
+
+function Skillet:ShowExtractionFrame()
+	if not frameInitialized then
+		createExtractionFrame(self)
+		frameInitialized = true
+	end
+	
+	SkilletExtractionFrame:Show()
+	self:SetExtractionTab(currentTab)
+end
+
+function Skillet:HideExtractionFrame()
+	if SkilletExtractionFrame then
+		SkilletExtractionFrame:Hide()
+	end
+end
+
+function Skillet:ToggleExtractionFrame()
+	if SkilletExtractionFrame and SkilletExtractionFrame:IsVisible() then
+		self:HideExtractionFrame()
+	else
+		self:ShowExtractionFrame()
+	end
+end
+
+function Skillet:ToggleExtractionBulkMode()
+	bulkMode = not bulkMode
+	SkilletExtractionBulkModeCheckbox:SetChecked(bulkMode)
+	DEFAULT_CHAT_FRAME:AddMessage("Extraction Bulk Mode: " .. (bulkMode and "ON" or "OFF"))
+end
+
+function Skillet:IsExtractionBulkMode()
+	return bulkMode
+end

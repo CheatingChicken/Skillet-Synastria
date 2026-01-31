@@ -1,0 +1,328 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <!-- Icon box template for items -->
+    <Button name="SkilletExtractionIconBoxTemplate" inherits="SecureActionButtonTemplate" virtual="true">
+        <Size>
+            <AbsDimension x="52" y="68"/>
+        </Size>
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture name="$parentBorder" file="Interface\Buttons\UI-EmptySlot">
+                    <Size>
+                        <AbsDimension x="38" y="38"/>
+                    </Size>
+                    <Anchors>
+                        <Anchor point="TOP">
+                            <Offset>
+                                <AbsDimension x="0" y="-3"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                    <Color r="0.5" g="0.5" b="0.5" a="1"/>
+                </Texture>
+                <Texture name="$parentIcon">
+                    <Size>
+                        <AbsDimension x="36" y="36"/>
+                    </Size>
+                    <Anchors>
+                        <Anchor point="TOP">
+                            <Offset>
+                                <AbsDimension x="0" y="-4"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </Texture>
+            </Layer>
+            <Layer level="ARTWORK">
+                <!-- Black background bar sits over icon, under text labels -->
+                <Texture name="$parentCountBackground">
+                    <Size>
+                        <AbsDimension x="36" y="14"/>
+                    </Size>
+                    <Anchors>
+                        <Anchor point="BOTTOM" relativeTo="$parentIcon" relativePoint="BOTTOM">
+                            <Offset>
+                                <AbsDimension x="0" y="0"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                    <Color r="0" g="0" b="0" a="0.8"/>
+                </Texture>
+            </Layer>
+            <Layer level="OVERLAY">
+                <FontString name="$parentLabel" inherits="GameFontNormalSmall" justifyH="CENTER" wordwrap="true">
+                    <Size>
+                        <AbsDimension x="50" y="0"/>
+                    </Size>
+                    <Anchors>
+                        <Anchor point="TOP" relativeTo="$parentIcon" relativePoint="BOTTOM">
+                            <Offset>
+                                <AbsDimension x="0" y="-2"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </FontString>
+                <!-- Swapped: Bags on left (CountOwned), Resource Bank on right (CountBank) -->
+                <FontString name="$parentCountOwned" inherits="GameFontNormalSmall" justifyH="LEFT">
+                    <Anchors>
+                        <Anchor point="BOTTOMLEFT" relativeTo="$parentIcon" relativePoint="BOTTOMLEFT">
+                            <Offset>
+                                <AbsDimension x="2" y="2"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </FontString>
+                <FontString name="$parentCountBank" inherits="GameFontNormalSmall" justifyH="RIGHT">
+                    <Anchors>
+                        <Anchor point="BOTTOMRIGHT" relativeTo="$parentIcon" relativePoint="BOTTOMRIGHT">
+                            <Offset>
+                                <AbsDimension x="-2" y="2"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Scripts>
+            <OnEnter>
+                local itemId = this.itemId
+                if itemId then
+                    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                    GameTooltip:SetHyperlink("item:"..itemId)
+                    GameTooltip:Show()
+                end
+            </OnEnter>
+            <OnLeave>
+                GameTooltip:Hide()
+            </OnLeave>
+        </Scripts>
+    </Button>
+
+    <!-- Main Extraction Frame -->
+    <Frame name="SkilletExtractionFrame" toplevel="true" movable="true" enableMouse="true" hidden="true" parent="UIParent">
+        <Size>
+            <AbsDimension x="450" y="650"/>
+        </Size>
+        <Anchors>
+            <Anchor point="CENTER"/>
+        </Anchors>
+
+        <Frames>
+            <!-- Mode Selector Buttons -->
+            <Button name="SkilletExtractionMillingButton" inherits="UIPanelButtonTemplate">
+                <Size>
+                    <AbsDimension x="120" y="28"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPLEFT">
+                        <Offset>
+                            <AbsDimension x="30" y="-45"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        this:SetText("Milling")
+                    </OnLoad>
+                    <OnClick>
+                        Skillet:SetExtractionTab("MILLING")
+                    </OnClick>
+                    <OnEnter>
+                        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                        GameTooltip:SetText("Milling", 1, 1, 1)
+                        GameTooltip:AddLine("Mill herbs to create pigments for Inscription", 0.8, 0.8, 0.8, 1)
+                        GameTooltip:Show()
+                    </OnEnter>
+                    <OnLeave>
+                        GameTooltip:Hide()
+                    </OnLeave>
+                </Scripts>
+            </Button>
+
+            <Button name="SkilletExtractionProspectingButton" inherits="UIPanelButtonTemplate">
+                <Size>
+                    <AbsDimension x="120" y="28"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="LEFT" relativeTo="SkilletExtractionMillingButton" relativePoint="RIGHT">
+                        <Offset>
+                            <AbsDimension x="10" y="0"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        this:SetText("Prospecting")
+                    </OnLoad>
+                    <OnClick>
+                        Skillet:SetExtractionTab("PROSPECTING")
+                    </OnClick>
+                    <OnEnter>
+                        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                        GameTooltip:SetText("Prospecting", 1, 1, 1)
+                        GameTooltip:AddLine("Prospect ore to find gems for Jewelcrafting", 0.8, 0.8, 0.8, 1)
+                        GameTooltip:Show()
+                    </OnEnter>
+                    <OnLeave>
+                        GameTooltip:Hide()
+                    </OnLeave>
+                </Scripts>
+            </Button>
+
+            <!-- Bulk Mode Toggle -->
+            <CheckButton name="SkilletExtractionBulkModeCheckbox">
+                <Size>
+                    <AbsDimension x="24" y="24"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPLEFT">
+                        <Offset>
+                            <AbsDimension x="30" y="-82"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        Skillet:ToggleExtractionBulkMode()
+                    </OnClick>
+                    <OnEnter>
+                        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                        GameTooltip:SetText("Bulk Mode", 1, 0.82, 0)
+                        GameTooltip:AddLine("Process multiple items at once", 1, 1, 1, true)
+                        GameTooltip:Show()
+                    </OnEnter>
+                    <OnLeave>
+                        GameTooltip:Hide()
+                    </OnLeave>
+                </Scripts>
+                <NormalTexture file="Interface\Buttons\UI-CheckBox-Up"/>
+                <PushedTexture file="Interface\Buttons\UI-CheckBox-Down"/>
+                <HighlightTexture file="Interface\Buttons\UI-CheckBox-Highlight" alphaMode="ADD"/>
+                <CheckedTexture file="Interface\Buttons\UI-CheckBox-Check"/>
+            </CheckButton>
+            <FontString name="SkilletExtractionBulkModeLabel" parent="SkilletExtractionFrame" inherits="GameFontNormal" text="Bulk Mode">
+                <Anchors>
+                    <Anchor point="LEFT" relativeTo="SkilletExtractionBulkModeCheckbox" relativePoint="RIGHT">
+                        <Offset>
+                            <AbsDimension x="4" y="0"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+            </FontString>
+
+            <!-- Scroll frame container -->
+            <Frame name="SkilletExtractionListParent" parent="SkilletExtractionFrame">
+                <Size>
+                    <AbsDimension x="410" y="520"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPLEFT">
+                        <Offset>
+                            <AbsDimension x="20" y="-115"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+
+                <Frames>
+                    <!-- Scroll Frame -->
+                    <ScrollFrame name="SkilletExtractionListScrollFrame" inherits="FauxScrollFrameTemplate" parent="SkilletExtractionListParent">
+                        <Size>
+                            <AbsDimension x="390" y="520"/>
+                        </Size>
+                        <Anchors>
+                            <Anchor point="TOPLEFT">
+                                <Offset>
+                                    <AbsDimension x="4" y="-4"/>
+                                </Offset>
+                            </Anchor>
+                        </Anchors>
+                        <Scripts>
+                            <OnVerticalScroll>
+                                FauxScrollFrame_OnVerticalScroll(self, offset, 150, function() Skillet:UpdateExtractionListDisplay() end)
+                            </OnVerticalScroll>
+                        </Scripts>
+                    </ScrollFrame>
+
+                    <!-- List buttons are SIBLINGS of ScrollFrame, not children -->
+                    <Button name="SkilletExtractionListButton1" inherits="SkilletExtractionIconBoxTemplate">
+                        <Anchors>
+                            <Anchor point="TOPLEFT" relativeTo="SkilletExtractionListScrollFrame" relativePoint="TOPLEFT">
+                                <Offset>
+                                    <AbsDimension x="0" y="0"/>
+                                </Offset>
+                            </Anchor>
+                        </Anchors>
+                    </Button>
+                    <Button name="SkilletExtractionListButton2" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton3" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton4" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton5" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton6" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton7" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton8" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton9" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton10" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton11" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton12" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton13" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton14" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton15" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton16" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton17" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton18" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton19" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton20" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton21" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton22" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton23" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton24" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton25" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton26" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton27" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton28" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton29" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton30" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton31" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton32" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton33" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton34" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton35" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <Button name="SkilletExtractionListButton36" inherits="SkilletExtractionIconBoxTemplate"/>
+                </Frames>
+            </Frame>
+
+            <!-- Close button -->
+            <Button name="SkilletExtractionCloseButton" inherits="UIPanelCloseButton">
+                <Anchors>
+                    <Anchor point="TOPRIGHT">
+                        <Offset>
+                            <AbsDimension x="-2" y="-2"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        Skillet:HideExtractionFrame()
+                    </OnClick>
+                </Scripts>
+            </Button>
+
+        </Frames>
+
+        <Scripts>
+            <OnShow>
+                PlaySound("igBackPackOpen")
+            </OnShow>
+            <OnHide>
+                PlaySound("igBackPackClose")
+            </OnHide>
+            <OnMouseDown>
+                this:StartMoving()
+            </OnMouseDown>
+            <OnMouseUp>
+                this:StopMovingOrSizing()
+            </OnMouseUp>
+        </Scripts>
+    </Frame>
+
+</Ui>

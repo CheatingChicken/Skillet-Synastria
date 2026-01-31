@@ -97,6 +97,15 @@ local function createShoppingListFrame(self)
 
     -- Button to retrieve items needed from the bank
     SkilletShoppingListRetrieveButton:SetText(L["Retrieve"])
+    
+    -- Synastria: Show/hide Export to ResourceTracker button based on availability
+    if SkilletShoppingListExportRTButton then
+        if self.IsResourceTrackerAvailable and self:IsResourceTrackerAvailable() then
+            SkilletShoppingListExportRTButton:Show()
+        else
+            SkilletShoppingListExportRTButton:Hide()
+        end
+    end
 
     -- Ace Window manager library, allows the window position (and size)
     -- to be automatically saved
@@ -117,15 +126,76 @@ local function createShoppingListFrame(self)
 end
 
 
+-- Synastria: Use centralized conversion maps from Skillet.lua
+-- These are built automatically from Skillet.CONVERSION_DEFINITIONS
+local function getConversionMaps()
+    local crystallizedToEternal = {}
+    local eternalToCrystallized = {}
+    
+    if Skillet and Skillet.CONVERSION_DEFINITIONS then
+        for _, conversion in ipairs(Skillet.CONVERSION_DEFINITIONS) do
+            if conversion.type == "combine" then
+                crystallizedToEternal[conversion.source] = conversion.target
+            elseif conversion.type == "split" then
+                eternalToCrystallized[conversion.source] = conversion.target
+            end
+        end
+    end
+    
+    return crystallizedToEternal, eternalToCrystallized
+end
+
+local CRYSTALLIZED_TO_ETERNAL_MAP, ETERNAL_TO_CRYSTALLIZED_MAP = getConversionMaps()
+
 -- Returns a table of items that:
 --   1. are needed to create the queued items for the specified player
 --   2. are not in the inventory
 -- If the player is not provided, then all players are assumed.
 -- @return list of {itemlink, count}. The list will be empty if nothing needs
 --         to be crafted.
--- Synastria: Updated to include resource bank
+-- Synastria: Updated to include resource bank, subtract items being crafted, and account for conversions
 function Skillet:GetShoppingList(playername, includeBank)
     local list = self:GetReagentsForQueuedRecipes(playername)
+    
+    -- Synastria: Build a table of items being crafted in the queue
+    -- Also track Crystallized/Eternal reserved for conversions
+    local queuedCrafts = {}
+    local reservedForConversion = {}
+    for player,playerqueues in pairs(self:GetAllQueues()) do
+        if not playername or playername == player then
+            local queue = playerqueues["AllProfessions"]
+            if queue and #queue > 0 then
+                for i=1,#queue,1 do
+                    local queueItem = queue[i]
+                    local count = queueItem.numcasts
+                    local link = queueItem.recipe.link
+                    local recipe = queueItem.recipe
+                    
+                    -- Extract item ID from link to match properly
+                    if link then
+                        if queuedCrafts[link] then
+                            queuedCrafts[link] = queuedCrafts[link] + count
+                        else
+                            queuedCrafts[link] = count
+                        end
+                    end
+                    
+                    -- Track items reserved for conversions (both directions)
+                    if recipe and recipe.isVirtualConversion then
+                        local sourceId = recipe.sourceId
+                        local sourceNeeded = recipe.sourceNeeded
+                        if sourceId and sourceNeeded then
+                            if reservedForConversion[sourceId] then
+                                reservedForConversion[sourceId] = reservedForConversion[sourceId] + sourceNeeded
+                            else
+                                reservedForConversion[sourceId] = sourceNeeded
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
 
     -- decrease counts by what we have on hand.
     -- work backwards so that removing items form the table
@@ -138,18 +208,83 @@ function Skillet:GetShoppingList(playername, includeBank)
         local have = GetItemCount(link, includeBank) or 0
         
         -- Synastria: Also check resource bank
-        if GetCustomGameData then
-            local itemId = tonumber(string.match(link, "item:(%d+)"))
-            if itemId then
-                have = have + (GetCustomGameData(13, itemId) or 0)
+        local itemId = tonumber(string.match(link, "item:(%d+)"))
+        if GetCustomGameData and itemId then
+            have = have + (GetCustomGameData(13, itemId) or 0)
+        end
+        
+        -- Synastria: Subtract items being crafted in queue
+        if queuedCrafts[link] then
+            have = have + queuedCrafts[link]
+        end
+        
+        -- Synastria: Account for Crystallized <-> Eternal conversions
+        -- But don't count materials already reserved for conversion queue items
+        local canConvert = 0
+        if itemId then
+            -- If we need an Eternal, check if we have Crystallized to convert
+            local crystallizedId = ETERNAL_TO_CRYSTALLIZED_MAP[itemId]
+            if crystallizedId then
+                local crystallizedCount = GetItemCount(crystallizedId, includeBank) or 0
+                if GetCustomGameData then
+                    crystallizedCount = crystallizedCount + (GetCustomGameData(13, crystallizedId) or 0)
+                end
+                -- Subtract any Crystallized already reserved for conversion
+                local reserved = reservedForConversion[crystallizedId] or 0
+                crystallizedCount = math.max(0, crystallizedCount - reserved)
+                -- 10 Crystallized = 1 Eternal
+                canConvert = math.floor(crystallizedCount / 10)
+            end
+            
+            -- If we need Crystallized, check if we have Eternal to break down
+            local eternalId = CRYSTALLIZED_TO_ETERNAL_MAP[itemId]
+            if eternalId then
+                local eternalCount = GetItemCount(eternalId, includeBank) or 0
+                if GetCustomGameData then
+                    eternalCount = eternalCount + (GetCustomGameData(13, eternalId) or 0)
+                end
+                -- Subtract any Eternal already reserved for breakdown (if we track that in the future)
+                -- For now, we only track Crystallized->Eternal conversions in the queue
+                -- 1 Eternal = 10 Crystallized
+                canConvert = eternalCount * 10
             end
         end
         
-        if have >= count then
-            -- have enough of these in the bags already ....
+        local totalAvailable = have + canConvert
+        
+        if totalAvailable >= count then
+            -- have enough between direct and conversion
             table.remove(list, i)
         else
-            list[i]["count"] = list[i]["count"] - have
+            local stillNeed = count - totalAvailable
+            list[i]["count"] = stillNeed
+            
+            -- If we could partially cover with conversion, add the convertible item to the list
+            if canConvert > 0 and itemId then
+                local convertibleId = ETERNAL_TO_CRYSTALLIZED_MAP[itemId] or CRYSTALLIZED_TO_ETERNAL_MAP[itemId]
+                if convertibleId then
+                    local convertibleLink = select(2, GetItemInfo(convertibleId))
+                    local convertibleName = select(1, GetItemInfo(convertibleId))
+                    if convertibleLink and convertibleName then
+                        -- Calculate how many of the convertible we need
+                        local convertibleNeeded
+                        if ETERNAL_TO_CRYSTALLIZED_MAP[itemId] then
+                            -- Need Eternal, show Crystallized needed
+                            convertibleNeeded = math.ceil((stillNeed) * 10)
+                        else
+                            -- Need Crystallized, show Eternal needed
+                            convertibleNeeded = math.ceil(stillNeed / 10)
+                        end
+                        
+                        -- Add to list
+                        table.insert(list, {
+                            ["link"] = convertibleLink,
+                            ["name"] = convertibleName,
+                            ["count"] = convertibleNeeded,
+                        })
+                    end
+                end
+            end
         end
 
     end
@@ -461,6 +596,15 @@ function Skillet:internal_DisplayShoppingList(atBank)
         SkilletShoppingListRetrieveButton:Hide()
     else
         SkilletShoppingListRetrieveButton:Show()
+    end
+    
+    -- Synastria: Update ResourceTracker button visibility
+    if SkilletShoppingListExportRTButton then
+        if self.IsResourceTrackerAvailable and self:IsResourceTrackerAvailable() then
+            SkilletShoppingListExportRTButton:Show()
+        else
+            SkilletShoppingListExportRTButton:Hide()
+        end
     end
 
     cache_list(self)

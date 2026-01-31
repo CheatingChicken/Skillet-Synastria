@@ -556,24 +556,10 @@
                 <Anchors>
                     <Anchor point="BOTTOMLEFT" relativeTo="SkilletSkillListParent" relativePoint="TOPLEFT">
                         <Offset>
-                            <AbsDimension x="67" y="36"/>
+                            <AbsDimension x="0" y="36"/>
                         </Offset>
                     </Anchor>
                 </Anchors>
-                <Layers>
-                    <Layer level="ARTWORK">
-                        <FontString name="SkilletSortLabel" inherits="GameFontNormal" text="Sorting">
-                            <Anchors>
-                                <Anchor point="RIGHT" relativeTo="$parent" relativePoint="LEFT">
-                                    <Offset>
-                                        <AbsDimension x="10" y="1"/>
-                                    </Offset>
-                                </Anchor>
-                            </Anchors>
-                            <Color r="1" g="1" b="1" a="1"/>
-                        </FontString>
-                    </Layer>
-                </Layers>
                 <Scripts>
                     <OnLoad>
                         Skillet:SortDropdown_OnLoad()
@@ -769,10 +755,10 @@
 
             <!--
             #
-            # A button that displays the options dialog
+            # A button that triggers a rescan of the tradeskill
             #
             -->
-            <Button name="SkilletShowOptionsButton" inherits="UIPanelButtonTemplate" text="Options" parent="SkilletFrame">
+            <Button name="SkilletRescanButton" inherits="UIPanelButtonTemplate" text="Rescan" parent="SkilletFrame">
                 <Size>
                     <AbsDimension x="100" y="22"/>
                 </Size>
@@ -785,21 +771,18 @@
                 </Anchors>
                 <Scripts>
                     <OnClick>
-                        Skillet:ShowOptions();
+                        Skillet:RescanTrade(true)
                     </OnClick>
                 </Scripts>
             </Button>
-            <!--
-            #
-            # A button that triggers a rescan of the tradeskill
-            #
-            -->
-            <Button name="SkilletRescanButton" inherits="UIPanelButtonTemplate" text="Rescan" parent="SkilletFrame">
+            
+            <!-- Synastria: Scan All Professions button -->
+            <Button name="SkilletScanAllButton" inherits="UIPanelButtonTemplate" text="Scan All" parent="SkilletFrame">
                 <Size>
                     <AbsDimension x="100" y="22"/>
                 </Size>
                 <Anchors>
-                    <Anchor point="RIGHT" relativeTo="SkilletShowOptionsButton" relativePoint="LEFT">
+                    <Anchor point="RIGHT" relativeTo="SkilletRescanButton" relativePoint="LEFT">
                         <Offset>
                             <AbsDimension x="-5" y="0"/>
                         </Offset>
@@ -807,7 +790,7 @@
                 </Anchors>
                 <Scripts>
                     <OnClick>
-                        Skillet:RescanTrade(true)
+                        Skillet:ScanAllProfessions()
                     </OnClick>
                 </Scripts>
             </Button>
@@ -1368,7 +1351,7 @@
                     </Anchor>
                     <Anchor point="BOTTOMRIGHT" relativeTo="SkilletFrame" relativePoint="BOTTOMRIGHT">
                         <Offset>
-                            <AbsDimension x="-10" y="32"/>
+                            <AbsDimension x="-10" y="59"/>
                         </Offset>
                     </Anchor>
                 </Anchors>
@@ -1436,15 +1419,38 @@
                     <AbsDimension x="100" y="22"/>
                 </Size>
                 <Anchors>
-                    <Anchor point="TOPLEFT" relativeTo="SkilletStartQueueButton" relativePoint="TOPRIGHT">
+                    <Anchor point="TOP" relativeTo="SkilletQueueParent" relativePoint="BOTTOM">
                         <Offset>
-                            <AbsDimension x="5" y=""/>
+                            <AbsDimension x="0" y="-1"/>
                         </Offset>
                     </Anchor>
                 </Anchors>
                 <Scripts>
                     <OnClick>
                         Skillet:EmptyQueue()
+                    </OnClick>
+                </Scripts>
+            </Button>
+
+            <!--
+            #
+            # Synastria: A button that groups queue items by profession to minimize switches
+            #
+            -->
+            <Button name="SkilletGroupQueueButton" inherits="UIPanelButtonTemplate" text="Group" parent="SkilletFrame">
+                <Size>
+                    <AbsDimension x="100" y="22"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletQueueParent" relativePoint="BOTTOMRIGHT">
+                        <Offset>
+                            <AbsDimension x="0" y="-1"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        Skillet.stitch:GroupQueueByProfession()
                     </OnClick>
                 </Scripts>
             </Button>
@@ -1459,15 +1465,61 @@
                     <AbsDimension x="115" y="22"/>
                 </Size>
                 <Anchors>
-                    <Anchor point="TOPRIGHT" relativeTo="SkilletQueueParent" relativePoint="BOTTOMRIGHT">
+                    <Anchor point="TOPLEFT" relativeTo="SkilletQueueParent" relativePoint="BOTTOMLEFT">
                         <Offset>
-                            <AbsDimension x="0" y="-1"/>
+                            <AbsDimension x="0" y="-28"/>
                         </Offset>
                     </Anchor>
                 </Anchors>
                 <Scripts>
                     <OnClick>
                         Skillet:DisplayShoppingList(false)
+                    </OnClick>
+                </Scripts>
+            </Button>
+
+            <!--
+            #
+            # A button that displays the extraction frame
+            #
+            -->
+            <Button name="SkilletShowExtractionButton" inherits="UIPanelButtonTemplate" text="Extraction" parent="SkilletFrame">
+                <Size>
+                    <AbsDimension x="100" y="22"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletQueueParent" relativePoint="BOTTOMRIGHT">
+                        <Offset>
+                            <AbsDimension x="-105" y="-28"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        Skillet:ToggleExtractionFrame();
+                    </OnClick>
+                </Scripts>
+            </Button>
+
+            <!--
+            #
+            # A button that displays the options dialog
+            #
+            -->
+            <Button name="SkilletShowOptionsButton" inherits="UIPanelButtonTemplate" text="Options" parent="SkilletFrame">
+                <Size>
+                    <AbsDimension x="100" y="22"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletQueueParent" relativePoint="BOTTOMRIGHT">
+                        <Offset>
+                            <AbsDimension x="0" y="-28"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        Skillet:ShowOptions();
                     </OnClick>
                 </Scripts>
             </Button>

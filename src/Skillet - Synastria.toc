@@ -41,8 +41,10 @@ Locale\Locale-esES.lua
 LibPossessions.lua
 SkilletStitch-1.1.lua
 Skillet.lua
+SkilletCraftCalc.lua
 TradeskillInfo.lua
 SkilletQueue.lua
+SkilletExtraction.lua
 ThirdPartyHooks.lua
 Upgrades.lua
 
@@ -51,6 +53,7 @@ UI\Utils.lua
 UI\Sorting.lua
 UI\ProfessionSelector.lua
 UI\AttunabilityFilter.lua
+UI\SlotFilter.lua
 UI\MainFrame.lua
 UI\MainFrame.xml
 UI\RecipeNotes.lua
@@ -59,3 +62,10 @@ UI\MerchantWindow.lua
 UI\MerchantWindow.xml
 UI\ShoppingList.lua
 UI\ShoppingList.xml
+UI\ExtractionFrame.lua
+UI\ExtractionFrame.xml
+
+#### Integration files
+Integrations\ResourceTracker.lua
+
+SkilletItemIDValidator.lua

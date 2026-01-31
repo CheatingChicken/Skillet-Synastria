@@ -185,9 +185,12 @@ local function sort_recipes()
             end
         end
 
-        table.sort(sorted_recipes, function(a,b)
-            return recipe_sort_method(Skillet.currentTrade, a, b)
-        end)
+        -- Only actually sort if we have a valid sort method (not just slot filter)
+        if recipe_sort_method and recipe_sort_method ~= NOSORT then
+            table.sort(sorted_recipes, function(a,b)
+                return recipe_sort_method(Skillet.currentTrade, a, b)
+            end)
+        end
 
     end
 end
@@ -280,9 +283,23 @@ end
 
 --
 -- True if the list of recipes is sorted and false if it is not.
+-- Synastria: Also returns true if slot filter is active (to hide headers)
 --
 function Skillet:AreRecipesSorted()
-    return recipe_sort_method and recipe_sort_method ~= NOSORT
+    -- Check if sorting is active
+    if recipe_sort_method and recipe_sort_method ~= NOSORT then
+        return true
+    end
+    
+    -- Check if slot filter is active
+    if self.currentTrade then
+        local slotFilter = self:GetTradeSkillOption(self.currentTrade, "slotfilter")
+        if slotFilter then
+            return true
+        end
+    end
+    
+    return false
 end
 
 --
