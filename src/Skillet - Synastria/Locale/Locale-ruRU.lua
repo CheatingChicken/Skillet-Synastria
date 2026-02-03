@@ -23,7 +23,6 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 L:RegisterTranslations("ruRU", function() return {
 	["Skillet Trade Skills"] 		= "Skillet Trade Skills", -- default message
 	["Sorting"] 				 	= "Сортировать",
-	["Create"] 				 		= "Создать",
 	["Queue All"]					= "Всё в очередь",
 	["Create All"]					= "Создать Все",
 	["Create"]						= "Создать",
@@ -57,7 +56,6 @@ L:RegisterTranslations("ruRU", function() return {
 	["ABOUTDESC"]					= "Информация о Skillet",
 	["Config"]						= "Настройки",
 	["CONFIGDESC"]					= "Открыть окно настройки для Skillet",
-	["Shopping List"]					= "Список закупок",
 	["SHOPPINGLISTDESC"]				= "Открыть список закупок",
 
 	["Features"]					= "Cвойства",

@@ -7,19 +7,6 @@
         </Size>
         <Layers>
             <Layer level="BACKGROUND">
-                <Texture name="$parentBorder" file="Interface\Buttons\UI-EmptySlot">
-                    <Size>
-                        <AbsDimension x="38" y="38"/>
-                    </Size>
-                    <Anchors>
-                        <Anchor point="TOP">
-                            <Offset>
-                                <AbsDimension x="0" y="-3"/>
-                            </Offset>
-                        </Anchor>
-                    </Anchors>
-                    <Color r="0.5" g="0.5" b="0.5" a="1"/>
-                </Texture>
                 <Texture name="$parentIcon">
                     <Size>
                         <AbsDimension x="36" y="36"/>
@@ -50,6 +37,20 @@
                 </Texture>
             </Layer>
             <Layer level="OVERLAY">
+                <!-- Quality/Rarity border glow overlay -->
+                <Texture name="$parentBorder" file="Interface\Buttons\UI-ActionButton-Border" alphaMode="ADD" hidden="true">
+                    <Size>
+                        <AbsDimension x="64" y="64"/>
+                    </Size>
+                    <Anchors>
+                        <Anchor point="CENTER" relativeTo="$parentIcon">
+                            <Offset>
+                                <AbsDimension x="0" y="0"/>
+                            </Offset>
+                        </Anchor>
+                    </Anchors>
+                    <Color r="1" g="1" b="1" a="1"/>
+                </Texture>
                 <FontString name="$parentLabel" inherits="GameFontNormalSmall" justifyH="CENTER" wordwrap="true">
                     <Size>
                         <AbsDimension x="50" y="0"/>
@@ -169,6 +170,36 @@
                 </Scripts>
             </Button>
 
+            <Button name="SkilletExtractionConversionsButton" inherits="UIPanelButtonTemplate">
+                <Size>
+                    <AbsDimension x="120" y="28"/>
+                </Size>
+                <Anchors>
+                    <Anchor point="LEFT" relativeTo="SkilletExtractionProspectingButton" relativePoint="RIGHT">
+                        <Offset>
+                            <AbsDimension x="10" y="0"/>
+                        </Offset>
+                    </Anchor>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        this:SetText("Conversions")
+                    </OnLoad>
+                    <OnClick>
+                        Skillet:SetExtractionTab("CONVERSIONS")
+                    </OnClick>
+                    <OnEnter>
+                        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                        GameTooltip:SetText("Conversions", 1, 1, 1)
+                        GameTooltip:AddLine("Convert between elementals, motes, and enchanting materials", 0.8, 0.8, 0.8, 1)
+                        GameTooltip:Show()
+                    </OnEnter>
+                    <OnLeave>
+                        GameTooltip:Hide()
+                    </OnLeave>
+                </Scripts>
+            </Button>
+
             <!-- Bulk Mode Toggle -->
             <CheckButton name="SkilletExtractionBulkModeCheckbox">
                 <Size>
@@ -210,8 +241,8 @@
                 </Anchors>
             </FontString>
 
-            <!-- Scroll frame container -->
-            <Frame name="SkilletExtractionListParent" parent="SkilletExtractionFrame">
+            <!-- Single container for all layouts -->
+            <Frame name="SkilletExtractionContainer" parent="SkilletExtractionFrame">
                 <Size>
                     <AbsDimension x="410" y="520"/>
                 </Size>
@@ -224,8 +255,8 @@
                 </Anchors>
 
                 <Frames>
-                    <!-- Scroll Frame -->
-                    <ScrollFrame name="SkilletExtractionListScrollFrame" inherits="FauxScrollFrameTemplate" parent="SkilletExtractionListParent">
+                    <!-- Single Scroll Frame for all layouts -->
+                    <ScrollFrame name="SkilletExtractionScrollFrame" inherits="FauxScrollFrameTemplate">
                         <Size>
                             <AbsDimension x="390" y="520"/>
                         </Size>
@@ -243,51 +274,119 @@
                         </Scripts>
                     </ScrollFrame>
 
-                    <!-- List buttons are SIBLINGS of ScrollFrame, not children -->
-                    <Button name="SkilletExtractionListButton1" inherits="SkilletExtractionIconBoxTemplate">
-                        <Anchors>
-                            <Anchor point="TOPLEFT" relativeTo="SkilletExtractionListScrollFrame" relativePoint="TOPLEFT">
-                                <Offset>
-                                    <AbsDimension x="0" y="0"/>
-                                </Offset>
-                            </Anchor>
-                        </Anchors>
-                    </Button>
-                    <Button name="SkilletExtractionListButton2" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton3" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton4" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton5" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton6" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton7" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton8" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton9" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton10" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton11" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton12" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton13" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton14" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton15" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton16" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton17" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton18" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton19" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton20" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton21" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton22" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton23" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton24" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton25" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton26" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton27" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton28" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton29" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton30" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton31" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton32" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton33" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton34" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton35" inherits="SkilletExtractionIconBoxTemplate"/>
-                    <Button name="SkilletExtractionListButton36" inherits="SkilletExtractionIconBoxTemplate"/>
+                    <!-- Small layout buttons (36 buttons: 6 rows of 6, for 3 conversion groups) -->
+                    <Button name="SkilletExtractionSmallButton1" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton2" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton3" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton4" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton5" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton6" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton7" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton8" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton9" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton10" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton11" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton12" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton13" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton14" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton15" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton16" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton17" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton18" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton19" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton20" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton21" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton22" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton23" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton24" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton25" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton26" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton27" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton28" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton29" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton30" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton31" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton32" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton33" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton34" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton35" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionSmallButton36" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+
+                    <!-- Medium layout buttons (36 buttons for 2 groups) -->
+                    <Button name="SkilletExtractionMediumButton1" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton2" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton3" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton4" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton5" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton6" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton7" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton8" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton9" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton10" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton11" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton12" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton13" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton14" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton15" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton16" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton17" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton18" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton19" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton20" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton21" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton22" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton23" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton24" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton25" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton26" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton27" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton28" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton29" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton30" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton31" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton32" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton33" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton34" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton35" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionMediumButton36" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+
+                    <!-- Large layout buttons (36 buttons for 1 extended group) -->
+                    <Button name="SkilletExtractionLargeButton1" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton2" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton3" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton4" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton5" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton6" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton7" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton8" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton9" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton10" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton11" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton12" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton13" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton14" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton15" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton16" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton17" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton18" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton19" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton20" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton21" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton22" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton23" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton24" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton25" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton26" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton27" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton28" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton29" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton30" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton31" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton32" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton33" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton34" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton35" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
+                    <Button name="SkilletExtractionLargeButton36" inherits="SkilletExtractionIconBoxTemplate" parent="SkilletExtractionContainer"/>
                 </Frames>
             </Frame>
 

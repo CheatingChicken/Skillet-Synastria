@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ]]--
 
+---@type table
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 local skill_style_type = {
@@ -28,9 +29,16 @@ local skill_style_type = {
     ["header"]          = { r = 1.00, g = 0.82, b = 0,    level = 0},
 }
 
+---@class SorterEntry
+---@field name string Sorter display name
+---@field sorter function Sorting function
+---@field enabled boolean|nil Whether sorter is enabled
+
 -- list of possible sorting methods
+---@type SorterEntry[]
 local sorters = {}
 
+---@type function|nil
 local recipe_sort_method = nil
 
 local function sort_recipe_by_name(tradeskill, a, b, stitch_left, stitch_right)
@@ -93,8 +101,8 @@ local function sort_by_required_level(tradeskill, a, b, stitch_left, stitch_righ
         return true
     end
 
-    left  = Skillet:GetLevelRequiredToUse(left_r.link)
-    right = Skillet:GetLevelRequiredToUse(right_r.link)
+    local left  = Skillet:GetLevelRequiredToUse(left_r.link)
+    local right = Skillet:GetLevelRequiredToUse(right_r.link)
 
     if not left  then  left = 0 end
     if not right then right = 0 end
@@ -122,8 +130,8 @@ local function sort_by_item_quality(tradeskill, a, b, stitch_left, stitch_right)
         return true
     end
 
-     left = select(1, Skillet:GetQualityFromLink(left_r.link))
-    right = select(1, Skillet:GetQualityFromLink(right_r.link))
+    local left = select(1, Skillet:GetQualityFromLink(left_r.link))
+    local right = select(1, Skillet:GetQualityFromLink(right_r.link))
 
     if not left  then  left = 0 end
     if not right then right = 0 end
@@ -143,6 +151,8 @@ end
 
 local sorted_recipes = {}
 local last_num_trade_skills = 0
+-- Track last trade for sorting state
+---@type string|nil
 local last_trade_skill = nil
 local last_recipe_sort_method = nil
 -- Builds a sorted list of recipes (no headers) for the
@@ -257,6 +267,7 @@ function Skillet:InitializeSorting()
         self:UpdateTradeSkillWindow()
     end)
     SkilletSortAscButton:SetScript("OnEnter", function()
+        ---@diagnostic disable-next-line: param-type-mismatch
         GameTooltip:SetOwner(SkilletSortAscButton, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["SORTASC"])
     end)
@@ -272,6 +283,7 @@ function Skillet:InitializeSorting()
         self:UpdateTradeSkillWindow()
     end)
     SkilletSortDescButton:SetScript("OnEnter", function()
+        ---@diagnostic disable-next-line: param-type-mismatch
         GameTooltip:SetOwner(SkilletSortDescButton, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["SORTDESC"])
     end)
@@ -293,6 +305,7 @@ function Skillet:AreRecipesSorted()
     
     -- Check if slot filter is active
     if self.currentTrade then
+        ---@type string|nil
         local slotFilter = self:GetTradeSkillOption(self.currentTrade, "slotfilter")
         if slotFilter then
             return true
@@ -339,12 +352,15 @@ end
 
 -- called when the sort drop down is first loaded
 function Skillet:SortDropdown_OnLoad()
+    ---@diagnostic disable-next-line: param-type-mismatch
     UIDropDownMenu_Initialize(SkilletSortDropdown, Skillet.SortDropdown_Initialize)
+    ---@diagnostic disable-next-line: inject-field
     SkilletSortDropdown.displayMode = "MENU"  -- changes the pop-up borders to be rounded instead of square
 
     -- Find out which sort method is selected
     for i=1, #sorters, 1 do
         if recipe_sort_method == sorters[i].sorter then
+            ---@diagnostic disable-next-line: param-type-mismatch
             UIDropDownMenu_SetSelectedID(SkilletSortDropdown, i)
             break
         end
@@ -354,11 +370,14 @@ end
 
 -- Called when the sort drop down is displayed
 function Skillet:SortDropdown_OnShow()
+    ---@diagnostic disable-next-line: param-type-mismatch
     UIDropDownMenu_Initialize(SkilletSortDropdown, Skillet.SortDropdown_Initialize)
+    ---@diagnostic disable-next-line: inject-field
     SkilletSortDropdown.displayMode = "MENU"  -- changes the pop-up borders to be rounded instead of square
 
     for i=1, #sorters, 1 do
         if recipe_sort_method == sorters[i].sorter then
+            ---@diagnostic disable-next-line: param-type-mismatch
             UIDropDownMenu_SetSelectedID(SkilletSortDropdown, i)
             break
         end
@@ -371,9 +390,11 @@ end
 function Skillet:SortDropdown_Initialize()
     recipe_sort_method = NOSORT
 
+    ---@type table
     local info
     local i = 0
     for i=1, #sorters, 1 do
+        ---@type SorterEntry
         local entry = sorters[i]
         info = UIDropDownMenu_CreateInfo()
 
@@ -396,7 +417,9 @@ end
 
 -- Called when the user selects an item in the sorting drop down
 function Skillet:SortDropdown_OnClick()
+    ---@diagnostic disable-next-line: param-type-mismatch
     UIDropDownMenu_SetSelectedID(SkilletSortDropdown, this:GetID())
+    ---@type SorterEntry
     local entry = sorters[this:GetID()]
 
     Skillet:SetTradeSkillOption(Skillet.currentTrade, "sortmethod", entry.name)
@@ -405,7 +428,7 @@ function Skillet:SortDropdown_OnClick()
 
     show_sort_toggle()
 
-    Skillet:ResortRecipes(force)
+    Skillet:ResortRecipes()
     Skillet:UpdateTradeSkillWindow()
 
 

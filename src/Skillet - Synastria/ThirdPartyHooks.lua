@@ -483,13 +483,11 @@ Recipe = {
     ["difficulty"] = "optimal", "medium", "easy", trivial" (non-localized)
     ["nummade"] = number made, (how many this recipe make)
     ["tools"] = "tools", (tools required, nil for no requirements)
-    ["count"] = number of reagents for this recipe
-    [index 1] = Reagent,
-    [index 2] = Reagent,
-    ....
+    ["reagents"] = array of Reagent objects
 }
 
-So, recipe.name is the name of the recipe, recipe[1].name is the name of
+-- Synastria: Modern format uses recipe.reagents table
+So, recipe.name is the name of the recipe, recipe.reagents[1].name is the name of
 the first required reagent.
 
 Profession = {

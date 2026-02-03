@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 L:RegisterTranslations("deDE", function() return {
     ["Skillet Trade Skills"]                = "Skillet Trade Skills",
-    ["Create"]                              = "Erstellen",
     ["Queue All"]                           = "Alle in Warteschlange",
     ["Create All"]                          = "Alle erstellen",
     ["Create"]                              = "Erstellen",
@@ -60,7 +59,6 @@ L:RegisterTranslations("deDE", function() return {
     ["ABOUTDESC"]					= "Gibt infos über Skillet aus",
     ["Config"]						= "Konfiguraton",
     ["CONFIGDESC"]					= "Öffnet ein Konfigurationsfenster für Skillet",
-    ["Shopping List"]					= "Einkaufsliste",
     ["SHOPPINGLISTDESC"]				= "Zeigt die Einkaufsliste",
 
     ["Features"]					= "Funktionen",

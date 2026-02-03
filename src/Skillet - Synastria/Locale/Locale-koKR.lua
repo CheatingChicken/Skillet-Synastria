@@ -26,7 +26,7 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 L:RegisterTranslations("koKR", function() return {
 	["Skillet Trade Skills"]					= "Skillet 전문기술", -- default message
-	["Create"]							= "제작",
+
 	["Queue All"]							= "전부 예약",
 	["Create All"]							= "전부 제작",
 	["Create"]							= "제작",
@@ -60,7 +60,6 @@ L:RegisterTranslations("koKR", function() return {
 	["ABOUTDESC"]					= "Skillet 정보 표시",
 	["Config"]					= "설정",
 	["CONFIGDESC"]					= "Skillet 설정을 엽니다.",
-	["Shopping List"]				= "쇼핑 리스트",
 	["SHOPPINGLISTDESC"]				= "쇼핑 리스트를 표시합니다.",
 
 	["Features"]					= "기능",

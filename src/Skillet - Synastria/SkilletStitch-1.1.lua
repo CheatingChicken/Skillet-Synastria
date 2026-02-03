@@ -28,8 +28,29 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 ]]
+
+---@class Reagent
+---@field name string Item name
+---@field link string Item link
+---@field texture string Icon texture path
+---@field needed number Quantity needed per craft
+---@field num number Available count (bags only)
+---@field numwbank number Available count (bags + bank)
+---@field vendor boolean|nil Can be bought from vendor
+
+---@class Recipe
+---@field name string Recipe name
+---@field link string Recipe link
+---@field texture string Icon texture path
+---@field reagents Reagent[] Array of reagents (modern format)
+---@field nummade number Number of items produced per craft
+---@field tools table|nil Required tools
+---@field difficulty string Difficulty color
+---@field needsRescan boolean|nil Needs rescan flag
+---@field craftable number|nil Cached craftable count
+
 local MAJOR_VERSION = "SkilletStitch-1.1"
-local MINOR_VERSION = "$Rev: 166 $"  -- Synastria: Bumped for PT vendor extension
+local MINOR_VERSION = "$Rev: 166 $" -- Synastria: Bumped for PT vendor extension
 
 if not AceLibrary then error(MAJOR_VERSION .. " requires AceLibrary") end
 if not AceLibrary:IsNewVersion(MAJOR_VERSION, MINOR_VERSION) then return end
@@ -60,14 +81,15 @@ local difficultyr = {
 local function squishlink(link)
     -- in:  |cffffffff|Hitem:13928:0:0:0:0:0:0:0|h[Grilled Squid]|h|r
     -- out: ffffff|13928|Grilled Squid
-    local color, id, name = link:match("^|cff(......)|Hitem:(%d+):[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+|h%[([^%]]+)%]|h|r$")
+    local color, id, name = link:match(
+    "^|cff(......)|Hitem:(%d+):[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+|h%[([^%]]+)%]|h|r$")
     if id then
-        return color.."|"..id.."|"..name
+        return color .. "|" .. id .. "|" .. name
     else
         -- in:  |cffffffff|Henchant:7421|h[Runed Copper Rod]|h|r
         -- out: |-7421|Runed Copper Rod
         id, name = link:match("^|cffffd000|Henchant:(%d+)|h%[([^%]]+)%]|h|r$")
-        return "|-"..id.."|"..name
+        return "|-" .. id .. "|" .. name
     end
 end
 local function unsquishlink(link)
@@ -75,13 +97,13 @@ local function unsquishlink(link)
     -- out: |cffffffff|Hitem:13928:0:0:0:0:0:0:0|h[Grilled Squid]|h|r  ,false
     local color, id, name = link:match("^([^|].....)|(%d+)|(.+)$")
     if id then
-        return "|cff"..color.."|Hitem:"..id..":0:0:0:0:0:0:0:0|h["..name.."]|h|r", false
+        return "|cff" .. color .. "|Hitem:" .. id .. ":0:0:0:0:0:0:0:0|h[" .. name .. "]|h|r", false
     else
         -- in:  |-7421|Runed Copper Rod
         -- out: |cffffffff|Henchant:7421|h[Runed Copper Rod]|h|r ,true
         id, name = link:match("^|%-(%d+)|(.+)$")
         if id then
-            return "|cffffd000|Henchant:"..id.."|h["..name.."]|h|r",true
+            return "|cffffd000|Henchant:" .. id .. "|h[" .. name .. "]|h|r", true
         else
             return link
         end
@@ -122,12 +144,12 @@ local function get_resource_bank_count(link)
     if not GetCustomGameData or not link then
         return 0
     end
-    
+
     local itemId = extract_item_id(link)
     if not itemId then
         return 0
     end
-    
+
     return GetCustomGameData(13, itemId) or 0
 end
 
@@ -138,18 +160,18 @@ local function get_item_id_from_link(link)
     if not link or type(link) ~= "string" then
         return nil
     end
-    
+
     -- Try to extract item ID from link
     local itemId = link:match("|Hitem:(%d+):")
     if itemId then
         return tonumber(itemId)
     end
-    
+
     -- Check if it's already a number
     if tonumber(link) then
         return tonumber(link)
     end
-    
+
     return nil
 end
 
@@ -162,12 +184,12 @@ local function get_item_count_with_conversions(itemId, includeBank)
     if type(itemId) ~= "number" then
         return 0
     end
-    
+
     -- Get base count for the requested item
     local baseCount = GetItemCount(itemId, includeBank) or 0
     local rbankCount = (GetCustomGameData and GetCustomGameData(13, itemId)) or 0
     local totalCount = baseCount + rbankCount
-    
+
     -- Synastria: Check queued conversions that will produce this item
     local lib = AceLibrary("SkilletStitch-1.1")
     if lib and lib.queue then
@@ -182,29 +204,29 @@ local function get_item_count_with_conversions(itemId, includeBank)
             end
         end
     end
-    
+
     -- Check if this item can be converted FROM another item
     local convertFromId = nil
     local conversionRatio = 1
-    
+
     -- Check if we need Eternal and have Crystallized (10 Crystallized = 1 Eternal)
     if ETERNAL_TO_CRYSTALLIZED[itemId] then
         -- We need an Eternal, check if we have Crystallized
         convertFromId = ETERNAL_TO_CRYSTALLIZED[itemId]
         conversionRatio = 10 -- Need 10 Crystallized to make 1 Eternal
-    -- Check if we need Crystallized and have Eternal (1 Eternal = 10 Crystallized)
+        -- Check if we need Crystallized and have Eternal (1 Eternal = 10 Crystallized)
     elseif CRYSTALLIZED_TO_ETERNAL[itemId] then
         -- We need Crystallized, check if we have Eternal
         convertFromId = CRYSTALLIZED_TO_ETERNAL[itemId]
         conversionRatio = 0.1 -- 1 Eternal makes 10 Crystallized
     end
-    
+
     -- If we can convert, add the converted amount
     if convertFromId then
         local convertibleBase = GetItemCount(convertFromId, includeBank) or 0
         local convertibleRbank = (GetCustomGameData and GetCustomGameData(13, convertFromId)) or 0
         local convertibleTotal = convertibleBase + convertibleRbank
-        
+
         -- Synastria: Subtract any Crystallized that are queued to be converted
         -- (they won't be available for other conversions)
         if lib and lib.queue then
@@ -218,14 +240,14 @@ local function get_item_count_with_conversions(itemId, includeBank)
                 end
             end
         end
-        
+
         -- Add the converted amount to our total
         -- If ratio is 10, we divide by 10 (10 crystallized = 1 eternal)
         -- If ratio is 0.1, we multiply by 10 (1 eternal = 10 crystallized)
         local convertedAmount = math.floor(convertibleTotal / conversionRatio)
         totalCount = totalCount + convertedAmount
     end
-    
+
     return totalCount
 end
 
@@ -235,7 +257,7 @@ local function get_reserved_reagent_count(link)
     local count = 0
 
     if reserved_reagents then
-        for i=#reserved_reagents, 1, -1 do
+        for i = #reserved_reagents, 1, -1 do
             if reserved_reagents[i].link == link then
                 count = reserved_reagents[i].count
                 break
@@ -275,22 +297,22 @@ local function invalidateCacheForItems(itemIds)
     if not itemIds or #itemIds == 0 then
         return 0
     end
-    
+
     -- Convert item IDs to a lookup table for faster checking
     local itemLookup = {}
     for _, itemId in ipairs(itemIds) do
         itemLookup[tonumber(itemId)] = true
     end
-    
+
     local invalidatedCount = 0
     local cacheEntryCount = 0
-    
+
     -- Count cache entries
     for _ in pairs(craftabilityCache) do
         cacheEntryCount = cacheEntryCount + 1
     end
     -- craftabilityCache has entries (debug output removed)
-    
+
     -- Iterate through all cached entries
     for cacheKey, _ in pairs(craftabilityCache) do
         -- Cache key format: "profession:index:numcraftable"
@@ -300,12 +322,12 @@ local function invalidateCacheForItems(itemIds)
             -- Use GetItemDataByIndex to get full recipe with reagents
             local lib = AceLibrary("SkilletStitch-1.1")
             local recipe = lib:GetItemDataByIndex(profession, index)
-            
-            if recipe then
+
+            if recipe and recipe.reagents then
                 -- Check if this recipe uses any of the affected items as reagents
                 local usesAffectedItem = false
                 local reagentCount = 0
-                for _, reagent in ipairs(recipe) do
+                for _, reagent in ipairs(recipe.reagents) do
                     reagentCount = reagentCount + 1
                     local reagentId = tonumber((reagent.link or ""):match("item:(%d+)"))
                     if reagentId and itemLookup[reagentId] then
@@ -314,7 +336,7 @@ local function invalidateCacheForItems(itemIds)
                         break
                     end
                 end
-                
+
                 if usesAffectedItem then
                     craftabilityCache[cacheKey] = nil
                     invalidatedCount = invalidatedCount + 1
@@ -326,7 +348,7 @@ local function invalidateCacheForItems(itemIds)
             end
         end
     end
-    
+
     return invalidatedCount
 end
 
@@ -358,7 +380,7 @@ local function setCachedCraftability(recipe, key, value)
 end
 
 local itemmeta = {
-    __index = function(self,key)
+    __index = function(self, key)
         if key == "numcraftable" then
             -- Check cache first
             local cached = getCachedCraftability(self, key)
@@ -366,35 +388,35 @@ local itemmeta = {
                 cacheStats.hits = cacheStats.hits + 1
                 return cached
             end
-            
+
             cacheStats.misses = cacheStats.misses + 1
             cacheStats.calculations = cacheStats.calculations + 1
-            
-            local num = 1000
-            for _,v in ipairs(self) do
+
+            local num = 0
+            for _, v in ipairs(self) do
                 if v.vendor == false then
                     local available = v.num
-                    
+
                     -- Synastria: DO NOT check sub-reagent craftability here
                     -- That causes recursive calculations and freezing
                     -- Only the background calculation process should populate the cache
                     -- which is then used by all recipes via the cache check above
-                    
-                    local max = math.floor(available/v.needed)*self.nummade
+
+                    local max = math.floor(available / v.needed) * self.nummade
+                    if num == 0 or max < num then
+                        num = max
+                    end
+                end
+            end
+            if num == 0 then
+                for _, v in ipairs(self) do
+                    local max = math.floor(v.num / v.needed) * self.nummade
                     if max < num then
                         num = max
                     end
                 end
             end
-            if num == 1000 then
-                for _,v in ipairs(self) do
-                    local max = math.floor(v.num/v.needed)*self.nummade
-                    if max < num then
-                        num = max
-                    end
-                end
-            end
-            
+
             -- Cache the result
             setCachedCraftability(self, key, num)
             return num
@@ -405,49 +427,49 @@ local itemmeta = {
                 cacheStats.hits = cacheStats.hits + 1
                 return cached
             end
-            
+
             cacheStats.misses = cacheStats.misses + 1
             cacheStats.calculations = cacheStats.calculations + 1
-            
-            local num = 1000
-            for _,v in ipairs(self) do
+
+            local num = 0
+            for _, v in ipairs(self) do
                 if v.vendor == false then
                     local available = v.numwbank
-                    
+
                     -- Synastria: DO NOT check sub-reagent craftability here
                     -- Only the background calculation process should populate the cache
-                    
-                    local max = math.floor(available/v.needed)*self.nummade
+
+                    local max = math.floor(available / v.needed) * self.nummade
+                    if num == 0 or max < num then
+                        num = max
+                    end
+                end
+            end
+            if num == 0 then
+                for _, v in ipairs(self) do
+                    local max = math.floor(v.numwbank / v.needed) * self.nummade
                     if max < num then
                         num = max
                     end
                 end
             end
-            if num == 1000 then
-                for _,v in ipairs(self) do
-                    local max = math.floor(v.numwbank/v.needed)*self.nummade
-                    if max < num then
-                        num = max
-                    end
-                end
-            end
-            
+
             -- Cache the result
             setCachedCraftability(self, key, num)
             return num
         elseif key == "numcraftablewalts" and alt_lookup_function then
-            local num = 1000
-            for _,v in ipairs(self) do
+            local num = 0
+            for _, v in ipairs(self) do
                 if v.vendor == false then
-                    local max = math.floor(v.numwalts/v.needed)*self.nummade
-                    if max < num then
+                    local max = math.floor(v.numwalts / v.needed) * self.nummade
+                    if num == 0 or max < num then
                         num = max
                     end
                 end
             end
-            if num == 1000 then
-                for _,v in ipairs(self) do
-                    local max = math.floor(v.numwalts/v.needed)*self.nummade
+            if num == 0 then
+                for _, v in ipairs(self) do
+                    local max = math.floor(v.numwalts / v.needed) * self.nummade
                     if max < num then
                         num = max
                     end
@@ -458,7 +480,7 @@ local itemmeta = {
     end
 }
 local reagentmeta = {
-    __index = function(self,key)
+    __index = function(self, key)
         local count = 0
         local reserved = get_reserved_reagent_count(self.link)
 
@@ -478,7 +500,7 @@ local reagentmeta = {
                 count = get_item_count_with_conversions(itemId, true)
             else
                 -- Fallback to old method if we can't extract item ID
-                count = GetItemCount(self.link,true) + get_resource_bank_count(self.link)
+                count = GetItemCount(self.link, true) + get_resource_bank_count(self.link)
             end
         elseif key == "numwalts" and alt_lookup_function ~= nil then
             count = alt_lookup_function(self.link) or 0
@@ -487,14 +509,14 @@ local reagentmeta = {
         return math.max(0, count - reserved)
     end
 }
-local cache = setmetatable({},{
-    __index = function(self,prof)
+local cache = setmetatable({}, {
+    __index = function(self, prof)
         if prof == "UNKNOWN" then
             return
         end
-        self[prof] = setmetatable({},{
+        self[prof] = setmetatable({}, {
             __mode = 'v',
-            __index = function(self,key)
+            __index = function(self, key)
                 local l = AceLibrary("SkilletStitch-1.1")
                 if not l.data then
                     l.data = {}
@@ -531,12 +553,12 @@ local function PopulateRecipeInfoCache()
     if not l.data then
         return
     end
-    
+
     for profession, recipes in pairs(l.data) do
         if not recipeInfoCache[profession] then
             recipeInfoCache[profession] = {}
         end
-        
+
         for index, data in pairs(recipes) do
             -- If data is already in new table format, use it directly
             if type(data) == "table" and data.name and data.link then
@@ -549,7 +571,7 @@ local function PopulateRecipeInfoCache()
             -- Don't try to decode - just wait for rescan
         end
     end
-    
+
     -- Cache loaded silently
 end
 
@@ -559,14 +581,14 @@ local function needsRecipeScan(profession)
     if not l.data or not l.data[profession] then
         return false -- No data at all, will scan when opened
     end
-    
+
     -- Check if any recipe is still in encoded string format
     for index, data in pairs(l.data[profession]) do
         if type(data) == "string" then
             return true -- Found old format, needs rescan
         end
     end
-    
+
     return false
 end
 
@@ -575,11 +597,14 @@ function SkilletStitch:PopulateRecipeInfoCache()
     PopulateRecipeInfoCache()
 end
 
+-- Decode a recipe from compressed string or table format
+---@param datastring string|table Compressed recipe data or table with encoded+reagents
+---@return Recipe|nil recipe The decoded recipe object
 function SkilletStitch:DecodeRecipe(datastring)
     if not datastring then
         return
     end
-    
+
     -- Synastria: Handle new table format with reagents
     if type(datastring) == "table" then
         -- New format stores {name, link, encoded, reagents}
@@ -587,10 +612,11 @@ function SkilletStitch:DecodeRecipe(datastring)
             -- We have both encoded and non-empty reagent data
             -- Decode the encoded string for recipe metadata, then use stored reagents
             local itemchunk, _ = datastring.encoded:match("^([^;]-;[^;]-;[^;]-;[^;]-;)(.-)$")
-            local nameoverride, link, difficultychar, numcrafted, tools = itemchunk:match("^([^;]-);([^;]+);(%a)(%d+);([^;]-);$")
+            local nameoverride, link, difficultychar, numcrafted, tools = itemchunk:match(
+            "^([^;]-);([^;]+);(%a)(%d+);([^;]-);$")
             local isenchant
-            
-            link,isenchant = unsquishlink(link)
+
+            link, isenchant = unsquishlink(link)
             if nameoverride:len() == 0 then
                 nameoverride = link:match("%|h%[([^%]]+)%]%|h")
             end
@@ -601,9 +627,9 @@ function SkilletStitch:DecodeRecipe(datastring)
             if isenchant then
                 texture = "Interface\\Icons\\Spell_Holy_GreaterHeal"
             else
-                texture = select(10,GetItemInfo(link))
+                texture = select(10, GetItemInfo(link))
             end
-            
+
             local s = setmetatable({
                 name = nameoverride,
                 difficulty = difficultyt[difficultychar],
@@ -613,20 +639,22 @@ function SkilletStitch:DecodeRecipe(datastring)
                 texture = texture,
                 profession = prof,
                 index = key,
-            },itemmeta)
-            
-            -- Synastria: Use pre-scanned reagents with vendor info
+                reagents = {} -- Synastria: Initialize reagents table (modern format)
+            }, itemmeta)
+
+            -- Synastria: Use pre-scanned reagents with vendor info (modern format)
             for _, reagentData in ipairs(datastring.reagents) do
                 local texture = select(10, GetItemInfo(reagentData.link))
-                table.insert(s,setmetatable({
+                table.insert(s.reagents, setmetatable({
                     name = reagentData.name,
                     link = reagentData.link,
                     needed = reagentData.needed,
+                    -- num is calculated dynamically via reagentmeta __index
                     texture = texture,
-                    vendor = reagentData.vendor,  -- Synastria: Use stored vendor flag
-                },reagentmeta))
+                    vendor = reagentData.vendor, -- Synastria: Use stored vendor flag
+                }, reagentmeta))
             end
-            
+
             return s
         elseif datastring.encoded then
             -- Recursively call with the encoded string to get full recipe data (old format)
@@ -650,7 +678,7 @@ function SkilletStitch:DecodeRecipe(datastring)
     local nameoverride, link, difficultychar, numcrafted, tools = itemchunk:match("^([^;]-);([^;]+);(%a)(%d+);([^;]-);$")
     local isenchant
 
-    link,isenchant = unsquishlink(link)
+    link, isenchant = unsquishlink(link)
     if nameoverride:len() == 0 then
         nameoverride = link:match("%|h%[([^%]]+)%]%|h")
     end
@@ -661,7 +689,7 @@ function SkilletStitch:DecodeRecipe(datastring)
     if isenchant then
         texture = "Interface\\Icons\\Spell_Holy_GreaterHeal"
     else
-        texture = select(10,GetItemInfo(link))
+        texture = select(10, GetItemInfo(link))
     end
 
     local s = setmetatable({
@@ -673,25 +701,30 @@ function SkilletStitch:DecodeRecipe(datastring)
         texture = texture,
         profession = prof,
         index = key,
-    },itemmeta)
+        reagents = {} -- Synastria: Initialize reagents table (modern format)
+    }, itemmeta)
+
+    -- Synastria: Decode reagents and add to reagents table (modern format)
     for reagentnum, reagentlink in reagentchunk:gmatch("([^;]+);([^;]+);") do
         reagentlink = unsquishlink(reagentlink)
         local texture = select(10, GetItemInfo(reagentlink))
         local vendor = false
-        
+
         -- Synastria: Use PeriodicTable for vendor detection
         -- Check both the base PT vendor set and our Skillet extension
         if PT then
-            vendor = (PT:ItemInSet(reagentlink,"Tradeskill.Mat.BySource.Vendor") or PT:ItemInSet(reagentlink,"Skillet.Vendor.Extended")) and true or false
+            vendor = (PT:ItemInSet(reagentlink, "Tradeskill.Mat.BySource.Vendor") or PT:ItemInSet(reagentlink, "Skillet.Vendor.Extended")) and
+            true or false
         end
 
-        table.insert(s,setmetatable({
+        table.insert(s.reagents, setmetatable({
             name = reagentlink:match("%|h%[([^%]]+)%]%|h"),
             link = reagentlink,
             needed = tonumber(reagentnum),
+            -- num is calculated dynamically via reagentmeta __index
             texture = texture,
             vendor = vendor,
-        },reagentmeta))
+        }, reagentmeta))
     end
 
     return s
@@ -741,7 +774,7 @@ function SkilletStitch:GetCachedCraftability(recipe, key)
 end
 
 function SkilletStitch:EnableDataGathering(addon)
-    assert(tostring(addon),"Usage: EnableDataGathering('addon')")
+    assert(tostring(addon), "Usage: EnableDataGathering('addon')")
     self.datagatheraddons[addon] = true
     self:RegisterEvent("TRADE_SKILL_SHOW")
     self:RegisterEvent("CHAT_MSG_SKILL")
@@ -756,7 +789,7 @@ function SkilletStitch:DisableDataGathering(addon)
         self.datagatheraddons = {}
         return
     end
-    assert(tostring(addon),"Usage: DisableDataGathering(['addon'])")
+    assert(tostring(addon), "Usage: DisableDataGathering(['addon'])")
     self.datagatheraddons[addon] = false
     if next(self.datagatheraddons) then
         return
@@ -767,7 +800,7 @@ function SkilletStitch:DisableDataGathering(addon)
 end
 
 function SkilletStitch:EnableQueue(addon)
-    assert(tostring(addon),"Usage: EnableQueue('addon')")
+    assert(tostring(addon), "Usage: EnableQueue('addon')")
     self.queueaddons[addon] = true
     -- Synastria: Use BAG_UPDATE for reliable craft detection
     self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
@@ -785,7 +818,7 @@ function SkilletStitch:DisableQueue(addon)
         self.queueenabled = false
         return
     end
-    assert(tostring(addon),"Usage: DisableDataGathering(['addon'])")
+    assert(tostring(addon), "Usage: DisableDataGathering(['addon'])")
     self.queueaddons[addon] = false
     if next(self.queueaddons) then
         return
@@ -795,33 +828,41 @@ function SkilletStitch:DisableQueue(addon)
     self.queue = nil
 end
 
+-- Get recipe data by profession and index
+---@param profession number The profession/trade ID
+---@param index number The recipe index within the profession
+---@return Recipe|nil recipe The recipe data, or nil if not found
 function SkilletStitch:GetItemDataByIndex(profession, index)
-    assert(tonumber(index) and profession,"Usage: GetItemDataByIndex('profession', index)")
+    assert(tonumber(index) and profession, "Usage: GetItemDataByIndex('profession', index)")
     return cache[profession][index]
 end
 
-function SkilletStitch:GetItemDataByName(name,prof)
-    assert(tostring(name) ,"Usage: GetItemDataByName('name')")
-    
+-- Get recipe data by name (searches all professions)
+---@param name string The recipe or item name to search for
+---@param prof number|nil Optional profession ID to limit search
+---@return Recipe|nil recipe The recipe data, or nil if not found
+function SkilletStitch:GetItemDataByName(name, prof)
+    assert(tostring(name), "Usage: GetItemDataByName('name')")
+
     -- Synastria: Track all matching recipes to implement profession priority
     local matches = {}
-    
-    for k,v in pairs(cache) do
-        if not prof or k==prof then
-            for l,w in pairs(v) do
+
+    for k, v in pairs(cache) do
+        if not prof or k == prof then
+            for l, w in pairs(v) do
                 if w.name == name then
-                    table.insert(matches, {profession = k, recipe = cache[k][l]})
+                    table.insert(matches, { profession = k, recipe = cache[k][l] })
                 end
             end
         end
     end
-    
+
     -- If no exact match in cache, search data
     if #matches == 0 then
         name = string.gsub(name, "([%.%(%)%%%+%-%*%?%[%]%^%$])", "%%%1")
-        for k,v in pairs(self.data) do
-            if not prof or k==prof then
-                for l,w in pairs(v) do
+        for k, v in pairs(self.data) do
+            if not prof or k == prof then
+                for l, w in pairs(v) do
                     -- Synastria: Handle both old string format and new table format
                     local chunk
                     if type(w) == "table" then
@@ -839,15 +880,15 @@ function SkilletStitch:GetItemDataByName(name,prof)
                         -- Invalid format, skip
                         chunk = ""
                     end
-                    
-                    if chunk and (chunk:match("^"..name) or chunk:match("|"..name..";")) then
-                        table.insert(matches, {profession = k, recipe = cache[k][l]})
+
+                    if chunk and (chunk:match("^" .. name) or chunk:match("|" .. name .. ";")) then
+                        table.insert(matches, { profession = k, recipe = cache[k][l] })
                     end
                 end
             end
         end
     end
-    
+
     -- Synastria: If multiple recipes found, prefer Smelting/Mining over other professions (especially Alchemy)
     -- This handles cases like Titanium Bar (smelting vs transmute)
     if #matches > 1 then
@@ -857,36 +898,36 @@ function SkilletStitch:GetItemDataByName(name,prof)
                 return match.recipe
             end
         end
-        
+
         -- Second priority: Mining recipe (in case recipes are stored under Mining)
         for _, match in ipairs(matches) do
             if match.profession == "Mining" then
                 return match.recipe
             end
         end
-        
+
         -- If no Smelting or Mining, return first match
         return matches[1].recipe
     elseif #matches == 1 then
         return matches[1].recipe
     end
-    
+
     -- No matches found
     return nil
 end
 
 local result = {}
 function SkilletStitch:GetItemDataByPartialName(name)
-    for k,_ in pairs(result) do
+    for k, _ in pairs(result) do
         result[k] = nil
     end
-    assert(tostring(name),"Usage: GetItemDataByPartialName('name')")
+    assert(tostring(name), "Usage: GetItemDataByPartialName('name')")
     name = name:gsub("([%.%(%)%%%+%-%*%?%[%]%^%$])", "%%%1")
-    for k,v in pairs(self.data) do
-        for l,w in pairs(v) do
+    for k, v in pairs(self.data) do
+        for l, w in pairs(v) do
             local chunk = w:match("([^;]-;[^;]-;)")
-            if chunk:match("^"..name) or chunk:match("%|h%["..name.."%]%|h") then
-                table.insert(result,cache[k][l])
+            if chunk:match("^" .. name) or chunk:match("%|h%[" .. name .. "%]%|h") then
+                table.insert(result, cache[k][l])
             end
         end
     end
@@ -916,12 +957,12 @@ function SkilletStitch:RemoveFromQueue(index)
     -- Synastria: Check if we're removing a conversion to invalidate cache
     local removedEntry = self.queue[index]
     local isConversion = removedEntry and removedEntry.recipe and removedEntry.recipe.isVirtualConversion
-    
+
     table.remove(self.queue, index)
     if #self.queue == 0 then
         self:ClearQueue()
     end
-    
+
     -- Synastria: Clear craftability cache if we removed a conversion
     if isConversion then
         clearCraftabilityCache()
@@ -948,7 +989,7 @@ function SkilletStitch:ProcessQueue()
         AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
         return
     end
-    
+
     -- Synastria: Check if this is a virtual conversion recipe BEFORE profession check
     local recipe = self.queue[1]["recipe"]
     if recipe and recipe.isVirtualConversion then
@@ -956,9 +997,9 @@ function SkilletStitch:ProcessQueue()
         Skillet:ShowStartCraftingPrompt()
         return
     end
-    
+
     local nextProfession = self.queue[1]["profession"]
-    
+
     -- Synastria: Hardcoded exception - never try to switch to "Conversion" profession
     if nextProfession == "Conversion" then
         -- This shouldn't happen as we handle conversions above, but safety check
@@ -975,9 +1016,9 @@ function SkilletStitch:ProcessQueue()
         end
         return
     end
-    
+
     local tradeskill = GetTradeSkillLine()
-    
+
     -- Synastria: Check if we need to switch professions
     if tradeskill ~= nextProfession then
         -- Verify profession is valid and available
@@ -985,21 +1026,21 @@ function SkilletStitch:ProcessQueue()
             -- Invalid profession in queue (debug output removed)
             self:RemoveFromQueue(1)
             if table.getn(self.queue) > 0 then
-                self:ProcessQueue()  -- Try next item
+                self:ProcessQueue() -- Try next item
             else
                 AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
             end
             return
         end
-        
+
         -- Check if we're already waiting for a profession switch
         if self.waitingForProfessionSwitch then
-            return  -- Don't spam profession switches
+            return -- Don't spam profession switches
         end
-        
+
         -- Show prompt for user to switch profession
         self.waitingForProfessionSwitch = true
-        
+
         -- Find the spell ID for this profession
         local spellId = self:FindProfessionSpellId(nextProfession)
         if spellId then
@@ -1016,39 +1057,39 @@ function SkilletStitch:ProcessQueue()
         end
         return
     end
-    
+
     -- We're in the right profession, reset switch flag
     self.waitingForProfessionSwitch = false
-    
+
     -- We're in the right profession, process the craft
     self.queuecasting = true
-    self.craftAttemptTime = GetTime()  -- Synastria: Track when we attempted the craft
-    
+    self.craftAttemptTime = GetTime() -- Synastria: Track when we attempted the craft
+
     -- Synastria: Store pre-craft inventory count for bulk detection
     local recipe = self.queue[1]["recipe"]
     local queueIndex = self.queue[1]["index"]
     local queueProfession = self.queue[1]["profession"]
-    
+
     if recipe and recipe.link then
         local itemId = extract_item_id(recipe.link)
-        
+
         if itemId then
             local bagCount = GetItemCount(itemId, true) or 0
             local bankCount = 0
-            
+
             -- Synastria: Add resource bank count if available
             if GetCustomGameData then
                 bankCount = GetCustomGameData(13, itemId) or 0
             end
-            
+
             self.preCraftItemCount = bagCount + bankCount
             self.expectedCraftCount = self.queue[1]["numcasts"]
         end
     end
-    
+
     -- Synastria: Track when we attempt the craft (for timeout detection)
     self.craftAttemptTime = GetTime()
-    
+
     -- Synastria: Start repeating timer to check for craft failures
     -- Checks every 0.5 seconds if craft has timed out or failed
     if not AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
@@ -1056,7 +1097,7 @@ function SkilletStitch:ProcessQueue()
             self:CheckCraftStatus()
         end, 0.5, self)
     end
-    
+
     -- Synastria: Call DoTradeSkill - failures caught by:
     -- 1. UI_ERROR_MESSAGE event (visible errors)
     -- 2. Repeating timer checking cast status (silent failures)
@@ -1071,44 +1112,44 @@ function SkilletStitch:FindProfessionSpellId(professionName)
         ["Mining"] = "Smelting",  -- Mining profession opens Smelting tradeskill
         ["Smelting"] = "Smelting" -- Already correct
     }
-    
+
     -- Use mapped name if available
     local mappedName = professionMapping[professionName] or professionName
-    
+
     local professionSpellIds = {
-        ["Runeforging"] = {53428},
-        ["Alchemy"] = {51304, 28596, 11611, 3464, 3101, 2259},
-        ["Blacksmithing"] = {51300, 29844, 9785, 3538, 3100, 2018},
-        ["Enchanting"] = {51313, 28029, 13920, 7413, 7412, 7411},
-        ["Engineering"] = {51306, 30350, 12656, 4038, 4037, 4036},
-        ["Inscription"] = {45363, 45361, 45360, 45359, 45358, 45357},
-        ["Jewelcrafting"] = {51311, 28897, 28895, 28894, 25230, 25229},
-        ["Leatherworking"] = {51302, 32549, 10662, 3811, 3104, 2108},
-        ["Tailoring"] = {51309, 26790, 12180, 3910, 3909, 3908},
-        ["Cooking"] = {51296, 33359, 18260, 3413, 3102, 2550},
-        ["First Aid"] = {45542, 27028, 10846, 7924, 3274, 3273},
-        ["Smelting"] = {2656, 2655, 2654, 2653, 2652, 2575}  -- Mining/Smelting spell IDs
+        ["Runeforging"] = { 53428 },
+        ["Alchemy"] = { 51304, 28596, 11611, 3464, 3101, 2259 },
+        ["Blacksmithing"] = { 51300, 29844, 9785, 3538, 3100, 2018 },
+        ["Enchanting"] = { 51313, 28029, 13920, 7413, 7412, 7411 },
+        ["Engineering"] = { 51306, 30350, 12656, 4038, 4037, 4036 },
+        ["Inscription"] = { 45363, 45361, 45360, 45359, 45358, 45357 },
+        ["Jewelcrafting"] = { 51311, 28897, 28895, 28894, 25230, 25229 },
+        ["Leatherworking"] = { 51302, 32549, 10662, 3811, 3104, 2108 },
+        ["Tailoring"] = { 51309, 26790, 12180, 3910, 3909, 3908 },
+        ["Cooking"] = { 51296, 33359, 18260, 3413, 3102, 2550 },
+        ["First Aid"] = { 45542, 27028, 10846, 7924, 3274, 3273 },
+        ["Smelting"] = { 2656, 2655, 2654, 2653, 2652, 2575 } -- Mining/Smelting spell IDs
     }
-    
+
     local spellIdCollection = professionSpellIds[mappedName]
     if not spellIdCollection then
         return nil
     end
-    
+
     -- Find which spell rank the player knows
     for _, spellId in ipairs(spellIdCollection) do
         if IsSpellKnown(spellId) then
             return spellId
         end
     end
-    
+
     return nil
 end
 
 -- Internal
 function SkilletStitch:SkilletStitch_AutoRescan()
     if InCombatLockdown() or IsTradeSkillLinked() then
-        -- Do not try to scan skills when in combat or if the 
+        -- Do not try to scan skills when in combat or if the
         -- skill has been linked in chat.
         return
     end
@@ -1134,7 +1175,7 @@ function SkilletStitch:TRADE_SKILL_SHOW()
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[QUEUE DEBUG] TRADE_SKILL_SHOW clearing queue! Current: " .. recenttrade .. ", Queue first: " .. self.queue[1]["profession"] .. "|r")
         self:ClearQueue()
     end
-    ]]--
+    ]] --
 
     self:ScanTrade()
 
@@ -1157,44 +1198,44 @@ function SkilletStitch:CheckCraftStatus()
         end
         return
     end
-    
+
     -- Check if we have a craft attempt time
     if not self.craftAttemptTime then
         return
     end
-    
+
     local elapsed = GetTime() - self.craftAttemptTime
-    
+
     -- After 2.0 seconds, check if we're actually casting (catastrophic failure fallback)
     if elapsed > 2.0 then
         local casting = UnitCastingInfo("player") or UnitChannelInfo("player")
         if not casting then
             -- Synastria: Store timeout error
             self.lastCraftError = "Craft failed - no cast detected! Stopping queue."
-            
+
             DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000Skillet: Craft failed - no cast detected! Stopping queue.|r")
-            
+
             -- Cancel the monitoring timer
             if AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
                 AceEvent:CancelScheduledEvent("SkilletStitch_CraftMonitor")
             end
-            
+
             -- Reset crafting state
             self.queuecasting = false
             self.craftAttemptTime = nil
             self.preCraftItemCount = nil
             self.expectedCraftCount = nil
-            
+
             -- Synastria: Move failed item to end of queue
             if self.queue[1] then
                 local failedItem = tremove(self.queue, 1)
                 tinsert(self.queue, failedItem)
                 DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800Timeout - moved to end of queue|r")
             end
-            
+
             -- Trigger error event
             AceEvent:TriggerEvent("SkilletStitch_Craft_Failed", self.lastCraftError)
-            
+
             -- Continue processing next item in queue
             if #self.queue > 0 then
                 AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
@@ -1213,39 +1254,39 @@ function SkilletStitch:OnUIError(errorType, message)
     if not self.queuecasting then
         return
     end
-    
+
     -- Check if this is a craft-related error
     -- Common error messages that indicate craft failure:
     -- "You need to be near a forge to do that"
-    -- "You need to be near an anvil to do that" 
+    -- "You need to be near an anvil to do that"
     -- "Item is not ready yet" (cooldown)
     -- "Not enough mana/rage/energy"
     -- etc.
     if message then
         -- Synastria: Store the error message
         self.lastCraftError = message
-        
+
         -- Cancel monitoring timer if running
         if AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
             AceEvent:CancelScheduledEvent("SkilletStitch_CraftMonitor")
         end
-        
+
         -- Reset crafting state
         self.queuecasting = false
         self.craftAttemptTime = nil
         self.preCraftItemCount = nil
         self.expectedCraftCount = nil
-        
+
         -- Synastria: Move failed item to end of queue
         if self.queue[1] then
             local failedItem = tremove(self.queue, 1)
             tinsert(self.queue, failedItem)
             DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800Craft failed - moved to end of queue|r")
         end
-        
+
         -- Trigger event to update dialog with error
         AceEvent:TriggerEvent("SkilletStitch_Craft_Failed", message)
-        
+
         -- Continue processing next item in queue
         if #self.queue > 0 then
             AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
@@ -1263,37 +1304,37 @@ function SkilletStitch:OnSpellcastFailed(event, unit, spell, rank)
     if unit ~= "player" then
         return
     end
-    
+
     -- Only check if we're actively crafting from queue
     if not self.queuecasting then
         return
     end
-    
+
     -- Synastria: Store the error
     local errorMsg = "Spell cast failed: " .. (spell or "Unknown")
     self.lastCraftError = errorMsg
-    
+
     -- Cancel monitoring timer if running
     if AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
         AceEvent:CancelScheduledEvent("SkilletStitch_CraftMonitor")
     end
-    
+
     -- Reset crafting state
     self.queuecasting = false
     self.craftAttemptTime = nil
     self.preCraftItemCount = nil
     self.expectedCraftCount = nil
-    
+
     -- Synastria: Move failed item to end of queue
     if self.queue[1] then
         local failedItem = tremove(self.queue, 1)
         tinsert(self.queue, failedItem)
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800Spell failed - moved to end of queue|r")
     end
-    
+
     -- Trigger event to update dialog with error
     AceEvent:TriggerEvent("SkilletStitch_Craft_Failed", errorMsg)
-    
+
     -- Continue processing next item in queue
     if #self.queue > 0 then
         AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
@@ -1310,30 +1351,30 @@ function SkilletStitch:OnBagUpdate()
     if not self.queuecasting then
         return
     end
-    
+
     -- Only check if we have pre-craft tracking data
     if not self.preCraftItemCount or not self.expectedCraftCount then
         return
     end
-    
+
     -- Get current inventory count
     local recipe = self.queue[1] and self.queue[1]["recipe"]
     if not recipe or not recipe.link then
         return
     end
-    
+
     local itemId = extract_item_id(recipe.link)
     if not itemId then
         return
     end
-    
+
     local currentCount = GetItemCount(itemId, true) or 0
-    
+
     -- Add resource bank count if available
     if GetCustomGameData then
         currentCount = currentCount + (GetCustomGameData(13, itemId) or 0)
     end
-    
+
     -- If inventory increased, craft completed
     if currentCount > self.preCraftItemCount then
         -- Call completion processing directly
@@ -1346,15 +1387,15 @@ function SkilletStitch:ProcessCraftCompletion()
     if not self.queuecasting then
         return
     end
-    
+
     -- Cancel the craft monitoring timer
     if AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
         AceEvent:CancelScheduledEvent("SkilletStitch_CraftMonitor")
     end
-    
+
     -- Clear timeout timer and craft attempt tracking
     self.craftAttemptTime = nil
-    
+
     if not self.queue[1] then
         -- Synastria: Clear contents while keeping reference
         for k in pairs(self.queue) do
@@ -1364,59 +1405,59 @@ function SkilletStitch:ProcessCraftCompletion()
         return
     end
 
-        -- Synastria: Check for bulk completion by comparing inventory changes
-        local actualCrafted = 1  -- Default to 1 if we can't detect
-        if self.preCraftItemCount and self.expectedCraftCount then
-            local recipe = self.queue[1]["recipe"]
-            if recipe and recipe.link then
-                local itemId = extract_item_id(recipe.link)
-                if itemId then
-                    local bagCount = GetItemCount(itemId, true) or 0
-                    local bankCount = 0
-                    if GetCustomGameData then
-                        bankCount = GetCustomGameData(13, itemId) or 0
-                    end
-                    local postCraftItemCount = bagCount + bankCount
-                    
-                    local inventoryIncrease = postCraftItemCount - self.preCraftItemCount
-                    
-                    -- If we got more than 1 item, Synastria bulk crafted
-                    if inventoryIncrease > 1 then
-                        actualCrafted = inventoryIncrease
-                    elseif inventoryIncrease == 1 then
-                        actualCrafted = 1
-                    end
+    -- Synastria: Check for bulk completion by comparing inventory changes
+    local actualCrafted = 1     -- Default to 1 if we can't detect
+    if self.preCraftItemCount and self.expectedCraftCount then
+        local recipe = self.queue[1]["recipe"]
+        if recipe and recipe.link then
+            local itemId = extract_item_id(recipe.link)
+            if itemId then
+                local bagCount = GetItemCount(itemId, true) or 0
+                local bankCount = 0
+                if GetCustomGameData then
+                    bankCount = GetCustomGameData(13, itemId) or 0
+                end
+                local postCraftItemCount = bagCount + bankCount
+
+                local inventoryIncrease = postCraftItemCount - self.preCraftItemCount
+
+                -- If we got more than 1 item, Synastria bulk crafted
+                if inventoryIncrease > 1 then
+                    actualCrafted = inventoryIncrease
+                elseif inventoryIncrease == 1 then
+                    actualCrafted = 1
                 end
             end
-            -- Clear tracking variables
-            self.preCraftItemCount = nil
-            self.expectedCraftCount = nil
         end
+        -- Clear tracking variables
+        self.preCraftItemCount = nil
+        self.expectedCraftCount = nil
+    end
 
-        -- Deduct the actual number of items crafted
-        self.queue[1].numcasts = self.queue[1].numcasts - actualCrafted
-        
-        -- Synastria: Update ResourceTracker after crafting
-        if Skillet and Skillet.UpdateResourceTrackerAfterCraft then
-            local recipe = self.queue[1].recipe
-            Skillet:UpdateResourceTrackerAfterCraft(recipe, actualCrafted)
-        end
+    -- Deduct the actual number of items crafted
+    self.queue[1].numcasts = self.queue[1].numcasts - actualCrafted
 
-        if self.queue[1].numcasts < 1 then
-            self:RemoveFromQueue(1)
-            if table.getn(self.queue) > 0 then
-                AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
-                -- Synastria: Show crafting prompt for next item
-                Skillet:ShowStartCraftingPrompt()
-            else
-                AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
-            end
-        else
+    -- Synastria: Update ResourceTracker after crafting
+    if Skillet and Skillet.UpdateResourceTrackerAfterCraft then
+        local recipe = self.queue[1].recipe
+        Skillet:UpdateResourceTrackerAfterCraft(recipe, actualCrafted)
+    end
+
+    if self.queue[1].numcasts < 1 then
+        self:RemoveFromQueue(1)
+        if table.getn(self.queue) > 0 then
             AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
-            -- Synastria: Show crafting prompt for remaining items
+            -- Synastria: Show crafting prompt for next item
             Skillet:ShowStartCraftingPrompt()
+        else
+            AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
         end
-        self.queuecasting = false
+    else
+        AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
+        -- Synastria: Show crafting prompt for remaining items
+        Skillet:ShowStartCraftingPrompt()
+    end
+    self.queuecasting = false
 end
 
 -- Synastria: StopCast removed - BAG_UPDATE handles craft completion reliably
@@ -1431,13 +1472,13 @@ end
 -- Synastria: Group queue items by profession to minimize profession switches
 function SkilletStitch:GroupQueueByProfession()
     if not self.queue or table.getn(self.queue) < 2 then
-        return  -- No need to group if queue is empty or has only one item
+        return -- No need to group if queue is empty or has only one item
     end
-    
+
     -- Create profession-based groups
     local grouped = {}
     local professionOrder = {}
-    
+
     for _, item in ipairs(self.queue) do
         local prof = item.profession
         if not grouped[prof] then
@@ -1446,7 +1487,7 @@ function SkilletStitch:GroupQueueByProfession()
         end
         table.insert(grouped[prof], item)
     end
-    
+
     -- Rebuild queue with items grouped by profession
     local newQueue = {}
     for _, prof in ipairs(professionOrder) do
@@ -1454,7 +1495,7 @@ function SkilletStitch:GroupQueueByProfession()
             table.insert(newQueue, item)
         end
     end
-    
+
     self.queue = newQueue
     AceEvent:TriggerEvent("SkilletStitch_Queue_Update", #self.queue)
     DEFAULT_CHAT_FRAME:AddMessage("Queue grouped by profession to minimize switches")
@@ -1468,10 +1509,11 @@ function SkilletStitch:GetIDFromLink(link)
     return tonumber(id)
 end
 
-function SkilletStitch:AddToQueue(index, times, profession)
+function SkilletStitch:AddToQueue(index, times, profession, addToTop)
     -- Synastria: Accept optional profession parameter for cross-profession queuing
+    -- and addToTop parameter to add items to the front of the queue
     recenttrade = profession or GetTradeSkillLine()
-    
+
     -- Synastria: REMOVED - This was clearing the queue when switching professions!
     -- For unified queue across all professions, we want to keep all items
     --[[
@@ -1479,56 +1521,99 @@ function SkilletStitch:AddToQueue(index, times, profession)
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[QUEUE DEBUG] CLEARING QUEUE! First item profession (" .. (self.queue[1]["profession"] or "nil") .. ") != current (" .. (recenttrade or "nil") .. ")|r")
         self:ClearQueue()
     end
-    ]]--
-    
+    ]] --
+
     if not times then
         times = 1
     end
 
     local found = false
+    local existingEntry = nil
 
     -- check to see if the item is already in the queue. If it is,
     -- then just increase the count
-    for _,s in pairs(self.queue) do
+    for _, s in pairs(self.queue) do
         if s.profession == recenttrade and s.index == index then
             found = true
+            existingEntry = s
             s.numcasts = s.numcasts + times
             break
         end
     end
 
+    -- Synastria: CRITICAL FIX - Ensure existing queue entries have complete recipe data
+    -- When incrementing an existing recipe, we must verify it has reagents for queue consumption tracking
+    -- Note: GetItemDataByIndex now converts legacy format to modern, so we only check for missing data
+    if found and existingEntry and existingEntry.recipe then
+        -- Check if recipe data is incomplete (missing reagents table)
+        if not existingEntry.recipe.reagents then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[AddToQueue] Existing recipe missing reagents, updating...|r")
+
+            local professionMapping = {
+                ["Mining"] = "Smelting",
+                ["Smelting"] = "Smelting"
+            }
+            local mappedProfession = professionMapping[recenttrade] or recenttrade
+
+            -- GetItemDataByIndex will auto-convert legacy format to modern
+            local fullRecipeData = self:GetItemDataByIndex(mappedProfession, index)
+            if not fullRecipeData then
+                fullRecipeData = self:GetItemDataByIndex(recenttrade, index)
+            end
+
+            if fullRecipeData then
+                existingEntry.recipe = fullRecipeData
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AddToQueue] Updated recipe with full data from cache|r")
+            end
+        end
+    end
+
     if not found then
         local recipeData = nil
-        
+
         -- Synastria: Map profession names for special cases (Mining -> Smelting)
         local professionMapping = {
             ["Mining"] = "Smelting",
             ["Smelting"] = "Smelting"
         }
         local mappedProfession = professionMapping[recenttrade] or recenttrade
-        
-        -- Synastria: Check the recipe info cache (populated when profession is scanned)
-        -- Check both the original and mapped profession names
-        if recipeInfoCache[mappedProfession] and recipeInfoCache[mappedProfession][index] then
-            recipeData = recipeInfoCache[mappedProfession][index]
-        elseif recipeInfoCache[recenttrade] and recipeInfoCache[recenttrade][index] then
-            recipeData = recipeInfoCache[recenttrade][index]
+
+        -- Synastria: CRITICAL FIX - Use GetItemDataByIndex to get FULL recipe data (including reagents)
+        -- The recipeInfoCache only has name/link, but we need reagents for queue consumption tracking
+        recipeData = self:GetItemDataByIndex(mappedProfession, index)
+        if not recipeData then
+            recipeData = self:GetItemDataByIndex(recenttrade, index)
         end
-        
-        -- If recipe data is a string or not a proper table, we need to fetch it
-        if type(recipeData) ~= "table" or not recipeData.link then
+
+        -- Debug: Show what we got from cache
+        if recipeData then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF888888[AddToQueue] Got recipe from cache: %s|r",
+                recipeData.name or "nil"))
+            if recipeData.reagents then
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF888888  Has .reagents table with %d items|r",
+                    #recipeData.reagents))
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800  WARNING: No .reagents table (data might be corrupt)|r")
+            end
+        end
+
+        -- If recipe data is not available from cache, fetch it from tradeskill window
+        if not recipeData or type(recipeData) ~= "table" or not recipeData.link then
             -- Only fetch from tradeskill window if we're in the correct profession
             local currentProfession = GetTradeSkillLine()
-            
+
             if currentProfession == recenttrade then
                 local name, _, _, _, _, _, _, _ = GetTradeSkillInfo(index)
                 local link = GetTradeSkillItemLink(index)
-                
+
+                -- Create minimal recipe data (reagents will be populated during queue processing)
                 recipeData = {
                     name = name,
                     link = link
                 }
-                
+
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF888888[AddToQueue] Created minimal recipe from tradeskill window|r")
+
                 -- Synastria: Cache it for future use
                 if not recipeInfoCache[recenttrade] then
                     recipeInfoCache[recenttrade] = {}
@@ -1539,19 +1624,32 @@ function SkilletStitch:AddToQueue(index, times, profession)
                 recipeData = {
                     name = "Unknown (" .. recenttrade .. " #" .. index .. ")",
                     link = nil,
-                    needsRefresh = true  -- Flag to refresh when profession opens
+                    needsRefresh = true -- Flag to refresh when profession opens
                 }
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF888888[AddToQueue] Created placeholder recipe (wrong profession)|r")
             end
         end
-        
-        table.insert(self.queue, {
-            ["profession"] = recenttrade,
-            ["index"] = index,
-            ["numcasts"] = times,
-            ["recipe"] = recipeData
-        })
-        
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ QUEUED: " .. (recipeData.name or "Unknown") .. " x" .. times .. " [" .. recenttrade .. "]|r")
+
+        -- Synastria: If addToTop is true, insert at position 1 (front of queue)
+        -- Otherwise insert at end (default behavior)
+        if addToTop then
+            table.insert(self.queue, 1, {
+                ["profession"] = recenttrade,
+                ["index"] = index,
+                ["numcasts"] = times,
+                ["recipe"] = recipeData
+            })
+        else
+            table.insert(self.queue, {
+                ["profession"] = recenttrade,
+                ["index"] = index,
+                ["numcasts"] = times,
+                ["recipe"] = recipeData
+            })
+        end
+
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ QUEUED: " ..
+        (recipeData.name or "Unknown") .. " x" .. times .. " [" .. recenttrade .. "]|r")
     end
 
     AceEvent:TriggerEvent("SkilletStitch_Queue_Add")
@@ -1562,7 +1660,7 @@ end
 function SkilletStitch:GetNumQueuedItems(index)
     local count = 0
 
-    for k,v in pairs(self.queue) do
+    for k, v in pairs(self.queue) do
         if v["index"] == index then
             count = count + tonumber(v["numcasts"])
         end
@@ -1579,7 +1677,7 @@ function SkilletStitch:ScanTrade()
     if not self.data[prof] then
         self.data[prof] = {}
     end
-    
+
     -- Synastria: Initialize recipe info cache for this profession
     if not recipeInfoCache[prof] then
         recipeInfoCache[prof] = {}
@@ -1587,13 +1685,13 @@ function SkilletStitch:ScanTrade()
 
     cache[prof] = nil
     local shred = false
-    for i=1,GetNumTradeSkills() do
+    for i = 1, GetNumTradeSkills() do
         local skillname, skilltype = GetTradeSkillInfo(i)
-        if skilltype~="header" and skillname then
+        if skilltype ~= "header" and skillname then
             local newstr = nil
             local link = GetTradeSkillItemLink(i)
-            local reagents = {}  -- Synastria: Initialize reagents table
-            
+            local reagents = {} -- Synastria: Initialize reagents table
+
             if not link then
                 shred = true
             else
@@ -1602,48 +1700,50 @@ function SkilletStitch:ScanTrade()
                     name = skillname,
                     link = link
                 }
-                
+
                 local v1, _, v2, _, v3, _, v4 = GetTradeSkillTools(i)
                 if v4 then
-                    v1 = v1..", "..v2..", "..v3..", "..v4
+                    v1 = v1 .. ", " .. v2 .. ", " .. v3 .. ", " .. v4
                 elseif v3 then
-                    v1 = v1..", "..v2..", "..v3
+                    v1 = v1 .. ", " .. v2 .. ", " .. v3
                 elseif v2 then
-                    v1 = v1..", "..v2
+                    v1 = v1 .. ", " .. v2
                 elseif v1 then
                     v1 = v1
                 end
                 local linkname = link:match("%|h%[([^%]]+)%]%|h")
-                local squishedlink = squishlink(link)  -- Synastria: Keep original link, squish for encoding
+                local squishedlink = squishlink(link) -- Synastria: Keep original link, squish for encoding
 
                 local minmade, maxmade = GetTradeSkillNumMade(i)
 
                 if linkname == skillname then
-                    newstr = ";"..squishedlink..";"..difficultyr[skilltype].. maxmade ..";"..(v1 or "")..";"
+                    newstr = ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
                 else
-                    newstr = skillname..";"..squishedlink..";"..difficultyr[skilltype].. maxmade .. ";"..(v1 or "")..";"
+                    newstr = skillname ..
+                    ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
                 end
-                
+
                 -- Synastria: Build reagents table with vendor info for new format
-                for j=1,GetTradeSkillNumReagents(i) do
-                    local reagentName, _, rcount, _ = GetTradeSkillReagentInfo(i,j)
-                    local reagentLink = GetTradeSkillReagentItemLink(i,j)
+                for j = 1, GetTradeSkillNumReagents(i) do
+                    local reagentName, _, rcount, _ = GetTradeSkillReagentInfo(i, j)
+                    local reagentLink = GetTradeSkillReagentItemLink(i, j)
                     if not reagentLink then
                         shred = true
                     else
                         -- Add to encoded string for backward compatibility
                         local squished = squishlink(reagentLink)
-                        newstr = newstr..rcount..";"..squished..";"
-                        
+                        newstr = newstr .. rcount .. ";" .. squished .. ";"
+
                         -- Synastria: Get vendor status from PeriodicTable for new format
                         local vendor = false
-                        
+
                         -- Synastria: Use PeriodicTable for vendor detection
                         -- Check both the base PT vendor set and our Skillet extension
                         if PT then
-                            vendor = (PT:ItemInSet(reagentLink,"Tradeskill.Mat.BySource.Vendor") or PT:ItemInSet(reagentLink,"Skillet.Vendor.Extended")) and true or false
+                            vendor = (PT:ItemInSet(reagentLink, "Tradeskill.Mat.BySource.Vendor") or PT:ItemInSet(reagentLink, "Skillet.Vendor.Extended")) and
+                            true or false
                         end
-                        
+
                         -- Store reagent in new format
                         table.insert(reagents, {
                             name = reagentName,
@@ -1654,30 +1754,29 @@ function SkilletStitch:ScanTrade()
                     end
                 end
             end
-            
+
             -- Synastria: Store both the encoded format (for backward compatibility) AND the new table format
             -- This happens regardless of whether link was nil or not (outside the if/else block)
             self.data[prof][i] = {
                 name = skillname,
-                link = link, -- Synastria: Store original unsquished link (may be nil if shred=true)
-                encoded = newstr,  -- Keep encoded version for compatibility  
-                reagents = reagents  -- Synastria: Store reagents with vendor info (may be empty if shred=true)
+                link = link,        -- Synastria: Store original unsquished link (may be nil if shred=true)
+                encoded = newstr,   -- Keep encoded version for compatibility
+                reagents = reagents -- Synastria: Store reagents with vendor info (may be empty if shred=true)
             }
         else
             self.data[prof][i] = nil
         end
     end
     if shred then
-        for k,v in pairs(self.data[prof]) do
+        for k, v in pairs(self.data[prof]) do
             self.data[prof][k] = nil
         end
         if not AceEvent:IsEventScheduled("SkilletStitch_AutoRescan") then
-            AceEvent:ScheduleEvent("SkilletStitch_AutoRescan", self.SkilletStitch_AutoRescan, 3,self)
+            AceEvent:ScheduleEvent("SkilletStitch_AutoRescan", self.SkilletStitch_AutoRescan, 3, self)
         end
     else
         AceEvent:TriggerEvent("SkilletStitch_Scan_Complete", prof)
     end
-
 end
 
 -- @function         SetAltCharacterItemLookupFunction

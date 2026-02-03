@@ -53,8 +53,13 @@ end
 -- If there are item needs to make the recipe that are not currently in your
 -- inventory, but you can craft them, then they are added to the queue before the
 -- requested recipe.
-local function add_items_to_queue(skillIndex, recipe, count, profession)
-    assert(tonumber(skillIndex) and recipe and tonumber(count),"Usage: add_items_to_queue(skillIndex, recipe, count, profession)")
+---@param skillIndex number The recipe index
+---@param recipe Recipe The recipe object
+---@param count number Number of times to queue
+---@param profession number The profession ID
+---@param addToTop boolean|nil Whether to add to top of queue
+local function add_items_to_queue(skillIndex, recipe, count, profession, addToTop)
+    assert(tonumber(skillIndex) and recipe and tonumber(count),"Usage: add_items_to_queue(skillIndex, recipe, count, profession, addToTop)")
 
     -- Synastria: Ensure queue is loaded before adding items
     if not Skillet.stitch.queue then
@@ -69,9 +74,10 @@ local function add_items_to_queue(skillIndex, recipe, count, profession)
     end
 
     if Skillet.db.profile.queue_craftable_reagents then
-        -- never more that 8 reagents
-        for i=1, 8, 1 do
-            reagent = recipe[i]
+        -- Synastria: Use modern reagents table format
+        local reagents = recipe.reagents or {}
+        for i=1, #reagents, 1 do
+            reagent = reagents[i]
 
             if not reagent then
                 break
@@ -86,6 +92,19 @@ local function add_items_to_queue(skillIndex, recipe, count, profession)
                 if itemId then
                     have = have + (GetCustomGameData(13, itemId) or 0)
                 end
+            end
+            
+            -- Synastria: Subtract items already allocated to queued recipes
+            local itemId = tonumber(string.match(reagent.link, "item:(%d+)"))
+            if itemId and Skillet.GetQueuedReagentConsumption then
+                local queuedConsumption = Skillet:GetQueuedReagentConsumption(itemId)
+                local haveBefore = have
+                have = have - queuedConsumption
+                
+                -- Debug output
+                local itemName = reagent.name or ("Item#" .. itemId)
+                Skillet:Print(string.format("|cFF888888[Queue Check] %s: bags %d, queued %d, avail %d, need %d|r", 
+                    itemName, haveBefore, queuedConsumption, have, needed))
             end
 
             if have < needed then
@@ -122,13 +141,17 @@ local function add_items_to_queue(skillIndex, recipe, count, profession)
                             -- not prevent the error, but will help detect it and generate
                             -- more meaningful error
                             local recipeId = tonumber((recipe.link or ""):match("item:(%d+)"))
-                            assert(recipeId ~= itemId, "Recursive loop detected: Recipe item ID " ..
-                                                             recipeId .. " has reagent with same ID " .. itemId)
+                            if recipeId then
+                                assert(recipeId ~= itemId, "Recursive loop detected: Recipe item ID " ..
+                                                                 recipeId .. " has reagent with same ID " .. itemId)
+                            end
                             
                             -- Synastria: Find which profession this recipe belongs to
                             local itemProfession = find_profession_for_recipe(item)
                             
-                            add_items_to_queue(item.index, item, (needed - have), itemProfession)
+                            -- Synastria: When adding required ingredients, also pass addToTop
+                            -- so they get added before the main recipe
+                            add_items_to_queue(item.index, item, (needed - have), itemProfession, addToTop)
                         end
                     end
                 end
@@ -136,7 +159,7 @@ local function add_items_to_queue(skillIndex, recipe, count, profession)
         end
     end
 
-	Skillet.stitch:AddToQueue(skillIndex, count, profession)
+	Skillet.stitch:AddToQueue(skillIndex, count, profession, addToTop)
 
     -- XXX: This is a bit hacky, try to think of something smarter
     Skillet:SaveQueue(Skillet.db.server.queues, Skillet.currentTrade)
@@ -177,12 +200,13 @@ end
 -- Queue the max number of craftable items for the currently selected skill
 function Skillet:QueueAllItems()
 	if self.currentTrade and self.selectedSkill then
+		---@type Recipe|nil
 		local s = self.stitch:GetItemDataByIndex(self.currentTrade, self.selectedSkill)
         if s then
             local factor = s.nummade or 1
             local count = math.floor(s.numcraftable/factor) - self.stitch:GetNumQueuedItems(self.selectedSkill)
             if count > 0 then
-                add_items_to_queue(self.selectedSkill, s, count)
+                add_items_to_queue(self.selectedSkill, s, count, self.currentTrade)
             end
 			-- queued all that could be created, reset the create count
 			-- back down to 0
@@ -199,7 +223,7 @@ function Skillet:QueueItems()
 		if self.currentTrade and self.selectedSkill then
 			local s = self.stitch:GetItemDataByIndex(self.currentTrade, self.selectedSkill);
 			if s then
-				add_items_to_queue(self.selectedSkill, s, self.numItemsToCraft)
+				add_items_to_queue(self.selectedSkill, s, self.numItemsToCraft, self.currentTrade)
 			end
 		end
 	end
@@ -213,7 +237,8 @@ function Skillet:CreateAllItems()
             local factor = s.nummade or 1
             local count = math.floor(s.numcraftable/factor) - self.stitch:GetNumQueuedItems(self.selectedSkill)
             if count > 0 then
-                add_items_to_queue(self.selectedSkill, s, count)
+                -- Synastria: Add to TOP of queue (true parameter) so we can craft immediately
+                add_items_to_queue(self.selectedSkill, s, count, nil, true)
                 self:ProcessQueue()
             end
             -- created all that could be created, reset the create count
@@ -231,7 +256,8 @@ function Skillet:CreateItems()
 		if self.currentTrade and self.selectedSkill then
 			local s = self.stitch:GetItemDataByIndex(self.currentTrade, self.selectedSkill);
 			if s then
-				add_items_to_queue(self.selectedSkill, s, self.numItemsToCraft)
+				-- Synastria: Add to TOP of queue (true parameter) so we can craft immediately
+				add_items_to_queue(self.selectedSkill, s, self.numItemsToCraft, nil, true)
 				self:ProcessQueue();
 			end
 		end
@@ -359,9 +385,9 @@ function Skillet:GetReagentsForQueuedRecipes(playername)
                     local recipe = self.stitch:GetItemDataByIndex(profession, index)
                     
                     if recipe then
-                        for j=1, 8, 1 do
-                            -- no recipes have more than 8 reagents
-                            local reagent = recipe[j]
+                        local reagents = recipe.reagents or {}
+                        for j=1, #reagents, 1 do
+                            local reagent = reagents[j]
                             if reagent then
                                 local needed = (count * reagent.needed)
                                 if needed > 0 then

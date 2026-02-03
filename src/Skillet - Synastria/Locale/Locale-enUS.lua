@@ -23,7 +23,6 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 L:RegisterTranslations("enUS", function() return {
 	["Skillet Trade Skills"] 		= true, -- default message
     ["Sorting"] 				 	= true,
-    ["Create"] 				 		= true,
     ["Queue All"]					= true,
     ["Create All"]					= true,
     ["Create"]						= true,
@@ -60,7 +59,6 @@ L:RegisterTranslations("enUS", function() return {
     ["ABOUTDESC"]					= "Prints info about Skillet",
     ["Config"]						= true,
     ["CONFIGDESC"]					= "Opens a config window for Skillet",
-    ["Shopping List"]					= true,
     ["SHOPPINGLISTDESC"]				= "Display the shopping list",
 
     ["Features"]					= true,

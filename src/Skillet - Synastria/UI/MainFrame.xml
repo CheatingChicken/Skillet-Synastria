@@ -733,6 +733,7 @@
             </CheckButton>
             
             <!-- Synastria: Equipment Only filter -->
+            <!-- COMMENTED OUT: Equipment filter is now automatically controlled by forge toggles
             <CheckButton name="SkilletEquipmentOnlyRecipes" inherits="SkilletCheckButtonTemplate">
                 <Anchors>
                     <Anchor point="LEFT" relativeTo="SkilletHideTrivialRecipes" relativePoint="RIGHT">
@@ -752,6 +753,7 @@
                     </OnClick>
                 </Scripts>
             </CheckButton>
+            -->
 
             <!--
             #

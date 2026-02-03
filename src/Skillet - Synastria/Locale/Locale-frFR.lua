@@ -22,7 +22,6 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 L:RegisterTranslations("frFR", function() return {
 --    ["Skillet Trade Skills"] 	                	= true, -- default message
-    ["Create"] 				 		= "Créer",
     ["Queue All"]					= "Queue tous", -- If someone got a good translation for this ...
     ["Create All"]					= "Créer tous",
     ["Create"]						= "Créer",

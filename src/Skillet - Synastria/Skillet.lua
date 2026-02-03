@@ -16,19 +16,20 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-]]--
+]] --
 
-local MAJOR_VERSION = "1.13"
-local MINOR_VERSION = ("$Revision: 153 $"):match("%d+") or 1
-local DATE = string.gsub("$Date: 2008-10-26 19:38:21 +0000 (Sun, 26 Oct 2008) $", "^.-(%d%d%d%d%-%d%d%-%d%d).-$", "%1")
+local MAJOR_VERSION    = "1.13"
+local MINOR_VERSION    = ("$Revision: 153 $"):match("%d+") or 1
+local DATE             = string.gsub("$Date: 2008-10-26 19:38:21 +0000 (Sun, 26 Oct 2008) $",
+    "^.-(%d%d%d%d%-%d%d%-%d%d).-$", "%1")
 
-Skillet = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceEvent-2.0", "AceDB-2.0", "AceHook-2.1")
-Skillet.title   = "Skillet"
-Skillet.version = MAJOR_VERSION .. "-" .. MINOR_VERSION
-Skillet.date    = DATE
+Skillet                = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceEvent-2.0", "AceDB-2.0", "AceHook-2.1")
+Skillet.title          = "Skillet"
+Skillet.version        = MAJOR_VERSION .. "-" .. MINOR_VERSION
+Skillet.date           = DATE
 
 -- Pull it into the local namespace, it's faster to access that way
-local Skillet = Skillet
+local Skillet          = Skillet
 
 -- Is a copy of LibPossessions is avaialable, use it for alt
 -- character inventory checks
@@ -40,19 +41,19 @@ Skillet:RegisterDB("SkilletDB", "SkilletDBPC")
 -- Global ( across all alts ) options
 Skillet:RegisterDefaults('profile', {
     -- user configurable options
-    vendor_buy_button = true,
-    vendor_auto_buy   = false,
-    show_item_notes_tooltip = false,
-    show_crafters_tooltip = true,
-    show_detailed_recipe_tooltip = true,
-    link_craftable_reagents = true,
-    queue_craftable_reagents = true,
-    display_required_level = false,
-    display_shopping_list_at_bank = false,
+    vendor_buy_button                = true,
+    vendor_auto_buy                  = false,
+    show_item_notes_tooltip          = false,
+    show_crafters_tooltip            = true,
+    show_detailed_recipe_tooltip     = true,
+    link_craftable_reagents          = true,
+    queue_craftable_reagents         = true,
+    display_required_level           = false,
+    display_shopping_list_at_bank    = false,
     display_shopping_list_at_auction = false,
-    transparency = 1.0,
-    scale = 1.0,
-} )
+    transparency                     = 1.0,
+    scale                            = 1.0,
+})
 
 -- Options specific to a single character
 Skillet:RegisterDefaults('server', {
@@ -64,7 +65,7 @@ Skillet:RegisterDefaults('server', {
 
     -- notes added to items crafted or used in crafting.
     notes = {},
-} )
+})
 
 -- Options specific to a single character
 Skillet:RegisterDefaults('char', {
@@ -73,7 +74,7 @@ Skillet:RegisterDefaults('char', {
 
     -- Display alt's items in shopping list
     include_alts = true,
-} )
+})
 
 -- Localization
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
@@ -240,7 +241,10 @@ Skillet.options =
                     type = "range",
                     name = L["Transparency"],
                     desc = L["TRANSPARAENCYDESC"],
-                    min = 0.1, max = 1, step = 0.05, isPercent = true,
+                    min = 0.1,
+                    max = 1,
+                    step = 0.05,
+                    isPercent = true,
                     get = function()
                         return Skillet.db.profile.transparency
                     end,
@@ -254,7 +258,10 @@ Skillet.options =
                     type = "range",
                     name = L["Scale"],
                     desc = L["SCALEDESC"],
-                    min = 0.1, max = 1.25, step = 0.05, isPercent = true,
+                    min = 0.1,
+                    max = 1.25,
+                    step = 0.05,
+                    isPercent = true,
                     get = function()
                         return Skillet.db.profile.scale
                     end,
@@ -328,7 +335,7 @@ Skillet.options =
                     AceLibrary("Waterfall-1.0"):Open("Skillet")
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cff8888ffSkillet|r: Combat lockdown restriction." ..
-                                                  " Leave combat and try again.")
+                        " Leave combat and try again.")
                 end
             end,
             guiHidden = true,
@@ -343,7 +350,7 @@ Skillet.options =
                     Skillet:DisplayShoppingList(false)
                 else
                     DEFAULT_CHAT_FRAME:AddMessage("|cff8888ffSkillet|r: Combat lockdown restriction." ..
-                                                  " Leave combat and try again.")
+                        " Leave combat and try again.")
                 end
             end,
             order = 52
@@ -397,7 +404,6 @@ Skillet.options =
 
 -- Called when the addon is loaded
 function Skillet:OnInitialize()
-
     -- hook default tooltips
     local tooltipsToHook = { ItemRefTooltip, GameTooltip, ShoppingTooltip1, ShoppingTooltip2 };
     for _, tooltip in pairs(tooltipsToHook) do
@@ -405,7 +411,9 @@ function Skillet:OnInitialize()
             if tooltip:GetScript("OnTooltipSetItem") then
                 local oldOnTooltipSetItem = tooltip:GetScript("OnTooltipSetItem")
                 tooltip:SetScript("OnTooltipSetItem", function(tooltip)
-                    oldOnTooltipSetItem(tooltip)
+                    if oldOnTooltipSetItem then
+                        oldOnTooltipSetItem(tooltip)
+                    end
                     Skillet:AddItemNotesToTooltip(tooltip)
                 end)
             else
@@ -425,8 +433,7 @@ function Skillet:OnInitialize()
     -- Make sure this is done in initialize, not enable as we want the chat
     -- commands to be available even when the mod is disabled. Otherwise,
     -- how would the mod be enabled again?
-    self:RegisterChatCommand({"/skillet"}, self.options, "SKILLET")
-
+    self:RegisterChatCommand({ "/skillet" }, self.options, "SKILLET")
 end
 
 -- Returns the number of items across all characters, including the
@@ -438,7 +445,6 @@ end
 
 -- Called when the addon is enabled
 function Skillet:OnEnable()
-
     -- Hook into the events that we care about
 
     -- Trade skill window changes
@@ -452,10 +458,10 @@ function Skillet:OnEnable()
     -- Tracks when the bumber of items on hand changes
     self:RegisterEvent("BAG_UPDATE")
     self:RegisterEvent("TRADE_CLOSED")
-    
+
     -- Synastria: Register for UI error messages to detect craft failures
     self:RegisterEvent("UI_ERROR_MESSAGE")
-    
+
     -- Synastria: Register for spell cast events to detect craft failures
     self:RegisterEvent("UNIT_SPELLCAST_FAILED")
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
@@ -480,10 +486,10 @@ function Skillet:OnEnable()
     -- as we consume reagents.
     self:RegisterEvent("SkilletStitch_Queue_Continue", "QueueChanged")
     self:RegisterEvent("SkilletStitch_Queue_Complete", "QueueChanged")
-    self:RegisterEvent("SkilletStitch_Queue_Add",      "QueueChanged")
-    self:RegisterEvent("SkilletStitch_Craft_Failed",   "OnCraftFailed")
+    self:RegisterEvent("SkilletStitch_Queue_Add", "QueueChanged")
+    self:RegisterEvent("SkilletStitch_Craft_Failed", "OnCraftFailed")
 
-    self:RegisterEvent("SkilletStitch_Scan_Complete",  "ScanCompleted")
+    self:RegisterEvent("SkilletStitch_Scan_Complete", "ScanCompleted")
 
     self.hideUncraftableRecipes = false
     self.hideTrivialRecipes = false
@@ -505,7 +511,7 @@ function Skillet:OnEnable()
         self.stitch.data = self.db.server.recipes[UnitName("player")]
     end
     self.db.server.recipes[UnitName("player")] = self.stitch.data
-    
+
     -- Synastria: Populate recipe info cache from database
     if self.stitch.PopulateRecipeInfoCache then
         self.stitch:PopulateRecipeInfoCache()
@@ -513,7 +519,7 @@ function Skillet:OnEnable()
 
     self.stitch:EnableDataGathering("Skillet")
     self.stitch:EnableQueue("Skillet")
-    
+
     -- Synastria: Check if any professions have old encoded data and need rescanning
     -- Set flag instead of showing dialog immediately
     self:ScheduleEvent("Skillet_CheckOldData", function()
@@ -521,14 +527,13 @@ function Skillet:OnEnable()
     end, 3)
 
     AceLibrary("Waterfall-1.0"):Register("Skillet",
-                   "aceOptions", Skillet.options,
-                   "title",      L["Skillet Trade Skills"],
-                   "colorR",     0,
-                   "colorG",     0.7,
-                   "colorB",     0
-                   )
+        "aceOptions", Skillet.options,
+        "title", L["Skillet Trade Skills"],
+        "colorR", 0,
+        "colorG", 0.7,
+        "colorB", 0
+    )
     AceLibrary("Waterfall-1.0"):Open("Skillet")
-
 end
 
 -- Called when the addon is disabled
@@ -548,7 +553,7 @@ local function is_known_trade_skill(name)
     -- the cached list of skills as this might also be a tradeskill that
     -- the user has just learned.
     local numSkills = GetNumSkillLines()
-    for skillIndex=1, numSkills do
+    for skillIndex = 1, numSkills do
         local skillName = GetSkillLineInfo(skillIndex)
         if skillName ~= nil and skillName == name then
             return true
@@ -570,11 +575,10 @@ local function is_supported_trade(parent)
     -- EnchantingSell does some odd things to the enchanting toggle,
     -- so expect some odd bug reports about this.
     if ESeller and ESeller:IsActive() and ESeller.db.char.DisableDefaultCraftFrame then
-         return false
+        return false
     end
 
     return is_known_trade_skill(name) and not IsTradeSkillLinked()
-
 end
 
 local scan_in_progress = false
@@ -639,11 +643,11 @@ end
 local function Skillet_rescan_skills()
     local numSkills = GetNumSkillLines()
     local skills = {}
-    for skillIndex=1, numSkills do
+    for skillIndex = 1, numSkills do
         local skillName = GetSkillLineInfo(skillIndex)
         if skillName ~= nil then
             skills[skillName] = skillName
-            
+
             -- Synastria: Add mapped profession names
             -- Mining skill opens Smelting tradeskill window, so treat them as the same
             if skillName == "Mining" then
@@ -700,31 +704,31 @@ function Skillet:TRADE_SKILL_SHOW()
                 -- Profession switch successful!
                 self.stitch.waitingForProfessionSwitch = false
                 self.stitch.targetProfession = nil
-                
+
                 -- Update the crafting prompt to show start button
                 if self.startCraftingPrompt and self.startCraftingPrompt:IsVisible() then
                     self:ShowStartCraftingPrompt()
                 end
             end
         end
-        
+
         -- Synastria: Clear craftability cache when switching professions
         local lib = AceLibrary("SkilletStitch-1.1")
         if lib and lib.ClearCraftabilityCache then
             lib:ClearCraftabilityCache()
         end
-        
+
         -- Synastria: Check if we need to prompt for recipe rescanning
         if self.needsRecipeScan and #self.needsRecipeScan > 0 then
             local temp = self.needsRecipeScan
-            self.needsRecipeScan = nil  -- Clear flag before showing dialog
+            self.needsRecipeScan = nil -- Clear flag before showing dialog
             self:ShowRecipePrompt(temp)
         end
-        
+
         self:UpdateTradeSkill()
         self:ShowTradeSkillWindow()
         self.stitch:TRADE_SKILL_SHOW()
-        
+
         -- Synastria: Start background craftability calculation
         local profession = GetTradeSkillLine()
         if profession and profession ~= "UNKNOWN" then
@@ -753,7 +757,7 @@ end
 
 -- Called when the trade skill window is closed
 function Skillet:TRADE_SKILL_CLOSE()
-    show_after_scan = false
+    local show_after_scan = false
     self:HideAllWindows()
 end
 
@@ -772,7 +776,7 @@ function Skillet:BAG_UPDATE()
     if lib and lib.ClearCraftabilityCache then
         lib:ClearCraftabilityCache()
     end
-    
+
     local showing = false
     if self.tradeSkillFrame and self.tradeSkillFrame:IsVisible() then
         showing = true
@@ -782,16 +786,21 @@ function Skillet:BAG_UPDATE()
     end
 
     if showing then
-        -- bag updates can happen fairly frequently and we don't want to
-        -- be scanning all the time so ... buffer updates to a single event
-        -- that fires after a 1/4 second.
-        if not AceEvent:IsEventScheduled("Skillet_rescan_bags") then
-            AceEvent:ScheduleEvent("Skillet_rescan_bags", Skillet_rescan_bags, 0.25)
+        -- Synastria: Start background recalculation after clearing cache
+        -- This replaces the old 0.25s scheduled rescan which would read from
+        -- an empty cache and populate it with incorrect values
+        local profession = self.currentTrade
+        if profession and profession ~= "UNKNOWN" and self.CraftCalc then
+            self.CraftCalc:StartBackgroundCalculation(profession, function(count)
+                -- Callback when calculation is complete - update windows
+                self:UpdateTradeSkillWindow()
+                self:UpdateShoppingListWindow()
+            end)
         end
     else
-       -- no trade window open, but something change, we will need to rescan
-       -- when the window is next opened.
-       need_rescan_on_open = true
+        -- no trade window open, but something change, we will need to rescan
+        -- when the window is next opened.
+        need_rescan_on_open = true
     end
 
     if MerchantFrame and MerchantFrame:IsVisible() then
@@ -829,19 +838,19 @@ function Skillet:UNIT_SPELLCAST_SUCCEEDED(unit, spellName, rank, lineID, spellID
     if unit ~= "player" or not spellID then
         return
     end
-    
+
     -- Synastria: Update extraction frame after milling/prospecting
     -- Results go to resource bank and don't trigger BAG_UPDATE
-    local isMillingOrProspecting = (spellID == 51005 or spellID == 80348 or 
-                                     spellID == 31252 or spellID == 80347)
-    
+    local isMillingOrProspecting = (spellID == 51005 or spellID == 80348 or
+        spellID == 31252 or spellID == 80347)
+
     if isMillingOrProspecting and self.extractionFrame and self.extractionFrame:IsVisible() then
         -- Schedule update after a short delay to allow resource bank to update
         self:ScheduleEvent("Skillet_UpdateExtractionAfterCast", function()
             self:UpdateExtractionListDisplay()
         end, 0.5)
     end
-    
+
     -- Synastria: Handle queue removal for non-item-producing crafts (enchantments, improvements)
     -- These don't produce items in bags, so BAG_UPDATE never fires to remove them from queue
     if self.stitch and self.stitch.queuecasting and self.stitch.queue and self.stitch.queue[1] then
@@ -899,7 +908,6 @@ function Skillet:UpdateTradeSkill()
 
         -- Load up any saved queued items for this profession
         self:LoadQueue(self.db.server.queues, new_trade)
-
     end
 end
 
@@ -923,7 +931,6 @@ end
 -- Hides the Skillet trade skill window. Does nothing if the window is not visible
 --
 function Skillet:internal_HideTradeSkillWindow()
-
     local closed -- was anything closed by us?
     local frame = self.tradeSkillFrame
 
@@ -973,18 +980,18 @@ function Skillet:DebugSelectedRecipe()
     if not self.selectedSkill then
         return
     end
-    
+
     local lib = AceLibrary("SkilletStitch-1.1")
     local recipe = lib:GetItemDataByIndex(self.currentTrade, self.selectedSkill)
-    
+
     if not recipe then
         return
     end
-    
+
     if self.CraftCalc then
         -- Test bags+resbank - FORCE RECALCULATION (bypass cache)
         local numCraftable = self.CraftCalc:CalculateRecipeCraftability(recipe, lib, false, true, 0, true)
-        
+
         -- Test with bank - FORCE RECALCULATION
         local numCraftableBank = self.CraftCalc:CalculateRecipeCraftability(recipe, lib, true, true, 0, true)
     end
@@ -998,19 +1005,19 @@ function Skillet:IsItemAttuned(itemLink)
     if not itemLink then
         return false
     end
-    
+
     -- Use GetItemAttuneProgress as it's more reliable
     -- Returns a number 0-100 representing attunement progress
     if GetItemAttuneProgress then
         local progress = GetItemAttuneProgress(itemLink)
         return progress and progress >= 100
     end
-    
+
     -- Fallback: try HasAttunedAnyVariant (may not work correctly)
     if HasAttunedAnyVariant then
         return HasAttunedAnyVariant(itemLink) == true
     end
-    
+
     -- No API available
     return false
 end
@@ -1022,7 +1029,7 @@ function Skillet:GetItemAttunementProgress(itemLink)
     if not itemLink or not GetItemAttuneProgress then
         return nil
     end
-    
+
     return GetItemAttuneProgress(itemLink)
 end
 
@@ -1033,61 +1040,106 @@ end
 -- Format: [sourceItemId] = {targetItemId, conversionRatio, conversionType, name}
 --   ratio: how many source items = 1 target (e.g., 10 Crystallized = 1 Eternal)
 --   type: "combine" (use source item) or "split" (use target item to get source)
--- 
+--
 -- To add new conversions:
 -- 1. Add entries to CONVERSION_DEFINITIONS
 -- 2. System automatically builds lookup maps
 -- 3. Shopping list and queue processor use the same data
 -- ========================================
 
+-- NEW: Hardcoded conversion groups for extraction interface with labels
+Skillet.CONVERSION_GROUPS = {
+    {
+        label = "Eternal Elements",
+        resultItems = { 35623, 35624, 36860, 35625, 35627, 35622 }, -- Water, Earth, Fire, Life, Shadow, Air (Eternals)
+        sourceItems = { 37705, 37701, 37702, 37704, 37703, 37700 }, -- Crystallized versions
+        bidirectional = true,                                       -- Can convert both ways
+        ratio = 10                                                  -- 10 crystallized = 1 eternal
+    },
+    {
+        label = "Elemental Primals",
+        resultItems = { 21884, 22452, 22451, 21886 }, -- Life, Earth, Air, Fire (Primals)
+        sourceItems = { 22575, 22573, 22572, 22574 }, -- Corresponding Motes
+        bidirectional = false,                        -- One-way conversion only
+        ratio = 10                                    -- 10 motes = 1 primal
+    },
+    {
+        label = "Abstract Primals",
+        resultItems = { 21884, 22457, 22456 }, -- Life, Mana, Shadow (Primals)
+        sourceItems = { 22575, 22576, 22577 }, -- Corresponding Motes
+        bidirectional = false,                 -- One-way conversion only
+        ratio = 10                             -- 10 motes = 1 primal
+    },
+    {
+        label = "Enchanting Essences",
+        -- Row 1 (Greater): Cosmic, Planar, Eternal, Nether
+        -- Row 2 (Lesser): Cosmic, Planar, Eternal, Nether
+        -- Row 3 (Greater): Mystic, Astral, Magic
+        -- Row 4 (Lesser): Mystic, Astral, Magic
+        resultItems = { 34055, 22446, 16203, 11175, 11135, 11082, 10939 }, -- Greater Essences (high→low level)
+        sourceItems = { 34056, 22447, 16202, 11174, 11134, 10998, 10938 }, -- Lesser Essences (high→low level)
+        bidirectional = true,                                              -- Can convert both ways
+        ratio = 3,                                                         -- 3 lesser = 1 greater
+        extended = true                                                    -- Use large layout (4 rows needed)
+    }
+}
+
 Skillet.CONVERSION_DEFINITIONS = {
     -- ===== WRATH: Crystallized → Eternal (combine 10 into 1) =====
-    {source = 37708, target = 35623, ratio = 10, type = "combine", name = "Crystallized Air → Eternal Air"},
-    {source = 37701, target = 35624, ratio = 10, type = "combine", name = "Crystallized Earth → Eternal Earth"},
-    {source = 37702, target = 36860, ratio = 10, type = "combine", name = "Crystallized Fire → Eternal Fire"},
-    {source = 37704, target = 35625, ratio = 10, type = "combine", name = "Crystallized Life → Eternal Life"},
-    {source = 37703, target = 35627, ratio = 10, type = "combine", name = "Crystallized Shadow → Eternal Shadow"},
-    {source = 37705, target = 35623, ratio = 10, type = "combine", name = "Crystallized Water → Eternal Water"},
-    
+    { source = 37700, target = 35622, ratio = 10, type = "combine", name = "Crystallized Air → Eternal Air" },
+    { source = 37701, target = 35624, ratio = 10, type = "combine", name = "Crystallized Earth → Eternal Earth" },
+    { source = 37702, target = 36860, ratio = 10, type = "combine", name = "Crystallized Fire → Eternal Fire" },
+    { source = 37704, target = 35625, ratio = 10, type = "combine", name = "Crystallized Life → Eternal Life" },
+    { source = 37703, target = 35627, ratio = 10, type = "combine", name = "Crystallized Shadow → Eternal Shadow" },
+    { source = 37705, target = 35623, ratio = 10, type = "combine", name = "Crystallized Water → Eternal Water" },
+
     -- ===== WRATH: Eternal → Crystallized (split 1 into 10) =====
-    {source = 35623, target = 37708, ratio = 0.1, type = "split", name = "Eternal Air → Crystallized Air"},
-    {source = 35624, target = 37701, ratio = 0.1, type = "split", name = "Eternal Earth → Crystallized Earth"},
-    {source = 36860, target = 37702, ratio = 0.1, type = "split", name = "Eternal Fire → Crystallized Fire"},
-    {source = 35625, target = 37704, ratio = 0.1, type = "split", name = "Eternal Life → Crystallized Life"},
-    {source = 35627, target = 37703, ratio = 0.1, type = "split", name = "Eternal Shadow → Crystallized Shadow"},
-    {source = 35623, target = 37705, ratio = 0.1, type = "split", name = "Eternal Water → Crystallized Water"},
-    
+    { source = 35622, target = 37700, ratio = 0.1, type = "split", name = "Eternal Air → Crystallized Air" },
+    { source = 35624, target = 37701, ratio = 0.1, type = "split", name = "Eternal Earth → Crystallized Earth" },
+    { source = 36860, target = 37702, ratio = 0.1, type = "split", name = "Eternal Fire → Crystallized Fire" },
+    { source = 35625, target = 37704, ratio = 0.1, type = "split", name = "Eternal Life → Crystallized Life" },
+    { source = 35627, target = 37703, ratio = 0.1, type = "split", name = "Eternal Shadow → Crystallized Shadow" },
+    { source = 35623, target = 37705, ratio = 0.1, type = "split", name = "Eternal Water → Crystallized Water" },
+
     -- ===== TBC: Mote → Primal (combine 10 into 1) =====
-    {source = 22572, target = 22451, ratio = 10, type = "combine", name = "Mote of Air → Primal Air"},
-    {source = 22573, target = 22452, ratio = 10, type = "combine", name = "Mote of Earth → Primal Earth"},
-    {source = 22574, target = 21886, ratio = 10, type = "combine", name = "Mote of Fire → Primal Fire"},
-    {source = 22575, target = 21884, ratio = 10, type = "combine", name = "Mote of Life → Primal Life"},
-    {source = 22576, target = 22457, ratio = 10, type = "combine", name = "Mote of Mana → Primal Mana"},
-    {source = 22577, target = 22456, ratio = 10, type = "combine", name = "Mote of Shadow → Primal Shadow"},
-    {source = 22578, target = 21885, ratio = 10, type = "combine", name = "Mote of Water → Primal Water"},
-    
+    { source = 22572, target = 22451, ratio = 10, type = "combine", name = "Mote of Air → Primal Air" },
+    { source = 22573, target = 22452, ratio = 10, type = "combine", name = "Mote of Earth → Primal Earth" },
+    { source = 22574, target = 21886, ratio = 10, type = "combine", name = "Mote of Fire → Primal Fire" },
+    { source = 22575, target = 21884, ratio = 10, type = "combine", name = "Mote of Life → Primal Life" },
+    { source = 22576, target = 22457, ratio = 10, type = "combine", name = "Mote of Mana → Primal Mana" },
+    { source = 22577, target = 22456, ratio = 10, type = "combine", name = "Mote of Shadow → Primal Shadow" },
+    { source = 22578, target = 21885, ratio = 10, type = "combine", name = "Mote of Water → Primal Water" },
+
     -- Note: Primal Fire/Earth → Mote conversions are real Mining recipes, not virtual conversions
-    
+
     -- ===== VANILLA: Enchanting Essence Conversions (3:1 ratio) =====
     -- Lesser → Greater (combine 3 into 1)
-    {source = 10938, target = 10939, ratio = 3, type = "combine", name = "Lesser Magic Essence → Greater Magic Essence"},
-    {source = 10940, target = 10978, ratio = 3, type = "combine", name = "Lesser Astral Essence → Greater Astral Essence"},
-    {source = 10998, target = 11082, ratio = 3, type = "combine", name = "Lesser Mystic Essence → Greater Mystic Essence"},
-    {source = 11134, target = 11135, ratio = 3, type = "combine", name = "Lesser Nether Essence → Greater Nether Essence"},
-    {source = 11174, target = 11175, ratio = 3, type = "combine", name = "Lesser Eternal Essence → Greater Eternal Essence"},
-    
+    { source = 10938, target = 10939, ratio = 3, type = "combine", name = "Lesser Magic Essence → Greater Magic Essence" },
+    { source = 10998, target = 11082, ratio = 3, type = "combine", name = "Lesser Mystic Essence → Greater Mystic Essence" },
+    { source = 11134, target = 11135, ratio = 3, type = "combine", name = "Lesser Nether Essence → Greater Nether Essence" },
+    { source = 11174, target = 11175, ratio = 3, type = "combine", name = "Lesser Eternal Essence → Greater Eternal Essence" },
+    { source = 10940, target = 10978, ratio = 3, type = "combine", name = "Lesser Astral Essence → Greater Astral Essence" },
+
     -- Greater → Lesser (split 1 into 3)
-    {source = 10939, target = 10938, ratio = 0.333, type = "split", name = "Greater Magic Essence → Lesser Magic Essence"},
-    {source = 10978, target = 10940, ratio = 0.333, type = "split", name = "Greater Astral Essence → Lesser Astral Essence"},
-    {source = 11082, target = 10998, ratio = 0.333, type = "split", name = "Greater Mystic Essence → Lesser Mystic Essence"},
-    {source = 11135, target = 11134, ratio = 0.333, type = "split", name = "Greater Nether Essence → Lesser Nether Essence"},
-    {source = 11175, target = 11174, ratio = 0.333, type = "split", name = "Greater Eternal Essence → Lesser Eternal Essence"},
-    
+    { source = 10939, target = 10938, ratio = 0.333, type = "split", name = "Greater Magic Essence → Lesser Magic Essence" },
+    { source = 11082, target = 10998, ratio = 0.333, type = "split", name = "Greater Mystic Essence → Lesser Mystic Essence" },
+    { source = 11135, target = 11134, ratio = 0.333, type = "split", name = "Greater Nether Essence → Lesser Nether Essence" },
+    { source = 11175, target = 11174, ratio = 0.333, type = "split", name = "Greater Eternal Essence → Lesser Eternal Essence" },
+    { source = 10978, target = 10940, ratio = 0.333, type = "split", name = "Greater Astral Essence → Lesser Astral Essence" },
+
+    -- ===== TBC: Planar Essence Conversions (3:1 ratio) =====
+    { source = 22447, target = 22446, ratio = 3, type = "combine", name = "Lesser Planar Essence → Greater Planar Essence" },
+    { source = 22446, target = 22447, ratio = 0.333, type = "split", name = "Greater Planar Essence → Lesser Planar Essence" },
+
+    -- ===== WRATH: Cosmic Essence Conversions (3:1 ratio) =====
+    { source = 34056, target = 34055, ratio = 3, type = "combine", name = "Lesser Cosmic Essence → Greater Cosmic Essence" },
+    { source = 34055, target = 34056, ratio = 0.333, type = "split", name = "Greater Cosmic Essence → Lesser Cosmic Essence" },
+
     -- ===== VANILLA: Enchanting Shard Conversions (3:1 ratio, one-way only) =====
-    {source = 11084, target = 11139, ratio = 3, type = "combine", name = "Small Glimmering Shard → Large Glimmering Shard"},
-    {source = 11138, target = 11177, ratio = 3, type = "combine", name = "Small Glowing Shard → Large Glowing Shard"},
-    {source = 11176, target = 11178, ratio = 3, type = "combine", name = "Small Radiant Shard → Large Radiant Shard"},
-    {source = 14343, target = 14344, ratio = 3, type = "combine", name = "Small Brilliant Shard → Large Brilliant Shard"},
+    { source = 11084, target = 11139, ratio = 3, type = "combine", name = "Small Glimmering Shard → Large Glimmering Shard" },
+    { source = 11138, target = 11177, ratio = 3, type = "combine", name = "Small Glowing Shard → Large Glowing Shard" },
+    { source = 11176, target = 11178, ratio = 3, type = "combine", name = "Small Radiant Shard → Large Radiant Shard" },
+    { source = 14343, target = 14344, ratio = 3, type = "combine", name = "Small Brilliant Shard → Large Brilliant Shard" },
 }
 
 -- Build lookup maps from definitions (backwards compatibility)
@@ -1115,7 +1167,7 @@ function Skillet:GetConversionInfo(itemId)
             return conversion.source, conversion.ratio, conversion.type
         end
     end
-    
+
     -- Check if this item is a SOURCE (can be converted INTO something else)
     -- This handles the case where we have excess and want to convert it
     for _, conversion in ipairs(self.CONVERSION_DEFINITIONS) do
@@ -1123,8 +1175,56 @@ function Skillet:GetConversionInfo(itemId)
             return conversion.target, conversion.ratio, conversion.type
         end
     end
-    
+
     return nil, nil, nil
+end
+
+-- Synastria: Calculate how many of an item will be consumed by queued recipes
+---@param itemId number The item ID to check
+---@return number consumed Number of items that will be consumed by the queue
+function Skillet:GetQueuedReagentConsumption(itemId)
+    if not itemId then return 0 end
+
+    local lib = AceLibrary("SkilletStitch-1.1")
+    if not lib or not lib.queue then return 0 end
+
+    -- Debug: Show queue size and item being checked
+    local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
+    self:Print(string.format("|cFF888888[QueueConsump] Checking %s (id=%s), queue size=%d|r",
+        itemName, tostring(itemId), #lib.queue))
+
+    local totalNeeded = 0
+
+    -- Iterate through queue and count reagents needed
+    for i = 1, #lib.queue do
+        local entry = lib.queue[i]
+        local recipeName = entry.recipe and entry.recipe.name or "Unknown"
+        self:Print(string.format("|cFF888888  [%d] Recipe: %s|r", i, recipeName))
+
+        if entry.recipe and entry.recipe.reagents then
+            self:Print(string.format("|cFF888888    Has .reagents table with %d items|r", #entry.recipe.reagents))
+            for j, reagent in ipairs(entry.recipe.reagents) do
+                local reagentId = self:GetItemIDFromLink(reagent.link)
+                local reagentName = GetItemInfo(reagentId) or "Unknown"
+                self:Print(string.format("|cFF888888      [%d] %s (id=%s vs %s) match=%s|r",
+                    j, reagentName, tostring(reagentId), tostring(itemId), tostring(reagentId == itemId)))
+
+                if reagentId == itemId then
+                    local neededPerCraft = reagent.num or 1
+                    local numCasts = entry.numcasts or 1
+                    local amount = neededPerCraft * numCasts
+                    totalNeeded = totalNeeded + amount
+                    self:Print(string.format("|cFFFFAA00      MATCH! Adding %d (need %d × %d casts)|r",
+                        amount, neededPerCraft, numCasts))
+                end
+            end
+        else
+            self:Print("|cFF888888    WARNING: Recipe missing reagents data!|r")
+        end
+    end
+
+    self:Print(string.format("|cFFFFAA00[QueueConsump] Total for %s: %d|r", itemName, totalNeeded))
+    return totalNeeded
 end
 
 -- Synastria: Queue conversions when needed (bidirectional support)
@@ -1136,80 +1236,89 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
     if not reagent or not needed or needed <= 0 then
         return false
     end
-    
+
     -- Get the item ID from the reagent link
     local itemId = self:GetItemIDFromLink(reagent.link)
     if not itemId then
         return false
     end
-    
+
     -- Get conversion info for this item
     local targetId, ratio, conversionType = self:GetConversionInfo(itemId)
     if not targetId then
         return false -- No conversion available for this item
     end
-    
+
     -- Calculate how many we have of the needed item
     local available = GetItemCount(itemId, true) or 0
     if GetCustomGameData then
         available = available + (GetCustomGameData(13, itemId) or 0)
     end
-    
+
+    -- Subtract items already allocated to queued recipes
+    local queuedConsumption = self:GetQueuedReagentConsumption(itemId)
+    local availableBeforeQueue = available
+    available = available - queuedConsumption
+
+    -- Debug output
+    local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
+    self:Print(string.format("|cFF888888[Conv Check] %s: have %d, queued %d, avail %d, need %d|r",
+        itemName, availableBeforeQueue, queuedConsumption, available, needed))
+
     if available >= needed then
-        return false -- We already have enough
+        return false -- We already have enough (after accounting for queue)
     end
-    
+
     -- Calculate the shortage - this is what we need to convert
     local shortage = needed - available
     local conversionsNeeded, amountToConvert
-    
+
     if conversionType == "combine" then
         -- Crystallized → Eternal (10:1 ratio)
         -- Need X Eternals, queue conversion for ALL of them
         conversionsNeeded = shortage
         amountToConvert = conversionsNeeded * math.floor(1 / ratio) -- e.g., 10 Crystallized per Eternal
-        
     elseif conversionType == "split" then
         -- Eternal → Crystallized (1:10 ratio)
         -- Need X Crystallized, calculate how many Eternals we need to split
         local eternalsNeeded = math.ceil(shortage * ratio) -- e.g., divide by 10 and round up
         conversionsNeeded = eternalsNeeded
-        amountToConvert = conversionsNeeded -- Eternals to split
+        amountToConvert = conversionsNeeded                -- Eternals to split
     else
         return false
     end
-    
+
     if conversionsNeeded <= 0 then
         return false
     end
-    
+
     -- Get item names
     local neededName = GetItemInfo(itemId) or "Item"
     local convertibleName = GetItemInfo(targetId) or "Item"
-    
+
     -- Determine which item we're using and which we're making
     local sourceId, sourceNeeded, outputId, outputAmount
     if conversionType == "combine" then
         sourceId = targetId -- Crystallized (what we use)
         sourceNeeded = amountToConvert
-        outputId = itemId -- Eternal (what we make)
+        outputId = itemId   -- Eternal (what we make)
         outputAmount = conversionsNeeded
-    else -- split
+    else                    -- split
         sourceId = targetId -- Eternal (what we use)
         sourceNeeded = amountToConvert
-        outputId = itemId -- Crystallized (what we make)
+        outputId = itemId   -- Crystallized (what we make)
         outputAmount = conversionsNeeded * 10
     end
-    
+
     -- Add the virtual conversion recipe to the queue
     local lib = AceLibrary("SkilletStitch-1.1")
     if lib and lib.queue then
         -- Check if this exact conversion is already in the queue
         for i = 1, #lib.queue do
             local entry = lib.queue[i]
-            if entry.recipe and entry.recipe.isVirtualConversion and 
-               entry.recipe.sourceId == sourceId and 
-               entry.recipe.outputId == outputId then
+            if entry.recipe and entry.recipe.isVirtualConversion and
+                entry.recipe.sourceId == sourceId and
+                entry.recipe.outputId == outputId then
                 -- Found existing conversion - increase the amount
                 local oldAmount = entry.recipe.outputAmount
                 if conversionType == "combine" then
@@ -1219,51 +1328,53 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
                     entry.recipe.outputAmount = oldAmount + (conversionsNeeded * 10)
                     entry.recipe.sourceNeeded = math.ceil(entry.recipe.outputAmount / 10)
                 end
-                
+
                 local outputName = GetItemInfo(outputId) or "Item"
                 entry.recipe.name = string.format("%s (x%d)", outputName, entry.recipe.outputAmount)
-                
-                self:Print(string.format("|cFFFFAA00Conversion updated: %s (now %dx)|r", outputName, entry.recipe.outputAmount))
-                
+
+                self:Print(string.format("|cFFFFAA00Conversion updated: %s (now %dx)|r", outputName,
+                    entry.recipe.outputAmount))
+
                 -- Clear craftability cache since conversion amounts changed
                 lib:ClearCraftabilityCache()
                 return true
             end
         end
-        
+
         -- No existing conversion found - create new one
         local virtualRecipe = {
-            name = string.format("%s (x%d)", neededName, conversionType == "combine" and conversionsNeeded or outputAmount),
+            name = string.format("%s (x%d)", neededName,
+                conversionType == "combine" and conversionsNeeded or outputAmount),
             link = reagent.link,
             isVirtualConversion = true,
             conversionType = conversionType, -- "combine" or "split"
-            sourceId = sourceId, -- What we withdraw and use
-            outputId = outputId, -- What we make
-            sourceNeeded = sourceNeeded, -- How many to withdraw
-            outputAmount = outputAmount, -- How many we'll make
+            sourceId = sourceId,             -- What we withdraw and use
+            outputId = outputId,             -- What we make
+            sourceNeeded = sourceNeeded,     -- How many to withdraw
+            outputAmount = outputAmount,     -- How many we'll make
             -- Backwards compatibility fields
             crystallizedId = conversionType == "combine" and sourceId or outputId,
             eternalId = conversionType == "combine" and outputId or sourceId,
             crystallizedNeeded = conversionType == "combine" and sourceNeeded or outputAmount,
             eternalsToMake = conversionType == "combine" and conversionsNeeded or amountToConvert,
         }
-        
+
         table.insert(lib.queue, 1, { -- Insert at the beginning so it runs first
             profession = "Conversion",
             index = 0,
             numcasts = 1,
             recipe = virtualRecipe
         })
-        
+
         local action = conversionType == "combine" and "Combine" or "Split"
-        self:Print(string.format("|cFFFFAA00Auto-queued: %s %s (x%d) → %s (x%d)|r", 
+        self:Print(string.format("|cFFFFAA00Auto-queued: %s %s (x%d) → %s (x%d)|r",
             action, convertibleName, sourceNeeded, neededName, outputAmount))
-        
+
         -- Clear craftability cache since we added a conversion
         lib:ClearCraftabilityCache()
         return true
     end
-    
+
     return false
 end
 
@@ -1273,21 +1384,21 @@ end
 -- @return success: true if item was withdrawn, false otherwise
 function Skillet:WithdrawFromResourceBank(itemId, autoClose)
     if autoClose == nil then autoClose = true end
-    
+
     if not itemId or type(itemId) ~= "number" then
         self:Print("WithdrawFromResourceBank: Invalid item ID")
         return false
     end
-    
+
     -- Open the Resource Bank
     if not OpenResourceSummary then
         self:Print("OpenResourceSummary function not available")
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     OpenResourceSummary()
-    
+
     -- Check if Resource Bank opened
     local rbankFrame = _G["RBankFrame"]
     if not rbankFrame or not rbankFrame:IsShown() then
@@ -1295,7 +1406,7 @@ function Skillet:WithdrawFromResourceBank(itemId, autoClose)
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     -- Use the direct ItemId approach - set the ItemId on any ILine and click it
     local iline = _G["RBankFrame-ILine-1"]
     if not iline then
@@ -1303,11 +1414,11 @@ function Skillet:WithdrawFromResourceBank(itemId, autoClose)
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     -- Set the ItemId property and click the line
     iline.ItemId = itemId
     iline:Click()
-    
+
     -- Click the Withdraw button
     local withdrawBtn = _G["RBankFrame-Withdraw"]
     if withdrawBtn and withdrawBtn.Click then
@@ -1329,10 +1440,10 @@ function Skillet:WithdrawMultipleFromResourceBank(itemIds)
         self:Print("WithdrawMultipleFromResourceBank: No item IDs provided")
         return 0, 0
     end
-    
+
     local withdrawn = 0
     local failed = 0
-    
+
     for i, itemId in ipairs(itemIds) do
         local success = self:WithdrawFromResourceBank(itemId, false) -- Don't auto-close
         if success then
@@ -1341,10 +1452,10 @@ function Skillet:WithdrawMultipleFromResourceBank(itemIds)
             failed = failed + 1
         end
     end
-    
+
     -- Close the Resource Bank after all withdrawals
     self:CloseResourceBank()
-    
+
     -- Report results
     if withdrawn > 0 then
         self:Print(string.format("Withdrew %d item(s) from Resource Bank", withdrawn))
@@ -1352,7 +1463,7 @@ function Skillet:WithdrawMultipleFromResourceBank(itemIds)
     if failed > 0 then
         self:Print(string.format("Failed to withdraw %d item(s)", failed))
     end
-    
+
     return withdrawn, failed
 end
 
@@ -1374,17 +1485,17 @@ function Skillet:DepositToResourceBank(itemIds, autoClose)
         autoClose = itemIds
         itemIds = nil
     end
-    
+
     if autoClose == nil then autoClose = true end
-    
+
     -- Open the Resource Bank
     if not OpenResourceSummary then
         self:Print("OpenResourceSummary function not available")
         return false
     end
-    
+
     OpenResourceSummary()
-    
+
     -- Check if Resource Bank opened
     local rbankFrame = _G["RBankFrame"]
     if not rbankFrame or not rbankFrame:IsShown() then
@@ -1392,7 +1503,7 @@ function Skillet:DepositToResourceBank(itemIds, autoClose)
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     -- If no specific items provided, deposit all
     if not itemIds then
         local depositBtn = _G["RBankFrame-DepositAll"]
@@ -1407,33 +1518,33 @@ function Skillet:DepositToResourceBank(itemIds, autoClose)
             return false
         end
     end
-    
+
     -- Deposit specific items
     -- Convert single itemId to table
     if type(itemIds) == "number" then
-        itemIds = {itemIds}
+        itemIds = { itemIds }
     end
-    
+
     if type(itemIds) ~= "table" or #itemIds == 0 then
         self:Print("DepositToResourceBank: Invalid item IDs")
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     local iline = _G["RBankFrame-ILine-1"]
     if not iline then
         self:Print("Failed to find ILine element")
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     local depositBtn = _G["RBankFrame-Deposit"]
     if not depositBtn or not depositBtn.Click then
         self:Print("Failed to find Deposit button")
         if autoClose then self:CloseResourceBank() end
         return false
     end
-    
+
     -- Deposit each item
     local deposited = 0
     for _, itemId in ipairs(itemIds) do
@@ -1446,7 +1557,7 @@ function Skillet:DepositToResourceBank(itemIds, autoClose)
             deposited = deposited + 1
         end
     end
-    
+
     if deposited > 0 then
         local itemName = GetItemInfo(itemIds[1]) or "items"
         if deposited == 1 and #itemIds == 1 then
@@ -1455,7 +1566,7 @@ function Skillet:DepositToResourceBank(itemIds, autoClose)
             self:Print("Deposited " .. deposited .. " item type(s) to Resource Bank")
         end
     end
-    
+
     if autoClose then self:CloseResourceBank() end
     return deposited > 0
 end
@@ -1471,7 +1582,7 @@ function Skillet:TestResourceBank()
         37703, -- Crystallized Shadow
         37705  -- Crystallized Water
     }
-    
+
     self:WithdrawMultipleFromResourceBank(crystallizedElements)
 end
 
@@ -1479,95 +1590,95 @@ end
 function Skillet:TestAttunement()
     -- Try to get item from cursor first
     local cursorType, itemId, itemLink = GetCursorInfo()
-    
+
     if cursorType == "item" then
         self:Print("Testing cursor item: " .. (itemLink or "unknown"))
         local isAttuned = self:IsItemAttuned(itemLink)
         local progress = self:GetItemAttunementProgress(itemLink)
-        
+
         self:Print("IsAttuned: " .. tostring(isAttuned))
         self:Print("Progress: " .. tostring(progress))
-        
+
         -- Also test the raw APIs
         if GetItemAttuneProgress then
             local rawProgress = GetItemAttuneProgress(itemLink)
             self:Print("GetItemAttuneProgress: " .. tostring(rawProgress))
         end
-        
+
         if HasAttunedAnyVariant then
             local hasAttuned = HasAttunedAnyVariant(itemLink)
             self:Print("HasAttunedAnyVariant: " .. tostring(hasAttuned))
         end
         return
     end
-    
+
     -- Try mouseover tooltip
     local name, link = GameTooltip:GetItem()
     if link then
         self:Print("Testing tooltip item: " .. link)
         local isAttuned = self:IsItemAttuned(link)
         local progress = self:GetItemAttunementProgress(link)
-        
+
         self:Print("IsAttuned: " .. tostring(isAttuned))
         self:Print("Progress: " .. tostring(progress))
-        
+
         -- Also test the raw APIs
         if GetItemAttuneProgress then
             local rawProgress = GetItemAttuneProgress(link)
             self:Print("GetItemAttuneProgress: " .. tostring(rawProgress))
         end
-        
+
         if HasAttunedAnyVariant then
             local hasAttuned = HasAttunedAnyVariant(link)
             self:Print("HasAttunedAnyVariant: " .. tostring(hasAttuned))
         end
         return
     end
-    
+
     self:Print("No item found. Pick up an item or hover over one, then run /skillet testattune")
 end
 
 -- Synastria: Test Crystallized/Eternal conversion system
 function Skillet:TestConversions()
     self:Print("=== Testing Crystallized <-> Eternal Conversions ===")
-    
+
     -- Helper to get resource bank count
     local function GetRBankCount(itemId)
         if not GetCustomGameData then return 0 end
         return GetCustomGameData(13, itemId) or 0
     end
-    
+
     -- Test item pairs
     local testPairs = {
-        {cryst = 37700, eternal = 35622, name = "Air"},
-        {cryst = 37701, eternal = 35624, name = "Earth"},
-        {cryst = 37702, eternal = 36860, name = "Fire"},
-        {cryst = 37704, eternal = 35625, name = "Life"},
-        {cryst = 37703, eternal = 35627, name = "Shadow"},
-        {cryst = 37705, eternal = 35623, name = "Water"},
+        { cryst = 37700, eternal = 35622, name = "Air" },
+        { cryst = 37701, eternal = 35624, name = "Earth" },
+        { cryst = 37702, eternal = 36860, name = "Fire" },
+        { cryst = 37704, eternal = 35625, name = "Life" },
+        { cryst = 37703, eternal = 35627, name = "Shadow" },
+        { cryst = 37705, eternal = 35623, name = "Water" },
     }
-    
+
     for _, pair in ipairs(testPairs) do
         -- Get actual counts from bags/bank
         local crystCount = GetItemCount(pair.cryst, true) or 0
         local eternalCount = GetItemCount(pair.eternal, true) or 0
-        
+
         -- Get counts from Resource Bank
         local crystRBank = GetRBankCount(pair.cryst)
         local eternalRBank = GetRBankCount(pair.eternal)
-        
-        self:Print(string.format("|cFF00FF00%s:|r Cryst: %d+%d(rb), Eternal: %d+%d(rb)", 
+
+        self:Print(string.format("|cFF00FF00%s:|r Cryst: %d+%d(rb), Eternal: %d+%d(rb)",
             pair.name, crystCount, crystRBank, eternalCount, eternalRBank))
-        
+
         -- Calculate how many Eternals we can effectively have (with conversions)
         local effectiveEternals = eternalCount + eternalRBank + math.floor((crystCount + crystRBank) / 10)
-        
+
         -- Calculate how many Crystallized we can effectively have (with conversions)
         local effectiveCryst = crystCount + crystRBank + ((eternalCount + eternalRBank) * 10)
-        
+
         self:Print(string.format("  Effective: %d Eternal, %d Crystallized", effectiveEternals, effectiveCryst))
     end
-    
+
     self:Print("=== Conversion Test Complete ===")
 end
 
@@ -1600,26 +1711,26 @@ function Skillet:ScanAllProfessions()
         DEFAULT_CHAT_FRAME:AddMessage("Scan already in progress")
         return
     end
-    
+
     -- Get current profession to return to after scanning
     local currentTrade = self:GetTradeSkillLine()
-    
+
     -- Build list of professions using same spell ID detection as ProfessionSelector
     local professionsToScan = {}
     local professionSpellIds = {
-        {53428},                                    -- Runeforging
-        {51304, 28596, 11611, 3464,  3101,  2259},  -- Alchemy
-        {51300, 29844, 9785,  3538,  3100,  2018},  -- Blacksmithing
-        {51313, 28029, 13920, 7413,  7412,  7411},  -- Enchanting
-        {51306, 30350, 12656, 4038,  4037,  4036},  -- Engineering
-        {45363, 45361, 45360, 45359, 45358, 45357}, -- Inscription
-        {51311, 28897, 28895, 28894, 25230, 25229}, -- Jewelcrafting
-        {51302, 32549, 10662, 3811,  3104,  2108},  -- Leatherworking
-        {51309, 26790, 12180, 3910,  3909,  3908},  -- Tailoring
-        {51296, 33359, 18260, 3413,  3102,  2550},  -- Cooking
-        {45542, 27028, 10846, 7924,  3274,  3273}   -- First Aid
+        { 53428 },                                    -- Runeforging
+        { 51304, 28596, 11611, 3464,  3101,  2259 },  -- Alchemy
+        { 51300, 29844, 9785,  3538,  3100,  2018 },  -- Blacksmithing
+        { 51313, 28029, 13920, 7413,  7412,  7411 },  -- Enchanting
+        { 51306, 30350, 12656, 4038,  4037,  4036 },  -- Engineering
+        { 45363, 45361, 45360, 45359, 45358, 45357 }, -- Inscription
+        { 51311, 28897, 28895, 28894, 25230, 25229 }, -- Jewelcrafting
+        { 51302, 32549, 10662, 3811,  3104,  2108 },  -- Leatherworking
+        { 51309, 26790, 12180, 3910,  3909,  3908 },  -- Tailoring
+        { 51296, 33359, 18260, 3413,  3102,  2550 },  -- Cooking
+        { 45542, 27028, 10846, 7924,  3274,  3273 }   -- First Aid
     }
-    
+
     -- Check which professions the player knows
     for _, spellIdCollection in ipairs(professionSpellIds) do
         local spellId = nil
@@ -1630,25 +1741,25 @@ function Skillet:ScanAllProfessions()
                 break
             end
         end
-        
+
         if spellId then
             local name = GetSpellInfo(spellId)
-            if name and name ~= "Smelting" then  -- Skip smelting, it's part of Mining
-                table.insert(professionsToScan, {name = name, spellId = spellId})
+            if name and name ~= "Smelting" then -- Skip smelting, it's part of Mining
+                table.insert(professionsToScan, { name = name, spellId = spellId })
             end
         end
     end
-    
+
     if #professionsToScan == 0 then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000No professions found to scan|r")
         return
     end
-    
+
     self.scanningAllProfessions = true
     self.scanProfessionList = professionsToScan
     self.scanCurrentIndex = 1
     self.scanOriginalTrade = currentTrade
-    
+
     DEFAULT_CHAT_FRAME:AddMessage("Starting scan of " .. #professionsToScan .. " professions...")
     self:ContinueProfessionScan()
 end
@@ -1658,16 +1769,17 @@ function Skillet:ContinueProfessionScan()
     if not self.scanningAllProfessions then
         return
     end
-    
+
     if self.scanCurrentIndex > #self.scanProfessionList then
         -- Scanning complete, return to original profession
         self:CompleteProfessionScan()
         return
     end
-    
+
     local professionData = self.scanProfessionList[self.scanCurrentIndex]
-    self:UpdateScanningText("Scanning " .. self.scanCurrentIndex .. "/" .. #self.scanProfessionList .. ": " .. professionData.name)
-    
+    self:UpdateScanningText("Scanning " ..
+        self.scanCurrentIndex .. "/" .. #self.scanProfessionList .. ": " .. professionData.name)
+
     -- Check if we're already in this profession
     local currentTrade = GetTradeSkillLine()
     if currentTrade == professionData.name then
@@ -1684,13 +1796,13 @@ function Skillet:ScanNextProfessionCallback()
     if not self.scanningAllProfessions then
         return
     end
-    
+
     -- Scan the currently open profession
     self:RescanTrade(true)
-    
+
     -- Move to next profession
     self.scanCurrentIndex = self.scanCurrentIndex + 1
-    
+
     -- Schedule continuation
     self:ScheduleEvent("Skillet_ScanContinue", self.ContinueProfessionScan, 0.5, self)
 end
@@ -1699,15 +1811,15 @@ end
 function Skillet:CompleteProfessionScan()
     self.scanningAllProfessions = false
     self:UpdateScanningText("")
-    
+
     DEFAULT_CHAT_FRAME:AddMessage("Profession scan complete!")
-    
+
     -- Return to original profession if different
     if self.scanOriginalTrade and self.scanOriginalTrade ~= "UNKNOWN" then
         -- User will need to manually switch back if desired
         DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Return to " .. self.scanOriginalTrade .. " when ready|r")
     end
-    
+
     -- Cleanup
     self.scanProfessionList = nil
     self.scanCurrentIndex = nil
@@ -1718,7 +1830,7 @@ end
 function Skillet:CheckForOldRecipeData()
     local player = UnitName("player")
     local needsRescan = {}
-    
+
     if self.db.server.recipes[player] then
         for profession, _ in pairs(self.db.server.recipes[player]) do
             if profession ~= "UNKNOWN" then
@@ -1727,7 +1839,7 @@ function Skillet:CheckForOldRecipeData()
                 if profession == "Mining" then
                     checkProf = "Smelting"
                 end
-                
+
                 if self.stitch.data[checkProf] then
                     -- Check if any recipe is still in old encoded string format
                     for index, data in pairs(self.stitch.data[checkProf]) do
@@ -1740,19 +1852,57 @@ function Skillet:CheckForOldRecipeData()
             end
         end
     end
-    
+
     -- Synastria: Set flag instead of showing dialog immediately
     if #needsRescan > 0 then
         self.needsRecipeScan = needsRescan
-        DEFAULT_CHAT_FRAME:AddMessage("|".."|cFFFFAA00[Skillet] Recipe data needs updating. Will prompt when you open a profession.|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|" ..
+            "|cFFFFAA00[Skillet] Recipe data needs updating. Will prompt when you open a profession.|r")
     else
         self.needsRecipeScan = nil
     end
 end
 
+-- Synastria: Custom dialog frame classes
+---@class SkilletRecipePromptDialog : Frame
+---@field title FontString
+---@field text FontString
+---@field openButton Frame  -- Button type, but CreateFrame returns Frame
+---@field okButton Frame  -- Button type, but CreateFrame returns Frame
+---@field professionSpellIds table<string, number>
+---@field professions string[]
+---@field professionIndex number|nil
+---@field scannedProfessions table|nil
+
+---@class SkilletStartCraftingPrompt : Frame
+---@field title FontString
+---@field text FontString
+---@field itemText FontString
+---@field errorText FontString
+---@field startButton Frame  -- Button type, but CreateFrame returns Frame
+---@field switchButton Frame  -- Button type, but CreateFrame returns Frame
+---@field useItemButton Frame  -- Button type, but CreateFrame returns Frame
+---@field cancelButton Frame  -- Button type, but CreateFrame returns Frame
+---@field conversionStep number|nil
+---@field totalCombinesNeeded number|nil
+---@field combinesCompleted number|nil
+
+---@class SkilletConversionDialog : Frame
+---@field title FontString
+---@field text FontString
+---@field step1 FontString
+---@field step2 FontString
+---@field step3 FontString
+---@field withdrawButton Frame  -- Button type, but CreateFrame returns Frame
+---@field depositButton Frame  -- Button type, but CreateFrame returns Frame
+---@field doneButton Frame  -- Button type, but CreateFrame returns Frame
+---@field crystallizedId number|nil
+
 -- Synastria: Show dialog for professions needing rescan
 function Skillet:ShowRecipePrompt(professionList)
     if not self.recipePromptDialog then
+        ---@type SkilletRecipePromptDialog
+        ---@diagnostic disable-next-line: assign-type-mismatch
         local dialog = CreateFrame("Frame", "SkilletRecipePromptDialog", UIParent)
         dialog:SetSize(360, 280)
         dialog:SetPoint("CENTER")
@@ -1764,22 +1914,25 @@ function Skillet:ShowRecipePrompt(professionList)
         dialog:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
             edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 32,
-            insets = {left = 11, right = 12, top = 12, bottom = 11}
+            tile = true,
+            tileSize = 32,
+            edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 }
         })
         dialog:SetBackdropColor(0, 0, 0, 0.9)
-        
+
         dialog.title = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         dialog.title:SetPoint("TOP", 0, -15)
         dialog.title:SetText("Recipe Data Update Needed")
-        
+
         dialog.text = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         dialog.text:SetPoint("TOP", dialog.title, "BOTTOM", 0, -15)
         dialog.text:SetWidth(320)
         dialog.text:SetJustifyH("LEFT")
-        
+
         -- Open Next button (SecureActionButtonTemplate)
-        dialog.openButton = CreateFrame("Button", "SkilletRecipePromptOpenButton", dialog, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+        dialog.openButton = CreateFrame("Button", "SkilletRecipePromptOpenButton", dialog,
+            "SecureActionButtonTemplate, UIPanelButtonTemplate")
         dialog.openButton:SetSize(110, 22)
         dialog.openButton:SetPoint("BOTTOM", -50, 15)
         dialog.openButton:SetText("Open Next")
@@ -1793,7 +1946,7 @@ function Skillet:ShowRecipePrompt(professionList)
                     dialog.scannedProfessions = dialog.scannedProfessions or {}
                     local currentProf = dialog.professions[dialog.professionIndex]
                     dialog.scannedProfessions[currentProf] = true
-                    
+
                     -- Update the profession list display
                     local promptText = "The following professions need to be rescanned:\n\n"
                     for i, prof in ipairs(dialog.professions) do
@@ -1810,13 +1963,13 @@ function Skillet:ShowRecipePrompt(professionList)
                     end
                     promptText = promptText .. "\nOpen each profession window to update the data."
                     dialog.text:SetText(promptText)
-                    
+
                     -- Move to next profession
                     dialog.professionIndex = dialog.professionIndex + 1
                     if dialog.professionIndex <= #dialog.professions then
                         local nextProf = dialog.professions[dialog.professionIndex]
                         local spellId = dialog.professionSpellIds[nextProf]
-                        
+
                         if spellId then
                             dialog.openButton:SetAttribute("spell", spellId)
                             dialog.openButton:SetText("Open " .. nextProf)
@@ -1834,29 +1987,29 @@ function Skillet:ShowRecipePrompt(professionList)
                 end
             end)
         end)
-        
+
         dialog.okButton = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
         dialog.okButton:SetSize(80, 22)
         dialog.okButton:SetPoint("BOTTOM", 50, 15)
         dialog.okButton:SetText("OK")
-        dialog.okButton:SetScript("OnClick", function() 
+        dialog.okButton:SetScript("OnClick", function()
             dialog:Hide()
             dialog.professionIndex = nil
             dialog.scannedProfessions = nil
         end)
-        
+
         dialog:SetScript("OnDragStart", dialog.StartMoving)
         dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
         dialog:Hide()
-        
+
         -- Enable escape key to close the dialog
         table.insert(UISpecialFrames, "SkilletRecipePromptDialog")
-        
+
         self.recipePromptDialog = dialog
     end
-    
+
     local dialog = self.recipePromptDialog
-    
+
     -- Set up profession spell IDs
     dialog.professionSpellIds = {
         ["Alchemy"] = 51304,
@@ -1871,11 +2024,11 @@ function Skillet:ShowRecipePrompt(professionList)
         ["First Aid"] = 45542,
         ["Mining"] = 2656,
     }
-    
+
     dialog.professions = professionList
     dialog.professionIndex = 1
     dialog.scannedProfessions = {}
-    
+
     -- Build initial text with proper formatting
     local promptText = "The following professions need to be rescanned:\n\n"
     for i, prof in ipairs(professionList) do
@@ -1888,19 +2041,19 @@ function Skillet:ShowRecipePrompt(professionList)
         end
     end
     promptText = promptText .. "\nOpen each profession window to update the data."
-    
+
     dialog.text:SetText(promptText)
-    
+
     -- Set up the first profession to open
     if #professionList > 0 then
         local firstProf = professionList[1]
         local spellId = dialog.professionSpellIds[firstProf]
-        
+
         -- Try to find the spell ID if not in our basic list
         if not spellId then
             spellId = self.stitch:FindProfessionSpellId(firstProf)
         end
-        
+
         if spellId and IsSpellKnown(spellId) then
             dialog.openButton:SetAttribute("spell", spellId)
             dialog.openButton:SetText("Open " .. firstProf)
@@ -1910,107 +2063,18 @@ function Skillet:ShowRecipePrompt(professionList)
             dialog.openButton:Disable()
         end
     end
-    
+
     dialog:Show()
 end
 
 -- Synastria: Show profession switch prompt button
+-- DEPRECATED: Now handled by ShowStartCraftingPrompt with switchButton
 function Skillet:ShowProfessionSwitchPrompt(professionName, spellId, actionType)
-    -- Create the prompt frame if it doesn't exist
-    if not self.professionSwitchPrompt then
-        local frame = CreateFrame("Frame", "SkilletProfessionSwitchPrompt", UIParent)
-        frame:SetWidth(350)
-        frame:SetHeight(120)
-        frame:SetPoint("CENTER", UIParent, "CENTER", 0, 150)
-        frame:SetBackdrop({
-            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 32,
-            insets = { left = 11, right = 12, top = 12, bottom = 11 }
-        })
-        frame:SetBackdropColor(0, 0, 0, 1)
-        frame:SetFrameStrata("DIALOG")
-        frame:EnableMouse(true)
-        frame:SetMovable(true)
-        frame:RegisterForDrag("LeftButton")
-        frame:SetScript("OnDragStart", frame.StartMoving)
-        frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-        
-        -- Title text
-        local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        title:SetPoint("TOP", frame, "TOP", 0, -18)
-        title:SetText("Profession Switch Required")
-        frame.title = title
-        
-        -- Instruction text
-        local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        text:SetPoint("TOP", title, "BOTTOM", 0, -8)
-        text:SetWidth(300)
-        text:SetJustifyH("CENTER")
-        text:SetText("Click below to switch professions:")
-        frame.text = text
-        
-        -- Profession name text
-        local profText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        profText:SetPoint("TOP", text, "BOTTOM", 0, -5)
-        frame.profText = profText
-        
-        -- Switch button (SecureActionButtonTemplate)
-        local button = CreateFrame("Button", "SkilletProfessionSwitchButton", frame, "SecureActionButtonTemplate, UIPanelButtonTemplate")
-        button:SetWidth(140)
-        button:SetHeight(24)
-        button:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15)  -- Right edge at center with 3px gap
-        button:SetAttribute("type", "spell")
-        button:RegisterForClicks("AnyUp")
-        button:SetText("Switch Profession")
-        
-        -- Hook the button click to continue processing
-        button:SetScript("PostClick", function()
-            -- Give the profession window time to open
-            Skillet:ScheduleEvent("Skillet_AfterProfessionSwitch", function()
-                Skillet:OnProfessionSwitchComplete()
-            end, 1.0)
-        end)
-        
-        frame.button = button
-        
-        -- Cancel button
-        local cancelButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        cancelButton:SetWidth(100)
-        cancelButton:SetHeight(24)
-        cancelButton:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 3, 15)  -- Left edge at center with 3px gap
-        cancelButton:SetText("Cancel")
-        cancelButton:SetScript("OnClick", function()
-            frame:Hide()
-            -- Clear keybindings
-            SetBinding("CTRL-MOUSEWHEELUP")
-            SetBinding("CTRL-MOUSEWHEELDOWN")
-            -- Stop queue processing
-            local lib = AceLibrary("SkilletStitch-1.1")
-            if lib then
-                lib.waitingForProfessionSwitch = false
-            end
-        end)
-        frame.cancelButton = cancelButton
-        
-        -- Enable escape key to close the dialog
-        table.insert(UISpecialFrames, "SkilletProfessionSwitchPrompt")
-        
-        self.professionSwitchPrompt = frame
+    -- Redirect to unified dialog instead of showing separate prompt
+    if actionType == "queue" then
+        self:ShowStartCraftingPrompt()
     end
-    
-    -- Update the prompt with current profession info
-    local frame = self.professionSwitchPrompt
-    frame.profText:SetText("|cFF00FF00" .. professionName .. "|r")
-    frame.button:SetAttribute("spell", spellId)
-    frame.actionType = actionType  -- "scan" or "queue"
-    
-    -- Synastria: Bind Ctrl+MouseWheelUp/Down to the switch button
-    SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletProfessionSwitchButton")
-    SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletProfessionSwitchButton")
-    
-    -- Show the prompt
-    frame:Show()
+    -- Note: "scan" action type is not handled here anymore
 end
 
 -- Synastria: Called after user clicks the profession switch button
@@ -2018,14 +2082,14 @@ function Skillet:OnProfessionSwitchComplete()
     if not self.professionSwitchPrompt or not self.professionSwitchPrompt:IsVisible() then
         return
     end
-    
+
     -- Synastria: Clear the keybindings
     SetBinding("CTRL-MOUSEWHEELUP")
     SetBinding("CTRL-MOUSEWHEELDOWN")
-    
+
     local actionType = self.professionSwitchPrompt.actionType
     self.professionSwitchPrompt:Hide()
-    
+
     if actionType == "scan" and self.scanningAllProfessions then
         -- Continue with scan
         self:ScheduleEvent("Skillet_ScanNext", self.ScanNextProfessionCallback, 0.5, self)
@@ -2042,9 +2106,11 @@ function Skillet:ShowStartCraftingPrompt()
     if not self.stitch.queue or not self.stitch.queue[1] then
         return
     end
-    
+
     -- Create the prompt frame if it doesn't exist
     if not self.startCraftingPrompt then
+        ---@type SkilletStartCraftingPrompt
+        ---@diagnostic disable-next-line: assign-type-mismatch
         local frame = CreateFrame("Frame", "SkilletStartCraftingPrompt", UIParent)
         frame:SetWidth(350)
         frame:SetHeight(140)
@@ -2052,7 +2118,9 @@ function Skillet:ShowStartCraftingPrompt()
         frame:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
             edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 32,
+            tile = true,
+            tileSize = 32,
+            edgeSize = 32,
             insets = { left = 11, right = 12, top = 12, bottom = 11 }
         })
         frame:SetBackdropColor(0, 0, 0, 1)
@@ -2062,146 +2130,149 @@ function Skillet:ShowStartCraftingPrompt()
         frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart", frame.StartMoving)
         frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-        
+
         -- Title text
         local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         title:SetPoint("TOP", frame, "TOP", 0, -18)
         title:SetText("Ready to Craft")
         frame.title = title
-        
+
         -- Instruction text
         local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         text:SetPoint("TOP", title, "BOTTOM", 0, -10)
         text:SetWidth(300)
         text:SetJustifyH("CENTER")
         frame.text = text
-        
+
         -- Item info text
         local itemText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         itemText:SetPoint("TOP", text, "BOTTOM", 0, -8)
         itemText:SetWidth(300)
         itemText:SetJustifyH("CENTER")
         frame.itemText = itemText
-        
+
         -- Synastria: Error message text
         local errorText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         errorText:SetPoint("TOP", itemText, "BOTTOM", 0, -10)
         errorText:SetWidth(310)
         errorText:SetJustifyH("CENTER")
-        errorText:SetTextColor(1, 0.3, 0.3)  -- Red color
+        errorText:SetTextColor(1, 0.3, 0.3) -- Red color
         errorText:SetText("")
         frame.errorText = errorText
-        
+
         -- Start button
         local startButton = CreateFrame("Button", "SkilletStartCraftingButton", frame, "UIPanelButtonTemplate")
         startButton:SetWidth(100)
         startButton:SetHeight(24)
-        startButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15)  -- Right edge at center with 3px gap
+        startButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15) -- Right edge at center with 3px gap
         startButton:SetText("Start")
         startButton:SetScript("OnClick", function()
-            frame.errorText:SetText("")  -- Clear error message
+            frame.errorText:SetText("") -- Clear error message
             startButton:Disable()
             Skillet.stitch:ProcessQueue()
         end)
         frame.startButton = startButton
-        
+
         -- Synastria: Profession switch button (SecureActionButtonTemplate)
-        local switchButton = CreateFrame("Button", "SkilletSwitchProfessionButton", frame, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+        local switchButton = CreateFrame("Button", "SkilletSwitchProfessionButton", frame,
+            "SecureActionButtonTemplate, UIPanelButtonTemplate")
         switchButton:SetWidth(140)
         switchButton:SetHeight(24)
-        switchButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15)  -- Right edge at center with 3px gap
+        switchButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15) -- Right edge at center with 3px gap
         switchButton:SetAttribute("type", "spell")
         switchButton:RegisterForClicks("AnyUp")
         switchButton:SetText("Switch Profession")
         switchButton:Hide()
         frame.switchButton = switchButton
-        
+
         -- Synastria: Secure button for item usage (Combine step in conversions)
-        local useItemButton = CreateFrame("Button", "SkilletUseItemButton", frame, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+        local useItemButton = CreateFrame("Button", "SkilletUseItemButton", frame,
+            "SecureActionButtonTemplate, UIPanelButtonTemplate")
         useItemButton:SetWidth(100)
         useItemButton:SetHeight(24)
-        useItemButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15)  -- Same position as start button
+        useItemButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOM", -3, 15) -- Same position as start button
         useItemButton:SetAttribute("type", "item")
         useItemButton:RegisterForClicks("AnyUp")
         useItemButton:SetText("Combine")
         useItemButton:Hide()
-        
+
         -- PostClick handler for use item button to advance conversion step
         useItemButton:SetScript("PostClick", function()
             if frame.conversionStep == 2 then
                 frame.combinesCompleted = (frame.combinesCompleted or 0) + 1
-                
+
                 -- Check if we need more combines
                 if frame.combinesCompleted >= frame.totalCombinesNeeded then
                     -- All combines done, move to deposit
                     Skillet:Print(string.format("|cFF00FF00Combined %d times - completed!|r", frame.combinesCompleted))
                     frame.conversionStep = 3
-                    Skillet:ShowStartCraftingPrompt()  -- Refresh dialog to update button
+                    Skillet:ShowStartCraftingPrompt() -- Refresh dialog to update button
                 else
                     -- More combines needed, stay on step 2 and refresh to update counter
-                    Skillet:Print(string.format("|cFF00FF00Combined %d/%d times...|r", frame.combinesCompleted, frame.totalCombinesNeeded))
-                    Skillet:ShowStartCraftingPrompt()  -- Refresh to update counter
+                    Skillet:Print(string.format("|cFF00FF00Combined %d/%d times...|r", frame.combinesCompleted,
+                        frame.totalCombinesNeeded))
+                    Skillet:ShowStartCraftingPrompt() -- Refresh to update counter
                 end
             end
         end)
         frame.useItemButton = useItemButton
-        
+
         -- Cancel button
         local cancelButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         cancelButton:SetWidth(100)
         cancelButton:SetHeight(24)
-        cancelButton:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 3, 15)  -- Left edge at center with 3px gap
+        cancelButton:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 3, 15) -- Left edge at center with 3px gap
         cancelButton:SetText("Cancel")
         cancelButton:SetScript("OnClick", function()
             -- Synastria: Clear keybindings
             SetBinding("CTRL-MOUSEWHEELUP")
             SetBinding("CTRL-MOUSEWHEELDOWN")
             frame:Hide()
-            startButton:Enable()  -- Re-enable if user re-opens
+            startButton:Enable() -- Re-enable if user re-opens
             Skillet.stitch.waitingForProfessionSwitch = false
             DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00Crafting cancelled - queue preserved|r")
         end)
         frame.cancelButton = cancelButton
-        
+
         frame:Hide()
         self.startCraftingPrompt = frame
     end
-    
+
     -- Update the prompt with current queue info
     local frame = self.startCraftingPrompt
     local queueItem = self.stitch.queue[1]
-    
+
     if queueItem and queueItem.recipe then
         local profession = queueItem.profession or "Unknown"
         local itemName = queueItem.recipe.name or "Unknown Item"
         local count = queueItem.numcasts or 1
         local currentTrade = GetTradeSkillLine()
-        
+
         -- Synastria: Check if this is a virtual conversion recipe
         local isVirtualConversion = queueItem.recipe.isVirtualConversion
-        
+
         if isVirtualConversion then
             -- Handle conversion workflow with step-by-step buttons
             local conversionType = queueItem.recipe.conversionType or "combine"
             local sourceName = GetItemInfo(queueItem.recipe.sourceId) or "Item"
             local outputName = GetItemInfo(queueItem.recipe.outputId) or "Item"
-            
+
             local actionWord = conversionType == "combine" and "Combine" or "Split"
-            frame.text:SetText(string.format("%s |cFF00FF00%dx %s|r → |cFF00FF00%dx %s|r", 
+            frame.text:SetText(string.format("%s |cFF00FF00%dx %s|r → |cFF00FF00%dx %s|r",
                 actionWord,
                 queueItem.recipe.sourceNeeded, sourceName,
                 queueItem.recipe.outputAmount, outputName))
             frame.itemText:SetText("") -- No instruction text needed
-            
+
             -- Hide switch button, show start button with conversion action
             frame.switchButton:Hide()
             frame.startButton:Show()
-            
+
             -- Initialize conversion step if not set
             if not frame.conversionStep then
                 frame.conversionStep = 1
             end
-            
+
             -- Calculate how many times we need to use the item
             local totalUses
             if conversionType == "combine" then
@@ -2211,24 +2282,28 @@ function Skillet:ShowStartCraftingPrompt()
                 -- Eternal→Crystallized: need X uses to split X Eternals
                 totalUses = queueItem.recipe.sourceNeeded
             end
-            
+
             -- Set button based on current step
             if frame.conversionStep == 1 then
                 -- Initialize conversion tracking
                 frame.totalCombinesNeeded = totalUses
                 frame.combinesCompleted = 0
-                
+
                 frame.startButton:SetText("Withdraw")
                 frame.startButton:SetScript("OnClick", function()
                     if queueItem.recipe.sourceId then
                         Skillet:WithdrawFromResourceBank(queueItem.recipe.sourceId, true)
                         Skillet:Print("|cFF00FF00Items withdrawn.|r")
                         frame.conversionStep = 2
-                        Skillet:ShowStartCraftingPrompt()  -- Refresh dialog to update button
+                        Skillet:ShowStartCraftingPrompt() -- Refresh dialog to update button
                     end
                 end)
                 frame.startButton:Show()
                 frame.useItemButton:Hide()
+
+                -- Bind to start button for Withdraw step
+                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
+                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
             elseif frame.conversionStep == 2 then
                 -- Use secure button for item usage
                 local itemName = GetItemInfo(queueItem.recipe.sourceId)
@@ -2236,20 +2311,25 @@ function Skillet:ShowStartCraftingPrompt()
                     frame.useItemButton:SetAttribute("item", itemName)
                     -- Update button text to show progress
                     local buttonText = conversionType == "combine" and "Combine" or "Split"
-                    frame.useItemButton:SetText(string.format("%s (%d/%d)", buttonText, frame.combinesCompleted, frame.totalCombinesNeeded))
+                    frame.useItemButton:SetText(string.format("%s (%d/%d)", buttonText, frame.combinesCompleted,
+                        frame.totalCombinesNeeded))
                     frame.useItemButton:Show()
                     frame.startButton:Hide()
                 end
+
+                -- Bind to use item button for Combine/Split step
+                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletUseItemButton")
+                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletUseItemButton")
             elseif frame.conversionStep == 3 then
                 frame.startButton:SetText("Deposit")
                 frame.startButton:SetScript("OnClick", function()
                     Skillet:DepositToResourceBank(true)
                     Skillet:Print("|cFF00FF00Remaining items deposited. Conversion complete!|r")
-                    
+
                     -- Reset for next conversion and remove from queue
                     frame.conversionStep = 1
                     Skillet.stitch:RemoveFromQueue(1)
-                    
+
                     -- Continue to next queue item
                     if #Skillet.stitch.queue > 0 then
                         Skillet.stitch:ProcessQueue()
@@ -2263,47 +2343,46 @@ function Skillet:ShowStartCraftingPrompt()
                 end)
                 frame.startButton:Show()
                 frame.useItemButton:Hide()
+
+                -- Bind to start button for Deposit step
+                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
+                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
             end
-            
-            -- Bind to start button
-            SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
-            SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
-            
         else
             -- Regular crafting workflow
             -- Reset conversion step when not a conversion
             frame.conversionStep = 1
-            
+
             -- Hide the use item button (only for conversions)
             frame.useItemButton:Hide()
-            
+
             -- Restore normal start button click handler
             frame.startButton:SetScript("OnClick", function()
-                frame.errorText:SetText("")  -- Clear error message
+                frame.errorText:SetText("") -- Clear error message
                 frame.startButton:Disable()
                 Skillet.stitch:ProcessQueue()
             end)
             frame.startButton:SetText("Start")
-            
+
             -- Check if we need to switch professions
             if currentTrade ~= profession then
                 -- Need to switch profession
                 frame.text:SetText("Switch to " .. profession .. " to craft:")
                 frame.itemText:SetText("|cFF00FF00" .. count .. "x " .. itemName .. "|r")
-                
+
                 -- Show switch button, hide start button
                 frame.startButton:Hide()
                 frame.switchButton:Show()
-                
+
                 -- Set spell for profession switch
                 local spellId = self.stitch:FindProfessionSpellId(profession)
                 if spellId then
                     frame.switchButton:SetAttribute("spell", spellId)
-                    
+
                     -- Synastria: Bind to the switch button
                     SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletSwitchProfessionButton")
                     SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletSwitchProfessionButton")
-                    
+
                     -- Flag that we're waiting for profession switch
                     self.stitch.waitingForProfessionSwitch = true
                     self.stitch.targetProfession = profession
@@ -2314,11 +2393,11 @@ function Skillet:ShowStartCraftingPrompt()
                 -- Same profession, ready to craft
                 frame.text:SetText("Ready to craft in " .. profession .. ":")
                 frame.itemText:SetText("|cFF00FF00" .. count .. "x " .. itemName .. "|r")
-                
+
                 -- Show start button, hide switch button
                 frame.switchButton:Hide()
                 frame.startButton:Show()
-                
+
                 -- Synastria: Bind to the start button
                 SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
                 SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
@@ -2330,13 +2409,13 @@ function Skillet:ShowStartCraftingPrompt()
         frame.switchButton:Hide()
         frame.startButton:Show()
     end
-    
+
     -- Synastria: Clear any previous error message
     frame.errorText:SetText("")
-    
+
     -- Enable start button when showing prompt
     frame.startButton:Enable()
-    
+
     -- Show the prompt
     frame:Show()
 end
@@ -2345,6 +2424,8 @@ end
 function Skillet:ShowConversionDialog(virtualRecipe)
     -- Create the dialog if it doesn't exist
     if not self.conversionDialog then
+        ---@type SkilletConversionDialog
+        ---@diagnostic disable-next-line: assign-type-mismatch
         local frame = CreateFrame("Frame", "SkilletConversionDialog", UIParent)
         frame:SetWidth(400)
         frame:SetHeight(200)
@@ -2352,7 +2433,9 @@ function Skillet:ShowConversionDialog(virtualRecipe)
         frame:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
             edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 32,
+            tile = true,
+            tileSize = 32,
+            edgeSize = 32,
             insets = { left = 11, right = 12, top = 12, bottom = 11 }
         })
         frame:SetBackdropColor(0, 0, 0, 1)
@@ -2362,20 +2445,20 @@ function Skillet:ShowConversionDialog(virtualRecipe)
         frame:RegisterForDrag("LeftButton")
         frame:SetScript("OnDragStart", frame.StartMoving)
         frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-        
+
         -- Title
         local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         title:SetPoint("TOP", frame, "TOP", 0, -18)
         title:SetText("Item Conversion Required")
         frame.title = title
-        
+
         -- Instructions
         local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         text:SetPoint("TOP", title, "BOTTOM", 0, -15)
         text:SetWidth(360)
         text:SetJustifyH("CENTER")
         frame.text = text
-        
+
         -- Step 1: Withdraw
         local step1 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         step1:SetPoint("TOP", text, "BOTTOM", 0, -15)
@@ -2383,7 +2466,7 @@ function Skillet:ShowConversionDialog(virtualRecipe)
         step1:SetJustifyH("LEFT")
         step1:SetText("|cFFFFAA001. Click 'Withdraw' to get items from Resource Bank|r")
         frame.step1 = step1
-        
+
         -- Step 2: Use
         local step2 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         step2:SetPoint("TOP", step1, "BOTTOM", 0, -8)
@@ -2391,7 +2474,7 @@ function Skillet:ShowConversionDialog(virtualRecipe)
         step2:SetJustifyH("LEFT")
         step2:SetText("|cFFFFAA002. Right-click Crystallized items in bags to combine|r")
         frame.step2 = step2
-        
+
         -- Step 3: Deposit
         local step3 = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         step3:SetPoint("TOP", step2, "BOTTOM", 0, -8)
@@ -2399,7 +2482,7 @@ function Skillet:ShowConversionDialog(virtualRecipe)
         step3:SetJustifyH("LEFT")
         step3:SetText("|cFFFFAA003. Click 'Deposit' to return extras to Resource Bank|r")
         frame.step3 = step3
-        
+
         -- Withdraw button
         local withdrawButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         withdrawButton:SetWidth(100)
@@ -2413,7 +2496,7 @@ function Skillet:ShowConversionDialog(virtualRecipe)
             end
         end)
         frame.withdrawButton = withdrawButton
-        
+
         -- Deposit button
         local depositButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         depositButton:SetWidth(100)
@@ -2425,7 +2508,7 @@ function Skillet:ShowConversionDialog(virtualRecipe)
             Skillet:Print("|cFF00FF00Remaining items deposited.|r")
         end)
         frame.depositButton = depositButton
-        
+
         -- Done button
         local doneButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         doneButton:SetWidth(100)
@@ -2443,23 +2526,23 @@ function Skillet:ShowConversionDialog(virtualRecipe)
             end
         end)
         frame.doneButton = doneButton
-        
+
         frame:Hide()
         self.conversionDialog = frame
     end
-    
+
     -- Update the dialog with conversion details
     local frame = self.conversionDialog
-    
+
     local crystallizedName = GetItemInfo(virtualRecipe.crystallizedId) or "Crystallized"
     local eternalName = GetItemInfo(virtualRecipe.eternalId) or "Eternal"
-    
-    frame.text:SetText(string.format("Convert |cFF00FF00%dx %s|r to |cFF00FF00%dx %s|r", 
+
+    frame.text:SetText(string.format("Convert |cFF00FF00%dx %s|r to |cFF00FF00%dx %s|r",
         virtualRecipe.crystallizedNeeded, crystallizedName,
         virtualRecipe.eternalsToMake, eternalName))
-    
+
     frame.crystallizedId = virtualRecipe.crystallizedId
-    
+
     -- Show the dialog
     frame:Show()
 end
@@ -2504,7 +2587,7 @@ function Skillet:OnCraftFailed(errorMessage)
     -- Display error in the start crafting prompt if it's visible
     if self.startCraftingPrompt and self.startCraftingPrompt:IsVisible() then
         self.startCraftingPrompt.errorText:SetText(errorMessage or "Craft failed!")
-        
+
         -- Re-enable the start button after 1 second
         self:ScheduleEvent("Skillet_ReenableStartButton", function()
             if self.startCraftingPrompt and self.startCraftingPrompt:IsVisible() then
@@ -2520,7 +2603,7 @@ function Skillet:QueueChanged()
     if self.AutoExportQueueToResourceTracker then
         self:AutoExportQueueToResourceTracker()
     end
-    
+
     -- Synastria: If queue is empty and start crafting prompt is visible, hide it and clear keybindings
     if self.stitch.queue and #self.stitch.queue == 0 then
         if self.startCraftingPrompt and self.startCraftingPrompt:IsVisible() then
@@ -2531,7 +2614,7 @@ function Skillet:QueueChanged()
             DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Queue complete! Keybindings cleared.|r")
         end
     end
-    
+
     -- Synastria: Clear craftability cache when queue changes
     -- Simpler and more efficient than selective invalidation for multi-step crafts
     local lib = AceLibrary("SkilletStitch-1.1")
@@ -2546,14 +2629,14 @@ function Skillet:QueueChanged()
         if AceEvent:IsEventScheduled("Skillet_UpdateWindows") then
             AceEvent:CancelScheduledEvent("Skillet_UpdateWindows")
         end
-        
+
         -- Start background calculation for current profession
         if self.CraftCalc then
             local isRunning, runningProf = self.CraftCalc:IsCalculationRunning()
             if isRunning then
                 self.CraftCalc:StopCalculation()
             end
-            
+
             local success = self.CraftCalc:StartBackgroundCalculation(self.currentTrade, function()
                 -- After calculation completes, update the UI
                 if self.tradeSkillFrame and self.tradeSkillFrame:IsVisible() then
@@ -2565,7 +2648,7 @@ function Skillet:QueueChanged()
             self:UpdateTradeSkillWindow()
         end
     end
-    
+
     -- Hey! What's all this then? Well, we may get the request to update the
     -- windows while the queue is being processed and the reagent and item
     -- counts may not have been updated yet. So, the "0.5" puts in a 1/2
@@ -2610,7 +2693,10 @@ function Skillet:GetItemNote(link)
 
     if result and result == "" then
         result = nil
-        self.db.server.notes[UnitName("player")][id] = nil
+        local playerName = UnitName("player")
+        if playerName and self.db.server.notes[playerName] and id then
+            self.db.server.notes[playerName][id] = nil
+        end
     end
 
     return result
@@ -2630,7 +2716,6 @@ function Skillet:SetItemNote(link, note)
     else
         self:Print("Error: Skillet:SetItemNote() could not determine item ID for " .. link);
     end
-
 end
 
 -- Adds the skillet notes text to the tooltip for a specified
@@ -2650,7 +2735,7 @@ function Skillet:AddItemNotesToTooltip(tooltip)
     end
 
     -- get item name
-    local name,link = tooltip:GetItem();
+    local name, link = tooltip:GetItem();
     if not link then return; end
 
     local id = self:GetItemIDFromLink(link);
@@ -2658,7 +2743,7 @@ function Skillet:AddItemNotesToTooltip(tooltip)
 
     if notes_enabled then
         local header_added = false
-        for player,notes_table in pairs(self.db.server.notes) do
+        for player, notes_table in pairs(self.db.server.notes) do
             local note = notes_table[id]
             if note then
                 if not header_added then
@@ -2673,13 +2758,14 @@ function Skillet:AddItemNotesToTooltip(tooltip)
         end
     end
 
+    local header_added = false
     if crafters_enabled then
         local crafters = self:GetCraftersForItem(id);
         if crafters then
             header_added = true
             local title_added = false
 
-            for i,name in ipairs(crafters) do
+            for i, name in ipairs(crafters) do
                 if not title_added then
                     title_added = true
                     tooltip:AddDoubleLine(L["Crafted By"], name)
@@ -2726,40 +2812,40 @@ local playerEntered = false
 local function TryRegisterPT()
     -- Only run once, after both events have fired
     if not (addonLoaded and playerEntered) then return end
-    
+
     -- Unregister events
     frame:UnregisterEvent("ADDON_LOADED")
     frame:UnregisterEvent("PLAYER_ENTERING_WORLD")
-    
+
     if AceLibrary and AceLibrary:HasInstance("LibPeriodicTable-3.1") then
         local PT = AceLibrary("LibPeriodicTable-3.1")
-        
+
         -- Register our extension using our own parent category
         -- Define vendor items that are missing from PT's base vendor set
         local vendorItemOverrides = {
-            2593,   -- Flask of Port (Cooking)
-            2880,   -- Weak Flux (Engineering/Blacksmithing)
-            3466,   -- Strong Flux (Engineering/Blacksmithing)
-            4399,   -- Wooden Stock (Engineering - Gun component)
-            4539,   -- Goldenbark Apple (Cooking)
-            30817,  -- Simple Flour (Cooking)
-            34412,  -- Sparkling Apple Cider (Cooking)
-            38426,  -- Eternium Thread (Tailoring)
-            39354,  -- Light Parchment (Inscription)
-            39684,  -- Hair Trigger (Engineering - WotLK Gun component)
-            40533,  -- Walnut Stock (Engineering - WotLK Gun component)
+            2593,  -- Flask of Port (Cooking)
+            2880,  -- Weak Flux (Engineering/Blacksmithing)
+            3466,  -- Strong Flux (Engineering/Blacksmithing)
+            4399,  -- Wooden Stock (Engineering - Gun component)
+            4539,  -- Goldenbark Apple (Cooking)
+            30817, -- Simple Flour (Cooking)
+            34412, -- Sparkling Apple Cider (Cooking)
+            38426, -- Eternium Thread (Tailoring)
+            39354, -- Light Parchment (Inscription)
+            39684, -- Hair Trigger (Engineering - WotLK Gun component)
+            40533, -- Walnut Stock (Engineering - WotLK Gun component)
         }
-        
+
         -- Convert table to comma-separated string
         local vendorItemString = table.concat(vendorItemOverrides, ",")
-        
+
         local success, err = pcall(function()
             PT:AddData("Skillet", "$Rev: 1 $", {
                 ["Skillet.Vendor.Extended"] = vendorItemString
             })
         end)
-        
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[Skillet] Registered " .. #vendorItemOverrides .. " extended vendor items with PeriodicTable|r")
+
+        -- PeriodicTable registration complete (silent)
     end
 end
 

@@ -22,7 +22,6 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 L:RegisterTranslations("esES", function() return {
     ["Skillet Trade Skills"] 			= "Skillet - Habilidades de Comercio", -- default message
-    ["Create"] 				 	= "Crear",
     ["Queue All"]				= "Encolar Todo",
     ["Create All"]				= "Crear Todo",
     ["Create"]					= "Crear",
@@ -56,7 +55,6 @@ L:RegisterTranslations("esES", function() return {
     ["ABOUTDESC"]			= "Imprime información acerca de Skillet",
     ["Config"]				= "Configuración",
     ["CONFIGDESC"]			= "Abre una ventana de configuración para Skillet",
-    ["Shopping List"]			= "Lista de la Compra",
     ["SHOPPINGLISTDESC"]		= "Mostrar la Lista de la Compra",
 
     ["Features"]			= "Características",

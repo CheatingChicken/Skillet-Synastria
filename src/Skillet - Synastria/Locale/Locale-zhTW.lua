@@ -30,7 +30,6 @@ L:RegisterTranslations("zhTW", function() return {
     ["Create"]                  = "製造",
     ["Queue All"]               = "全部排程",
     ["Create All"]              = "全部製造",
-    ["Create"]                  = "製造",
     ["Queue"]                   = "排程",
     ["Enchant"]                 = "附魔",
     ["Rescan"]                  = "掃描",
@@ -91,7 +90,6 @@ L:RegisterTranslations("zhTW", function() return {
     ["TRANSPARAENCYDESC"]            = "商業技能視窗透明度",
 
     -- New in version 1.6
-    ["Shopping List"]               = "購物清單",
     ["Retrieve"]                    = "取得",
     ["Include alts"]                = "包括分身",
 

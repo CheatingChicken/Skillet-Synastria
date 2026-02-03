@@ -205,8 +205,10 @@ function Skillet:UpdateResourceTrackerAfterCraft(recipe, numCrafted)
     end
     
     -- For each reagent used in the craft, check if it's tracked
-    for i = 1, 8 do
-        local reagent = recipe[i]
+    -- Synastria: Use modern reagents table format
+    local reagents = recipe.reagents or {}
+    for i = 1, #reagents do
+        local reagent = reagents[i]
         if not reagent then
             break
         end

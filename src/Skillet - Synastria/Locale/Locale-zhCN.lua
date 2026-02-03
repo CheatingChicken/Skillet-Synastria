@@ -27,7 +27,6 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 L:RegisterTranslations("zhCN", function() return {
     ["Skillet Trade Skills"] = "Skillet Trade Skills", -- default message
-    ["Create"] = "制造",
     ["Queue All"] = "队列所有",
     ["Create All"] = "全部制造",
     ["Create"] = "制造",
@@ -61,7 +60,6 @@ L:RegisterTranslations("zhCN", function() return {
     ["ABOUTDESC"]					= "显示Skillet简介",
     ["Config"]						= "设定",
     ["CONFIGDESC"]					= "显示Skillet的设定窗口",
-    ["Shopping List"]					= "购物清单",
     ["SHOPPINGLISTDESC"]				= "显示购物清单",
 
     ["Features"]					= "功能",

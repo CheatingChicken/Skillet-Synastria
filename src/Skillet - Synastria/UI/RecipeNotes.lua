@@ -143,7 +143,8 @@ function Skillet:UpdateNotesWindow()
 
 	SkilletRecipeNotesFrameLabel:SetText(L["Notes"]);
 
-	local numItems = 1 + #s
+	local reagents = s.reagents or {}
+	local numItems = 1 + #reagents
 
 	-- Update the scroll frame
 	FauxScrollFrame_Update(SkilletNotesList,			    -- frame
@@ -182,9 +183,10 @@ function Skillet:UpdateNotesWindow()
 				link = s.link
 			else
 				-- notes for a reagent
-				text:SetText(s[index-1].name)
-				icon:SetNormalTexture(s[index-1].texture)
-				link = s[index-1].link
+				local reagents = s.reagents or {}
+				text:SetText(reagents[index-1].name)
+				icon:SetNormalTexture(reagents[index-1].texture)
+				link = reagents[index-1].link
 			end
 
 			button:SetAttribute("recipe_link", link)

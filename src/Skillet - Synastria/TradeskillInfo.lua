@@ -96,7 +96,9 @@ function Skillet:GetTradeSkillReagentItemLink(skill, index)
     local result = nil;
 
     if s then
-        local reagent = s[index];
+        if not s then return end
+        local reagents = s.reagents or {}
+        local reagent = reagents[index];
         if reagent then
             result = reagent.link
         end
@@ -158,11 +160,13 @@ local function build_skills(self, name, prof, skill_index)
         texture = s.texture,
         difficulty = s.difficulty,
         numname = s.nummade or 1,
-        count = #s
+        count = s.reagents and #s.reagents or 0
     }
 
-    for i=1, #s, 1 do
-        table.insert(c, build_reagents(self, s, s[i]))
+    -- Synastria: Use modern reagents table format
+    local reagents = s.reagents or {}
+    for i=1, #reagents, 1 do
+        table.insert(c, build_reagents(self, s, reagents[i]))
     end
 
     return c

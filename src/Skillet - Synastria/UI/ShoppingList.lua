@@ -90,10 +90,12 @@ local function createShoppingListFrame(self)
 
     -- The frame enclosing the scroll list needs a border and a background .....
     local backdrop = SkilletShoppingListParent
-    backdrop:SetBackdrop(ControlBackdrop)
-    backdrop:SetBackdropBorderColor(0.6, 0.6, 0.6)
-    backdrop:SetBackdropColor(0.05, 0.05, 0.05)
-    backdrop:SetResizable(true)
+    if backdrop then
+        backdrop:SetBackdrop(ControlBackdrop)
+        backdrop:SetBackdropBorderColor(0.6, 0.6, 0.6)
+        backdrop:SetBackdropColor(0.05, 0.05, 0.05)
+        backdrop:SetResizable(true)
+    end
 
     -- Button to retrieve items needed from the bank
     SkilletShoppingListRetrieveButton:SetText(L["Retrieve"])
@@ -110,7 +112,7 @@ local function createShoppingListFrame(self)
     -- Ace Window manager library, allows the window position (and size)
     -- to be automatically saved
     local windowManger = AceLibrary("Window-1.0")
-    local tradeSkillLocation = {
+    local shoppingListLocation = {
         prefix = "shoppingListLocation_"
     }
     windowManger:RegisterConfig(frame, self.db.char, shoppingListLocation)
@@ -432,9 +434,9 @@ local function getItemFromBank(item_id, bag, slot, count)
     local link = GetContainerItemLink(bag, slot)
     local num_moved = 0
 
-    if available == 1 or count >= available then
+    if available == 1 or count >= (available or 0) then
         PickupContainerItem(bag, slot)
-        num_moved = available
+        num_moved = available or 0
     else
         SplitContainerItem(bag, slot, count)
         num_moved = count
@@ -490,7 +492,9 @@ local function get_button(i)
     local button = getglobal("SkilletShoppingListButton"..i)
     if not button then
         button = CreateFrame("Button", "SkilletShoppingListButton"..i, SkilletShoppingListParent, "SkilletShoppingListItemButtonTemplate")
-        button:SetParent(SkilletShoppingList)
+        if SkilletShoppingList then
+            button:SetParent(SkilletShoppingList)
+        end
         button:SetPoint("TOPLEFT", "SkilletShoppingListButton"..(i-1), "BOTTOMLEFT")
     end
     return button
@@ -517,6 +521,7 @@ function Skillet:UpdateShoppingListWindow(use_cached_recipes)
     button_count = math.floor(button_count)
 
     -- Update the scroll frame
+    ---@diagnostic disable-next-line: param-type-mismatch
     FauxScrollFrame_Update(SkilletShoppingListList,         -- frame
                            numItems,                        -- num items
                            button_count,                    -- num to display
@@ -555,7 +560,9 @@ function Skillet:UpdateShoppingListWindow(use_cached_recipes)
             name:SetText(self.cachedShoppingList[itemIndex].link)
             player:SetText(self.cachedShoppingList[itemIndex].player)
 
+            ---@diagnostic disable-next-line: inject-field
             button.link  = self.cachedShoppingList[itemIndex].link
+            ---@diagnostic disable-next-line: inject-field
             button.count = self.cachedShoppingList[itemIndex].count
 
             button:Show()
@@ -563,6 +570,7 @@ function Skillet:UpdateShoppingListWindow(use_cached_recipes)
             count:Show()
             player:Show()
         else
+            ---@diagnostic disable-next-line: inject-field
             button.link = nil
             button:Hide()
             name:Hide()
@@ -609,7 +617,7 @@ function Skillet:internal_DisplayShoppingList(atBank)
 
     cache_list(self)
 
-    if not frame:IsVisible() then
+    if frame and not frame:IsVisible() then
         ShowUIPanel(frame)
     end
 

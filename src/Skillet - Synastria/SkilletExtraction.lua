@@ -17,14 +17,14 @@ Skillet.PROSPECTING_DATA = {
 		skill = 20,
 		minQuantity = 5,
 		commonGems = {
-			818,  -- Tigerseye
-			774,  -- Malachite
+			818, -- Tigerseye
+			774, -- Malachite
 		},
 		uncommonGems = {
 			1210, -- Shadowgem
 		}
 	},
-	
+
 	-- Tin Ore (requires skill 50)
 	[2771] = {
 		skill = 50,
@@ -40,7 +40,7 @@ Skillet.PROSPECTING_DATA = {
 			7909, -- Aquamarine
 		}
 	},
-	
+
 	-- Iron Ore (requires skill 125)
 	[2772] = {
 		skill = 125,
@@ -55,7 +55,7 @@ Skillet.PROSPECTING_DATA = {
 			7910, -- Star Ruby
 		}
 	},
-	
+
 	-- Mithril Ore (requires skill 175)
 	[3858] = {
 		skill = 175,
@@ -72,13 +72,13 @@ Skillet.PROSPECTING_DATA = {
 			12364, -- Huge Emerald
 		}
 	},
-	
+
 	-- Thorium Ore (requires skill 250)
 	[10620] = {
 		skill = 250,
 		minQuantity = 5,
 		commonGems = {
-			7910,  -- Star Ruby
+			7910, -- Star Ruby
 			12799, -- Large Opal
 			12361, -- Blue Sapphire
 			12364, -- Huge Emerald
@@ -93,7 +93,7 @@ Skillet.PROSPECTING_DATA = {
 			23107, -- Shadow Draenite
 		}
 	},
-	
+
 	-- TBC ORES
 	-- Fel Iron Ore (requires skill 275)
 	[23424] = {
@@ -116,7 +116,7 @@ Skillet.PROSPECTING_DATA = {
 			23441, -- Nightseye
 		}
 	},
-	
+
 	-- Adamantite Ore (requires skill 325)
 	[23425] = {
 		skill = 325,
@@ -138,7 +138,7 @@ Skillet.PROSPECTING_DATA = {
 			23441, -- Nightseye
 		}
 	},
-	
+
 	-- WRATH ORES
 	-- Cobalt Ore (requires skill 350)
 	[36909] = {
@@ -161,7 +161,7 @@ Skillet.PROSPECTING_DATA = {
 			36927, -- Twilight Opal (purple, uncommon)
 		}
 	},
-	
+
 	-- Saronite Ore (requires skill 400)
 	[36912] = {
 		skill = 400,
@@ -183,22 +183,14 @@ Skillet.PROSPECTING_DATA = {
 			36927, -- Twilight Opal (purple, uncommon)
 		}
 	},
-	
+
 	-- Titanium Ore (requires skill 450)
-	-- Produces all Cobalt/Saronite gems PLUS Epic gems
-	-- 12 common drops + 6 rare drops = 18 total possible gems!
+	-- Produces 6 uncommon + 6 rare + 6 epic gems = 18 total possible gems!
 	[36910] = {
 		skill = 450,
 		minQuantity = 5,
 		commonGems = {
-			-- Common quality gems
-			36917, -- Bloodstone (red, common)
-			36929, -- Huge Citrine (orange, common)
-			36920, -- Sun Crystal (yellow, common)
-			36932, -- Dark Jade (green, common)
-			36923, -- Chalcedony (blue, common)
-			36926, -- Shadow Crystal (purple, common)
-			-- Uncommon quality gems (also common drops from Titanium)
+			-- Uncommon quality gems (common drops from Titanium)
 			36918, -- Scarlet Ruby (red, uncommon)
 			36930, -- Monarch Topaz (orange, uncommon)
 			36921, -- Autumn's Glow (yellow, uncommon)
@@ -207,6 +199,15 @@ Skillet.PROSPECTING_DATA = {
 			36927, -- Twilight Opal (purple, uncommon)
 		},
 		uncommonGems = {
+			-- Rare quality gems (uncommon drops from Titanium)
+			36917, -- Bloodstone (red, rare)
+			36929, -- Huge Citrine (orange, rare)
+			36920, -- Sun Crystal (yellow, rare)
+			36932, -- Dark Jade (green, rare)
+			36923, -- Chalcedony (blue, rare)
+			36926, -- Shadow Crystal (purple, rare)
+		},
+		rareGems = {
 			-- Epic quality gems (rare drops from Titanium)
 			36919, -- Cardinal Ruby (red, epic)
 			36931, -- Ametrine (orange, epic)
@@ -229,353 +230,353 @@ Skillet.MILLING_DATA = {
 	[2447] = {
 		skill = 1,
 		minQuantity = 5,
-		commonPigments = {39151}, -- Alabaster Pigment
+		commonPigments = { 39151 }, -- Alabaster Pigment
 		rarePigments = {}
 	},
-	
+
 	-- Silverleaf
 	[765] = {
 		skill = 1,
 		minQuantity = 5,
-		commonPigments = {39151}, -- Alabaster Pigment
+		commonPigments = { 39151 }, -- Alabaster Pigment
 		rarePigments = {}
 	},
-	
+
 	-- Earthroot
 	[2449] = {
 		skill = 1,
 		minQuantity = 5,
-		commonPigments = {39151}, -- Alabaster Pigment
+		commonPigments = { 39151 }, -- Alabaster Pigment
 		rarePigments = {}
 	},
-	
+
 	-- VANILLA HERBS (Skill 25)
 	-- Tier 2: Dusky Pigment (Common) + Verdant Pigment (Rare)
 	-- Briarthorn
 	[2450] = {
 		skill = 25,
 		minQuantity = 5,
-		commonPigments = {39334}, -- Dusky Pigment
-		rarePigments = {43103}    -- Verdant Pigment
+		commonPigments = { 39334 }, -- Dusky Pigment
+		rarePigments = { 43103 } -- Verdant Pigment
 	},
-	
+
 	-- Swiftthistle
 	[2452] = {
 		skill = 25,
 		minQuantity = 5,
-		commonPigments = {39334}, -- Dusky Pigment
-		rarePigments = {43103}    -- Verdant Pigment
+		commonPigments = { 39334 }, -- Dusky Pigment
+		rarePigments = { 43103 } -- Verdant Pigment
 	},
-	
+
 	-- Bruiseweed
 	[2453] = {
 		skill = 25,
 		minQuantity = 5,
-		commonPigments = {39334}, -- Dusky Pigment
-		rarePigments = {43103}    -- Verdant Pigment
+		commonPigments = { 39334 }, -- Dusky Pigment
+		rarePigments = { 43103 } -- Verdant Pigment
 	},
-	
+
 	-- Stranglekelp
 	[3820] = {
 		skill = 25,
 		minQuantity = 5,
-		commonPigments = {39334}, -- Dusky Pigment
-		rarePigments = {43103}    -- Verdant Pigment
+		commonPigments = { 39334 }, -- Dusky Pigment
+		rarePigments = { 43103 } -- Verdant Pigment
 	},
-	
+
 	-- Mageroyal
 	[785] = {
 		skill = 25,
 		minQuantity = 5,
-		commonPigments = {39334}, -- Dusky Pigment
-		rarePigments = {43103}    -- Verdant Pigment
+		commonPigments = { 39334 }, -- Dusky Pigment
+		rarePigments = { 43103 } -- Verdant Pigment
 	},
-	
+
 	-- VANILLA HERBS (Skill 75)
 	-- Tier 3: Golden Pigment (Common) + Burnt Pigment (Rare)
 	-- Wild Steelbloom
 	[3355] = {
 		skill = 75,
 		minQuantity = 5,
-		commonPigments = {39338}, -- Golden Pigment
-		rarePigments = {43104}    -- Burnt Pigment
+		commonPigments = { 39338 }, -- Golden Pigment
+		rarePigments = { 43104 } -- Burnt Pigment
 	},
-	
+
 	-- Grave Moss
 	[3369] = {
 		skill = 75,
 		minQuantity = 5,
-		commonPigments = {39338}, -- Golden Pigment
-		rarePigments = {43104}    -- Burnt Pigment
+		commonPigments = { 39338 }, -- Golden Pigment
+		rarePigments = { 43104 } -- Burnt Pigment
 	},
-	
+
 	-- Kingsblood
 	[3356] = {
 		skill = 75,
 		minQuantity = 5,
-		commonPigments = {39338}, -- Golden Pigment
-		rarePigments = {43104}    -- Burnt Pigment
+		commonPigments = { 39338 }, -- Golden Pigment
+		rarePigments = { 43104 } -- Burnt Pigment
 	},
-	
+
 	-- Liferoot
 	[3357] = {
 		skill = 75,
 		minQuantity = 5,
-		commonPigments = {39338}, -- Golden Pigment
-		rarePigments = {43104}    -- Burnt Pigment
+		commonPigments = { 39338 }, -- Golden Pigment
+		rarePigments = { 43104 } -- Burnt Pigment
 	},
-	
+
 	-- VANILLA HERBS (Skill 125)
 	-- Fadeleaf
 	[3818] = {
 		skill = 125,
 		minQuantity = 5,
-		commonPigments = {39339}, -- Emerald Pigment
-		rarePigments = {43105}    -- Indigo Pigment
+		commonPigments = { 39339 }, -- Emerald Pigment
+		rarePigments = { 43105 } -- Indigo Pigment
 	},
-	
+
 	-- Goldthorn
 	[3821] = {
 		skill = 125,
 		minQuantity = 5,
-		commonPigments = {39339}, -- Emerald Pigment
-		rarePigments = {43105}    -- Indigo Pigment
+		commonPigments = { 39339 }, -- Emerald Pigment
+		rarePigments = { 43105 } -- Indigo Pigment
 	},
-	
+
 	-- Khadgar's Whisker
 	[3358] = {
 		skill = 125,
 		minQuantity = 5,
-		commonPigments = {39339}, -- Emerald Pigment
-		rarePigments = {43105}    -- Indigo Pigment
+		commonPigments = { 39339 }, -- Emerald Pigment
+		rarePigments = { 43105 } -- Indigo Pigment
 	},
-	
+
 	-- Wintersbite
 	[3819] = {
 		skill = 125,
 		minQuantity = 5,
-		commonPigments = {39339}, -- Emerald Pigment
-		rarePigments = {43105}    -- Indigo Pigment
+		commonPigments = { 39339 }, -- Emerald Pigment
+		rarePigments = { 43105 } -- Indigo Pigment
 	},
-	
+
 	-- VANILLA HERBS (Skill 175)
 	-- Tier 5: Violet Pigment (Common) + Ruby Pigment (Rare)
 	-- Firebloom
 	[4625] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- Purple Lotus
 	[8831] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- Arthas' Tears
 	[8836] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- Sungrass
 	[8838] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- Blindweed
 	[8153] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- Ghost Mushroom
 	[8845] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- Gromsblood
 	[8846] = {
 		skill = 175,
 		minQuantity = 5,
-		commonPigments = {39340}, -- Violet Pigment
-		rarePigments = {43106}    -- Ruby Pigment
+		commonPigments = { 39340 }, -- Violet Pigment
+		rarePigments = { 43106 } -- Ruby Pigment
 	},
-	
+
 	-- VANILLA HERBS (Skill 225)
 	-- Tier 6: Silvery Pigment (Common) + Sapphire Pigment (Rare)
 	-- Golden Sansam
 	[13464] = {
 		skill = 225,
 		minQuantity = 5,
-		commonPigments = {39341}, -- Silvery Pigment
-		rarePigments = {43107}    -- Sapphire Pigment
+		commonPigments = { 39341 }, -- Silvery Pigment
+		rarePigments = { 43107 } -- Sapphire Pigment
 	},
-	
+
 	-- Dreamfoil
 	[13463] = {
 		skill = 225,
 		minQuantity = 5,
-		commonPigments = {39341}, -- Silvery Pigment
-		rarePigments = {43107}    -- Sapphire Pigment
+		commonPigments = { 39341 }, -- Silvery Pigment
+		rarePigments = { 43107 } -- Sapphire Pigment
 	},
-	
+
 	-- Mountain Silversage
 	[13465] = {
 		skill = 225,
 		minQuantity = 5,
-		commonPigments = {39341}, -- Silvery Pigment
-		rarePigments = {43107}    -- Sapphire Pigment
+		commonPigments = { 39341 }, -- Silvery Pigment
+		rarePigments = { 43107 } -- Sapphire Pigment
 	},
-	
+
 	-- Plaguebloom
 	[13466] = {
 		skill = 225,
 		minQuantity = 5,
-		commonPigments = {39341}, -- Silvery Pigment
-		rarePigments = {43107}    -- Sapphire Pigment
+		commonPigments = { 39341 }, -- Silvery Pigment
+		rarePigments = { 43107 } -- Sapphire Pigment
 	},
-	
+
 	-- Icecap
 	[13467] = {
 		skill = 225,
 		minQuantity = 5,
-		commonPigments = {39341}, -- Silvery Pigment
-		rarePigments = {43107}    -- Sapphire Pigment
+		commonPigments = { 39341 }, -- Silvery Pigment
+		rarePigments = { 43107 } -- Sapphire Pigment
 	},
-	
+
 	-- TBC HERBS (Skill 275)
 	-- Tier 7: Nether Pigment (Common) + Ebon Pigment (Rare)
 	-- Note: All Outland herbs produce these pigments
-	
+
 	-- Felweed
 	[22785] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Dreaming Glory
 	[22786] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Terocone
 	[22787] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Ancient Lichen
 	[22789] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Netherbloom
 	[22791] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Nightmare Vine
 	[22792] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Mana Thistle
 	[22793] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- Ragveil
 	[22794] = {
 		skill = 275,
 		minQuantity = 5,
-		commonPigments = {39342}, -- Nether Pigment
-		rarePigments = {43108}    -- Ebon Pigment
+		commonPigments = { 39342 }, -- Nether Pigment
+		rarePigments = { 43108 } -- Ebon Pigment
 	},
-	
+
 	-- WRATH HERBS (Skill 325)
 	-- Tier 8: Azure Pigment (Common) + Icy Pigment (Rare)
 	-- Note: All Northrend herbs produce these pigments
-	
+
 	-- Goldclover
 	[36901] = {
 		skill = 325,
 		minQuantity = 5,
-		commonPigments = {39343}, -- Azure Pigment
-		rarePigments = {43109}    -- Icy Pigment
+		commonPigments = { 39343 }, -- Azure Pigment
+		rarePigments = { 43109 } -- Icy Pigment
 	},
-	
+
 	-- Tiger Lily
 	[36904] = {
 		skill = 325,
 		minQuantity = 5,
-		commonPigments = {39343}, -- Azure Pigment
-		rarePigments = {43109}    -- Icy Pigment
+		commonPigments = { 39343 }, -- Azure Pigment
+		rarePigments = { 43109 } -- Icy Pigment
 	},
-	
+
 	-- Talandra's Rose
 	[36907] = {
 		skill = 325,
 		minQuantity = 5,
-		commonPigments = {39343}, -- Azure Pigment
-		rarePigments = {43109}    -- Icy Pigment
+		commonPigments = { 39343 }, -- Azure Pigment
+		rarePigments = { 43109 } -- Icy Pigment
 	},
-	
+
 	-- Lichbloom
 	[36905] = {
 		skill = 325,
 		minQuantity = 5,
-		commonPigments = {39343}, -- Azure Pigment
-		rarePigments = {43109}    -- Icy Pigment
+		commonPigments = { 39343 }, -- Azure Pigment
+		rarePigments = { 43109 } -- Icy Pigment
 	},
-	
+
 	-- Icethorn
 	[36906] = {
 		skill = 325,
 		minQuantity = 5,
-		commonPigments = {39343}, -- Azure Pigment
-		rarePigments = {43109}    -- Icy Pigment
+		commonPigments = { 39343 }, -- Azure Pigment
+		rarePigments = { 43109 } -- Icy Pigment
 	},
-	
+
 	-- Adder's Tongue
 	[36903] = {
 		skill = 325,
 		minQuantity = 5,
-		commonPigments = {39343}, -- Azure Pigment
-		rarePigments = {43109}    -- Icy Pigment
+		commonPigments = { 39343 }, -- Azure Pigment
+		rarePigments = { 43109 } -- Icy Pigment
 	},
 }
 
@@ -607,23 +608,23 @@ end
 function Skillet:GetProspectingResults(oreId)
 	local data = self.PROSPECTING_DATA[oreId]
 	if not data then return nil end
-	
+
 	local results = {}
-	
+
 	-- Add common gems
 	if data.commonGems then
 		for _, gemId in ipairs(data.commonGems) do
-			table.insert(results, {itemId = gemId, rarity = "common"})
+			table.insert(results, { itemId = gemId, rarity = "common" })
 		end
 	end
-	
+
 	-- Add uncommon gems
 	if data.uncommonGems then
 		for _, gemId in ipairs(data.uncommonGems) do
-			table.insert(results, {itemId = gemId, rarity = "uncommon"})
+			table.insert(results, { itemId = gemId, rarity = "uncommon" })
 		end
 	end
-	
+
 	return results
 end
 
@@ -631,23 +632,23 @@ end
 function Skillet:GetMillingResults(herbId)
 	local data = self.MILLING_DATA[herbId]
 	if not data then return nil end
-	
+
 	local results = {}
-	
+
 	-- Add common pigments
 	if data.commonPigments then
 		for _, pigmentId in ipairs(data.commonPigments) do
-			table.insert(results, {itemId = pigmentId, rarity = "common"})
+			table.insert(results, { itemId = pigmentId, rarity = "common" })
 		end
 	end
-	
+
 	-- Add rare pigments
 	if data.rarePigments then
 		for _, pigmentId in ipairs(data.rarePigments) do
-			table.insert(results, {itemId = pigmentId, rarity = "rare"})
+			table.insert(results, { itemId = pigmentId, rarity = "rare" })
 		end
 	end
-	
+
 	return results
 end
 
