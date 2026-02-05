@@ -389,10 +389,10 @@ function Skillet:MatchesAttunabilityFilter(recipeIndex)
 
     -- Apply filter based on Char toggle
     if charPref then
-        -- Char toggle checked → show character-attuneable only
+        -- Char toggle checked -> show character-attuneable only
         return attuneChar
     else
-        -- Char toggle unchecked → show account-attuneable
+        -- Char toggle unchecked -> show account-attuneable
         return attuneAny
     end
 end

@@ -216,6 +216,23 @@ Skillet.options =
                     end,
                     order = 20,
                 },
+                dev_mode = {
+                    type = "toggle",
+                    name = "Developer Mode",
+                    desc = "Enable detailed debug logging. Can also be toggled with /skillet dev",
+                    get = function()
+                        return Skillet.db.profile.dev_mode
+                    end,
+                    set = function(value)
+                        Skillet.db.profile.dev_mode = value
+                        if value then
+                            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[Skillet] Developer mode enabled|r")
+                        else
+                            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Skillet] Developer mode disabled|r")
+                        end
+                    end,
+                    order = 21,
+                },
             }
         },
         appearance = {
@@ -434,6 +451,20 @@ function Skillet:OnInitialize()
     -- commands to be available even when the mod is disabled. Otherwise,
     -- how would the mod be enabled again?
     self:RegisterChatCommand({ "/skillet" }, self.options, "SKILLET")
+
+    -- Register dev mode toggle command
+    SLASH_SKILLETDEV1 = "/skillet"
+    SlashCmdList["SKILLETDEV"] = function(msg)
+        msg = msg:lower():trim()
+        if msg == "dev" then
+            Skillet.db.profile.dev_mode = not Skillet.db.profile.dev_mode
+            if Skillet.db.profile.dev_mode then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[Skillet] Developer mode ENABLED|r")
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Skillet] Developer mode DISABLED|r")
+            end
+        end
+    end
 end
 
 -- Returns the number of items across all characters, including the
@@ -441,6 +472,19 @@ end
 local function alt_item_lookup(link)
     local item = Skillet:GetItemIDFromLink(link)
     return Skillet.inventoryCheck:GetItemCount(item)
+end
+
+-- Synastria: Check if dev mode is enabled
+function Skillet:IsDevMode()
+    return self.db and self.db.profile and self.db.profile.dev_mode
+end
+
+-- Synastria: Debug logging function that respects dev mode
+function Skillet:DebugLog(message, color)
+    if self:IsDevMode() then
+        color = color or "|cFF888888"
+        DEFAULT_CHAT_FRAME:AddMessage(color .. message .. "|r")
+    end
 end
 
 -- Called when the addon is enabled
@@ -486,6 +530,7 @@ function Skillet:OnEnable()
     -- as we consume reagents.
     self:RegisterEvent("SkilletStitch_Queue_Continue", "QueueChanged")
     self:RegisterEvent("SkilletStitch_Queue_Complete", "QueueChanged")
+    self:RegisterEvent("SkilletStitch_Queue_Complete", "ResumeCalculations")
     self:RegisterEvent("SkilletStitch_Queue_Add", "QueueChanged")
     self:RegisterEvent("SkilletStitch_Craft_Failed", "OnCraftFailed")
 
@@ -733,9 +778,27 @@ function Skillet:TRADE_SKILL_SHOW()
         local profession = GetTradeSkillLine()
         if profession and profession ~= "UNKNOWN" then
             if self.CraftCalc then
+                -- Stop any existing calculation first
+                self.CraftCalc:StopCalculation()
+
                 self.CraftCalc:StartBackgroundCalculation(profession, function(count)
                     -- Callback when calculation is complete
+                    self:DebugLog("[ScanDialog] Calculation complete for '" .. profession .. "', updating UI",
+                        "|cFF00FFFF")
                     self:UpdateTradeSkillWindow()
+
+                    -- Re-enable the scan dialog button if it's visible
+                    -- Don't update dialog text here - PostClick handles that when moving to next profession
+                    if self.recipePromptDialog and self.recipePromptDialog:IsVisible() then
+                        local dialog = self.recipePromptDialog
+                        if dialog.openButton then
+                            self:DebugLog("[ScanDialog] Re-enabling Open Next button after '" .. profession .. "' scan",
+                                "|cFF00FF00")
+                            dialog.openButton:Enable()
+                        else
+                            self:DebugLog("[ScanDialog] Cannot re-enable: button missing", "|cFFFFAA00")
+                        end
+                    end
                 end)
             end
         end
@@ -975,9 +1038,17 @@ function Skillet:ShowOptions()
     AceLibrary("Waterfall-1.0"):Open("Skillet");
 end
 
+-- Synastria: Resume craftability calculations after queue processing
+function Skillet:ResumeCalculations()
+    if self.CraftCalc then
+        self.CraftCalc:ResumeCalculation()
+    end
+end
+
 -- Synastria: Debug craftability calculation for selected recipe
 function Skillet:DebugSelectedRecipe()
     if not self.selectedSkill then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet Debug] No recipe selected!|r")
         return
     end
 
@@ -985,15 +1056,97 @@ function Skillet:DebugSelectedRecipe()
     local recipe = lib:GetItemDataByIndex(self.currentTrade, self.selectedSkill)
 
     if not recipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet Debug] Could not get recipe data!|r")
         return
     end
 
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00=== Skillet Debug: " .. (recipe.name or "Unknown") .. " ===|r")
+
     if self.CraftCalc then
-        -- Test bags+resbank - FORCE RECALCULATION (bypass cache)
+        -- Show recursive crafting tree
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Recursive Crafting Tree:|r")
+        self:DebugRecipeTree(recipe, lib, false, 0)
+
+        DEFAULT_CHAT_FRAME:AddMessage(" ")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Detailed Calculation Log:|r")
+        -- Test bags+resbank - FORCE RECALCULATION with verbose output
         local numCraftable = self.CraftCalc:CalculateRecipeCraftability(recipe, lib, false, true, 0, true)
 
-        -- Test with bank - FORCE RECALCULATION
-        local numCraftableBank = self.CraftCalc:CalculateRecipeCraftability(recipe, lib, true, true, 0, true)
+        DEFAULT_CHAT_FRAME:AddMessage(" ")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF  Final Result: " .. tostring(numCraftable) .. "|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet Debug] CraftCalc not available!|r")
+    end
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00==================|r")
+end
+
+-- Synastria: Debug helper to show recursive crafting tree
+function Skillet:DebugRecipeTree(recipe, lib, includeBank, depth)
+    if not recipe or not recipe.name then
+        return
+    end
+
+    depth = depth or 0
+    local indent = string.rep("  ", depth)
+
+    -- Show recipe name
+    if depth == 0 then
+        DEFAULT_CHAT_FRAME:AddMessage(indent .. "|cFF00FF00" .. recipe.name .. "|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage(indent .. "|cFFFFFFFF" .. recipe.name .. "|r")
+    end
+
+    -- Show reagents
+    if recipe.reagents and #recipe.reagents > 0 then
+        for i, reagent in ipairs(recipe.reagents) do
+            local available = reagent.num or 0
+            local needed = reagent.needed or 0
+            local vendor = reagent.vendor and " (Vendor)" or ""
+
+            -- Calculate max craftable from this reagent
+            local maxFromReagent = math.floor(available / needed)
+
+            -- Check if reagent is craftable
+            local reagentRecipe = lib:GetItemDataByName(reagent.name)
+
+            -- Check if reagent has conversions (e.g., Eternal Fire from other Eternals)
+            local conversionText = ""
+            if reagent.name and reagent.name:match("^Eternal ") then
+                -- Check for conversion recipe (e.g., "Transmute: Eternal X to Eternal Y")
+                local targetEternal = reagent.name
+                -- Common eternal types to check
+                local eternals = { "Eternal Fire", "Eternal Earth", "Eternal Water", "Eternal Air", "Eternal Shadow",
+                    "Eternal Life" }
+                for _, sourceEternal in ipairs(eternals) do
+                    if sourceEternal ~= targetEternal then
+                        local conversionName = "Transmute: " .. sourceEternal .. " to " .. targetEternal
+                        local conversionRecipe = lib:GetItemDataByName(conversionName)
+                        if conversionRecipe then
+                            conversionText = conversionText .. " [Conv: " .. sourceEternal:match("Eternal (%w+)") .. "]"
+                        end
+                    end
+                end
+            end
+
+            local craftableText = ""
+            if reagentRecipe then
+                craftableText = " [Craftable]"
+            end
+
+            -- Color code based on availability
+            local color = "|cFF00FF00" -- Green if enough
+            if available < needed then
+                color = "|cFFFF0000"   -- Red if shortage
+            end
+
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("%s  %s%s: %d/%d -> max %d%s%s%s|r",
+                indent, color, reagent.name, available, needed, maxFromReagent, vendor, craftableText, conversionText))
+
+            -- Recurse if craftable and we have a shortage
+            if reagentRecipe and available < needed and depth < 5 then
+                self:DebugRecipeTree(reagentRecipe, lib, includeBank, depth + 1)
+            end
+        end
     end
 end
 
@@ -1076,8 +1229,8 @@ Skillet.CONVERSION_GROUPS = {
         -- Row 2 (Lesser): Cosmic, Planar, Eternal, Nether
         -- Row 3 (Greater): Mystic, Astral, Magic
         -- Row 4 (Lesser): Mystic, Astral, Magic
-        resultItems = { 34055, 22446, 16203, 11175, 11135, 11082, 10939 }, -- Greater Essences (high→low level)
-        sourceItems = { 34056, 22447, 16202, 11174, 11134, 10998, 10938 }, -- Lesser Essences (high→low level)
+        resultItems = { 34055, 22446, 16203, 11175, 11135, 11082, 10939 }, -- Greater Essences (high->low level)
+        sourceItems = { 34056, 22447, 16202, 11174, 11134, 10998, 10938 }, -- Lesser Essences (high->low level)
         bidirectional = true,                                              -- Can convert both ways
         ratio = 3,                                                         -- 3 lesser = 1 greater
         extended = true                                                    -- Use large layout (4 rows needed)
@@ -1085,27 +1238,27 @@ Skillet.CONVERSION_GROUPS = {
 }
 
 Skillet.CONVERSION_DEFINITIONS = {
-    -- ===== WRATH: Crystallized → Eternal (combine 10 into 1) =====
-    { source = 37700, target = 35622, ratio = 10, type = "combine", name = "Crystallized Air → Eternal Air" },
-    { source = 37701, target = 35624, ratio = 10, type = "combine", name = "Crystallized Earth → Eternal Earth" },
-    { source = 37702, target = 36860, ratio = 10, type = "combine", name = "Crystallized Fire → Eternal Fire" },
-    { source = 37704, target = 35625, ratio = 10, type = "combine", name = "Crystallized Life → Eternal Life" },
-    { source = 37703, target = 35627, ratio = 10, type = "combine", name = "Crystallized Shadow → Eternal Shadow" },
-    { source = 37705, target = 35623, ratio = 10, type = "combine", name = "Crystallized Water → Eternal Water" },
+    -- ===== WRATH: Crystallized -> Eternal (combine 10 into 1) =====
+    { source = 37700, target = 35622, ratio = 10, type = "combine", name = "Crystallized Air -> Eternal Air" },
+    { source = 37701, target = 35624, ratio = 10, type = "combine", name = "Crystallized Earth -> Eternal Earth" },
+    { source = 37702, target = 36860, ratio = 10, type = "combine", name = "Crystallized Fire -> Eternal Fire" },
+    { source = 37704, target = 35625, ratio = 10, type = "combine", name = "Crystallized Life -> Eternal Life" },
+    { source = 37703, target = 35627, ratio = 10, type = "combine", name = "Crystallized Shadow -> Eternal Shadow" },
+    { source = 37705, target = 35623, ratio = 10, type = "combine", name = "Crystallized Water -> Eternal Water" },
 
-    -- ===== WRATH: Eternal → Crystallized (split 1 into 10) =====
-    { source = 35622, target = 37700, ratio = 0.1, type = "split", name = "Eternal Air → Crystallized Air" },
-    { source = 35624, target = 37701, ratio = 0.1, type = "split", name = "Eternal Earth → Crystallized Earth" },
-    { source = 36860, target = 37702, ratio = 0.1, type = "split", name = "Eternal Fire → Crystallized Fire" },
-    { source = 35625, target = 37704, ratio = 0.1, type = "split", name = "Eternal Life → Crystallized Life" },
-    { source = 35627, target = 37703, ratio = 0.1, type = "split", name = "Eternal Shadow → Crystallized Shadow" },
-    { source = 35623, target = 37705, ratio = 0.1, type = "split", name = "Eternal Water → Crystallized Water" },
+    -- ===== WRATH: Eternal -> Crystallized (split 1 into 10) =====
+    { source = 35622, target = 37700, ratio = 0.1, type = "split", name = "Eternal Air -> Crystallized Air" },
+    { source = 35624, target = 37701, ratio = 0.1, type = "split", name = "Eternal Earth -> Crystallized Earth" },
+    { source = 36860, target = 37702, ratio = 0.1, type = "split", name = "Eternal Fire -> Crystallized Fire" },
+    { source = 35625, target = 37704, ratio = 0.1, type = "split", name = "Eternal Life -> Crystallized Life" },
+    { source = 35627, target = 37703, ratio = 0.1, type = "split", name = "Eternal Shadow -> Crystallized Shadow" },
+    { source = 35623, target = 37705, ratio = 0.1, type = "split", name = "Eternal Water -> Crystallized Water" },
 
-    -- ===== TBC: Mote → Primal (combine 10 into 1) =====
-    { source = 22572, target = 22451, ratio = 10, type = "combine", name = "Mote of Air → Primal Air" },
-    { source = 22573, target = 22452, ratio = 10, type = "combine", name = "Mote of Earth → Primal Earth" },
-    { source = 22574, target = 21886, ratio = 10, type = "combine", name = "Mote of Fire → Primal Fire" },
-    { source = 22575, target = 21884, ratio = 10, type = "combine", name = "Mote of Life → Primal Life" },
+    -- ===== TBC: Mote -> Primal (combine 10 into 1) =====
+    { source = 22572, target = 22451, ratio = 10, type = "combine", name = "Mote of Air -> Primal Air" },
+    { source = 22573, target = 22452, ratio = 10, type = "combine", name = "Mote of Earth -> Primal Earth" },
+    { source = 22574, target = 21886, ratio = 10, type = "combine", name = "Mote of Fire -> Primal Fire" },
+    { source = 22575, target = 21884, ratio = 10, type = "combine", name = "Mote of Life -> Primal Life" },
     { source = 22576, target = 22457, ratio = 10, type = "combine", name = "Mote of Mana → Primal Mana" },
     { source = 22577, target = 22456, ratio = 10, type = "combine", name = "Mote of Shadow → Primal Shadow" },
     { source = 22578, target = 21885, ratio = 10, type = "combine", name = "Mote of Water → Primal Water" },
@@ -1210,11 +1363,11 @@ function Skillet:GetQueuedReagentConsumption(itemId)
                     j, reagentName, tostring(reagentId), tostring(itemId), tostring(reagentId == itemId)))
 
                 if reagentId == itemId then
-                    local neededPerCraft = reagent.num or 1
+                    local neededPerCraft = reagent.needed or 1
                     local numCasts = entry.numcasts or 1
                     local amount = neededPerCraft * numCasts
                     totalNeeded = totalNeeded + amount
-                    self:Print(string.format("|cFFFFAA00      MATCH! Adding %d (need %d × %d casts)|r",
+                    self:Print(string.format("|cFFFFAA00      MATCH! Adding %d (need %d x %d casts)|r",
                         amount, neededPerCraft, numCasts))
                 end
             end
@@ -1256,16 +1409,19 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
     end
 
     -- Subtract items already allocated to queued recipes
+    -- IMPORTANT: Calculate this BEFORE calling this function recursively to avoid double-counting
     local queuedConsumption = self:GetQueuedReagentConsumption(itemId)
     local availableBeforeQueue = available
     available = available - queuedConsumption
 
     -- Debug output
     local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
-    self:Print(string.format("|cFF888888[Conv Check] %s: have %d, queued %d, avail %d, need %d|r",
+    self:DebugLog(string.format("[Conv Check] %s: have %d, queued %d, avail %d, need %d",
         itemName, availableBeforeQueue, queuedConsumption, available, needed))
 
     if available >= needed then
+        self:DebugLog(string.format("[Conv Check] %s: Already have enough (avail %d >= need %d)", 
+            itemName, available, needed))
         return false -- We already have enough (after accounting for queue)
     end
 
@@ -1319,13 +1475,31 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
             if entry.recipe and entry.recipe.isVirtualConversion and
                 entry.recipe.sourceId == sourceId and
                 entry.recipe.outputId == outputId then
-                -- Found existing conversion - increase the amount
-                local oldAmount = entry.recipe.outputAmount
+                -- Found existing conversion - check if we need to increase it
+                local currentOutput = entry.recipe.outputAmount or 0
+                
+                self:DebugLog(string.format("[Conv] Found existing conversion for %s: currently %d, shortage is %d", 
+                    neededName, currentOutput, shortage))
+                
+                -- Calculate total we'll have after existing conversion completes
+                local totalAfterConversion = available + currentOutput
+                
+                if totalAfterConversion >= needed then
+                    self:DebugLog(string.format("[Conv] Existing conversion sufficient: %d + %d >= %d", 
+                        available, currentOutput, needed))
+                    return false -- Existing conversion is already sufficient
+                end
+                
+                -- Need more - add only the additional shortage
+                local additionalNeeded = needed - totalAfterConversion
+                
+                self:DebugLog(string.format("[Conv] Need %d more, updating conversion", additionalNeeded))
+                
                 if conversionType == "combine" then
-                    entry.recipe.outputAmount = oldAmount + conversionsNeeded
+                    entry.recipe.outputAmount = currentOutput + additionalNeeded
                     entry.recipe.sourceNeeded = entry.recipe.outputAmount * 10
                 else -- split
-                    entry.recipe.outputAmount = oldAmount + (conversionsNeeded * 10)
+                    entry.recipe.outputAmount = currentOutput + (additionalNeeded * 10)
                     entry.recipe.sourceNeeded = math.ceil(entry.recipe.outputAmount / 10)
                 end
 
@@ -1707,14 +1881,6 @@ end
 
 -- Synastria: Scans all character professions
 function Skillet:ScanAllProfessions()
-    if self.scanningAllProfessions then
-        DEFAULT_CHAT_FRAME:AddMessage("Scan already in progress")
-        return
-    end
-
-    -- Get current profession to return to after scanning
-    local currentTrade = self:GetTradeSkillLine()
-
     -- Build list of professions using same spell ID detection as ProfessionSelector
     local professionsToScan = {}
     local professionSpellIds = {
@@ -1745,7 +1911,7 @@ function Skillet:ScanAllProfessions()
         if spellId then
             local name = GetSpellInfo(spellId)
             if name and name ~= "Smelting" then -- Skip smelting, it's part of Mining
-                table.insert(professionsToScan, { name = name, spellId = spellId })
+                table.insert(professionsToScan, name)
             end
         end
     end
@@ -1755,75 +1921,11 @@ function Skillet:ScanAllProfessions()
         return
     end
 
-    self.scanningAllProfessions = true
-    self.scanProfessionList = professionsToScan
-    self.scanCurrentIndex = 1
-    self.scanOriginalTrade = currentTrade
+    -- Store current profession to return to after scanning
+    local currentTrade = self:GetTradeSkillLine()
 
-    DEFAULT_CHAT_FRAME:AddMessage("Starting scan of " .. #professionsToScan .. " professions...")
-    self:ContinueProfessionScan()
-end
-
--- Synastria: Continue profession scan to next profession
-function Skillet:ContinueProfessionScan()
-    if not self.scanningAllProfessions then
-        return
-    end
-
-    if self.scanCurrentIndex > #self.scanProfessionList then
-        -- Scanning complete, return to original profession
-        self:CompleteProfessionScan()
-        return
-    end
-
-    local professionData = self.scanProfessionList[self.scanCurrentIndex]
-    self:UpdateScanningText("Scanning " ..
-        self.scanCurrentIndex .. "/" .. #self.scanProfessionList .. ": " .. professionData.name)
-
-    -- Check if we're already in this profession
-    local currentTrade = GetTradeSkillLine()
-    if currentTrade == professionData.name then
-        -- We're already in the right profession, scan it immediately
-        self:ScheduleEvent("Skillet_ScanNext", self.ScanNextProfessionCallback, 0.1, self)
-    else
-        -- Need to switch professions - show button for user to click
-        self:ShowProfessionSwitchPrompt(professionData.name, professionData.spellId, "scan")
-    end
-end
-
--- Synastria: Callback for scanning next profession
-function Skillet:ScanNextProfessionCallback()
-    if not self.scanningAllProfessions then
-        return
-    end
-
-    -- Scan the currently open profession
-    self:RescanTrade(true)
-
-    -- Move to next profession
-    self.scanCurrentIndex = self.scanCurrentIndex + 1
-
-    -- Schedule continuation
-    self:ScheduleEvent("Skillet_ScanContinue", self.ContinueProfessionScan, 0.5, self)
-end
-
--- Synastria: Complete profession scan and return to original
-function Skillet:CompleteProfessionScan()
-    self.scanningAllProfessions = false
-    self:UpdateScanningText("")
-
-    DEFAULT_CHAT_FRAME:AddMessage("Profession scan complete!")
-
-    -- Return to original profession if different
-    if self.scanOriginalTrade and self.scanOriginalTrade ~= "UNKNOWN" then
-        -- User will need to manually switch back if desired
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Return to " .. self.scanOriginalTrade .. " when ready|r")
-    end
-
-    -- Cleanup
-    self.scanProfessionList = nil
-    self.scanCurrentIndex = nil
-    self.scanOriginalTrade = nil
+    -- Show the rescan dialog with all professions
+    self:ShowRecipePrompt(professionsToScan, currentTrade)
 end
 
 -- Synastria: Check for old encoded recipe data and show rescan dialog
@@ -1899,7 +2001,7 @@ end
 ---@field crystallizedId number|nil
 
 -- Synastria: Show dialog for professions needing rescan
-function Skillet:ShowRecipePrompt(professionList)
+function Skillet:ShowRecipePrompt(professionList, originalProfession)
     if not self.recipePromptDialog then
         ---@type SkilletRecipePromptDialog
         ---@diagnostic disable-next-line: assign-type-mismatch
@@ -1939,6 +2041,22 @@ function Skillet:ShowRecipePrompt(professionList)
         dialog.openButton:SetAttribute("type", "spell")
         dialog.openButton:RegisterForClicks("AnyUp")
         dialog.openButton:SetScript("PostClick", function()
+            -- Check if this is the return button click
+            if dialog.returningToOriginal then
+                Skillet:DebugLog("[ScanDialog] Return button clicked, closing dialog", "|cFF00FF00")
+                C_Timer.After(0.5, function()
+                    dialog:Hide()
+                    dialog.professionIndex = nil
+                    dialog.scannedProfessions = nil
+                    dialog.originalProfession = nil
+                    dialog.returningToOriginal = nil
+                end)
+                return
+            end
+            
+            -- Disable button immediately to prevent double-clicks
+            dialog.openButton:Disable()
+
             -- Give the profession window time to open
             C_Timer.After(0.5, function()
                 if dialog.professionIndex then
@@ -1947,15 +2065,26 @@ function Skillet:ShowRecipePrompt(professionList)
                     local currentProf = dialog.professions[dialog.professionIndex]
                     dialog.scannedProfessions[currentProf] = true
 
+                    Skillet:DebugLog(
+                    "[ScanDialog] PostClick: Marking '" .. currentProf .. "' [" .. dialog.professionIndex .. "] as [OK]",
+                        "|cFF00FF00")
+
+                    -- Move to next profession first
+                    dialog.professionIndex = dialog.professionIndex + 1
+                    local nextProf = dialog.professions[dialog.professionIndex]
+
                     -- Update the profession list display
+                    Skillet:DebugLog(
+                    "[ScanDialog] PostClick: Moving to '" ..
+                    (nextProf or "DONE") .. "' [" .. dialog.professionIndex .. "]", "|cFF00FFFF")
                     local promptText = "The following professions need to be rescanned:\n\n"
                     for i, prof in ipairs(dialog.professions) do
                         if i < dialog.professionIndex then
                             -- Already scanned - show in green with checkmark
-                            promptText = promptText .. "|cFF00FF00  ✓ " .. prof .. "|r\n"
+                            promptText = promptText .. "|cFF00FF00  [OK] " .. prof .. "|r\n"
                         elseif i == dialog.professionIndex then
                             -- Currently being scanned - show in yellow
-                            promptText = promptText .. "|cFFFFFF00  → " .. prof .. " (scanning...)|r\n"
+                            promptText = promptText .. "|cFFFFFF00  -> " .. prof .. " (scanning...)|r\n"
                         else
                             -- Not yet scanned - show in gray
                             promptText = promptText .. "|cFF808080    " .. prof .. "|r\n"
@@ -1964,8 +2093,7 @@ function Skillet:ShowRecipePrompt(professionList)
                     promptText = promptText .. "\nOpen each profession window to update the data."
                     dialog.text:SetText(promptText)
 
-                    -- Move to next profession
-                    dialog.professionIndex = dialog.professionIndex + 1
+                    -- professionIndex already incremented above
                     if dialog.professionIndex <= #dialog.professions then
                         local nextProf = dialog.professions[dialog.professionIndex]
                         local spellId = dialog.professionSpellIds[nextProf]
@@ -1973,7 +2101,8 @@ function Skillet:ShowRecipePrompt(professionList)
                         if spellId then
                             dialog.openButton:SetAttribute("spell", spellId)
                             dialog.openButton:SetText("Open " .. nextProf)
-                            dialog.openButton:Enable()
+                            -- Don't enable here - let calculation callback enable it when scan completes
+                            Skillet:DebugLog("[ScanDialog] PostClick: Button configured for '" .. nextProf .. "', waiting for calculation to complete", "|cFF888888")
                         else
                             dialog.openButton:SetText("Not Learned")
                             dialog.openButton:Disable()
@@ -1983,6 +2112,22 @@ function Skillet:ShowRecipePrompt(professionList)
                         dialog.openButton:SetText("Done")
                         dialog.openButton:Disable()
                         DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00All professions opened! Recipe data updated.|r")
+
+                        -- Prompt to return to original profession if set
+                        if dialog.originalProfession and dialog.originalProfession ~= "UNKNOWN" then
+                            local spellId = dialog.professionSpellIds[dialog.originalProfession]
+                            if not spellId then
+                                spellId = Skillet.stitch:FindProfessionSpellId(dialog.originalProfession)
+                            end
+
+                            if spellId and IsSpellKnown(spellId) then
+                                dialog.openButton:SetAttribute("spell", spellId)
+                                dialog.openButton:SetText("Return to " .. dialog.originalProfession)
+                                dialog.returningToOriginal = true
+                                dialog.openButton:Enable()
+                                dialog.professionIndex = nil -- Prevent further progression
+                            end
+                        end
                     end
                 end
             end)
@@ -1991,11 +2136,13 @@ function Skillet:ShowRecipePrompt(professionList)
         dialog.okButton = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
         dialog.okButton:SetSize(80, 22)
         dialog.okButton:SetPoint("BOTTOM", 50, 15)
-        dialog.okButton:SetText("OK")
+        dialog.okButton:SetText("Cancel")
         dialog.okButton:SetScript("OnClick", function()
             dialog:Hide()
             dialog.professionIndex = nil
             dialog.scannedProfessions = nil
+            dialog.returningToOriginal = nil
+            dialog.originalProfession = nil
         end)
 
         dialog:SetScript("OnDragStart", dialog.StartMoving)
@@ -2028,6 +2175,7 @@ function Skillet:ShowRecipePrompt(professionList)
     dialog.professions = professionList
     dialog.professionIndex = 1
     dialog.scannedProfessions = {}
+    dialog.originalProfession = originalProfession
 
     -- Build initial text with proper formatting
     local promptText = "The following professions need to be rescanned:\n\n"
@@ -2090,10 +2238,7 @@ function Skillet:OnProfessionSwitchComplete()
     local actionType = self.professionSwitchPrompt.actionType
     self.professionSwitchPrompt:Hide()
 
-    if actionType == "scan" and self.scanningAllProfessions then
-        -- Continue with scan
-        self:ScheduleEvent("Skillet_ScanNext", self.ScanNextProfessionCallback, 0.5, self)
-    elseif actionType == "queue" then
+    if actionType == "queue" then
         -- Show start crafting prompt instead of auto-starting
         self:ScheduleEvent("Skillet_ShowCraftPrompt", function()
             self:ShowStartCraftingPrompt()

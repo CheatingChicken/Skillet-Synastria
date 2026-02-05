@@ -286,10 +286,10 @@ function Skillet:CreateTradeSkillWindow()
     if not minwidth or minwidth < 165 then
         minwidth = 165
     end
-    minwidth = minwidth +                  -- minwidth of scroll button
-        20 +                               -- padding between sroll and detail
-        SKILLET_REAGENT_MIN_WIDTH +        -- reagent window (fixed width)
-        10                                 -- padding about window borders
+    minwidth = minwidth +           -- minwidth of scroll button
+        20 +                        -- padding between sroll and detail
+        SKILLET_REAGENT_MIN_WIDTH + -- reagent window (fixed width)
+        10                          -- padding about window borders
 
     self:EnableResize(frame, minwidth, 680, Skillet.UpdateTradeSkillWindow)
 
@@ -356,6 +356,14 @@ function Skillet:ResetTradeSkillWindow()
                 button:SetNormalFontObject("GameFontNormal")
                 button:SetHighlightFontObject("GameFontHighlight")
                 button:SetDisabledFontObject("GameFontDisable")
+
+                -- Synastria: Change ARL button text from "Scan" to "Ackis Recipes"
+                if buttonName and (buttonName:find("ARL") or buttonName:find("Ackis")) then
+                    button:SetText("Ackis Recipes")
+                elseif button:GetText() == "Scan" then
+                    -- Fallback: check if the button text is "Scan" (typical ARL button)
+                    button:SetText("Ackis Recipes")
+                end
 
                 last_button = button
             end
@@ -657,10 +665,10 @@ function Skillet:internal_UpdateTradeSkillWindow()
     button_count = math.floor(button_count)
 
     -- Update the scroll frame
-    FauxScrollFrame_Update(SkilletSkillList,           -- frame
-        numTradeSkills,                                -- num items
-        button_count,                                  -- num to display
-        SKILLET_TRADE_SKILL_HEIGHT)                    -- value step (item height)
+    FauxScrollFrame_Update(SkilletSkillList, -- frame
+        numTradeSkills,                      -- num items
+        button_count,                        -- num to display
+        SKILLET_TRADE_SKILL_HEIGHT)          -- value step (item height)
 
     -- Where in the list of skill to start counting.
     local skillOffset = FauxScrollFrame_GetOffset(SkilletSkillList);
@@ -1227,10 +1235,10 @@ function Skillet:UpdateQueueWindow()
     button_count = math.floor(button_count)
 
     -- Update the scroll frame
-    FauxScrollFrame_Update(SkilletQueueList,           -- frame
-        numItems,                                      -- num items
-        button_count,                                  -- num to display
-        SKILLET_TRADE_SKILL_HEIGHT)                    -- value step (item height)
+    FauxScrollFrame_Update(SkilletQueueList, -- frame
+        numItems,                            -- num items
+        button_count,                        -- num to display
+        SKILLET_TRADE_SKILL_HEIGHT)          -- value step (item height)
 
     -- Where in the list of skill to start counting.
     local itemOffset = FauxScrollFrame_GetOffset(SkilletQueueList)

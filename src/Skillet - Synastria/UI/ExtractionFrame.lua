@@ -56,13 +56,15 @@ Shows prospecting and milling data organized by target items
 -- NOTE: All getglobal() calls must be validated for nil before use
 
 ---@type table
-local L                = AceLibrary("AceLocale-2.2"):new("Skillet")
+local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 -- DEBUG: Check if CONVERSION_GROUPS exists at file load time
 if Skillet and Skillet.CONVERSION_GROUPS then
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS exists with " .. #Skillet.CONVERSION_GROUPS .. " groups")
+	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS exists with " ..
+		#Skillet.CONVERSION_GROUPS .. " groups")
 else
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS NOT FOUND! Skillet=" .. tostring(Skillet))
+	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS NOT FOUND! Skillet=" ..
+		tostring(Skillet))
 end
 
 -- Stolen from the Waterfall Ace2 addon.
@@ -473,7 +475,7 @@ local function performActualConversion(sourceItemId, targetItemId, ratio, source
 
 	local targetCount = isReverse and ratio or 1
 	Skillet:Print("|cFF66FF66Converting " ..
-		ratio .. "x " .. sourceItemName .. " → " .. targetCount .. "x " .. targetItemName .. "|r")
+		ratio .. "x " .. sourceItemName .. " -> " .. targetCount .. "x " .. targetItemName .. "|r")
 end
 
 -- Perform conversion between items
@@ -715,7 +717,7 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			local targetCount = isReverse and ratio or 1
 
 			Skillet:Print("|cFF66FF66Converting " ..
-				ratio .. "x " .. sourceItemName .. " → " .. targetCount .. "x " .. targetItemName .. "|r")
+				ratio .. "x " .. sourceItemName .. " -> " .. targetCount .. "x " .. targetItemName .. "|r")
 		elseif mouseButton == "RightButton" then
 			-- Right click: Deposit all stacks to resource bank
 			if Skillet and Skillet.Print and Skillet.DepositToResourceBank then
@@ -1241,7 +1243,8 @@ local function createConversionsScrollData()
 		return data
 	end
 
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Creating conversion scroll data, found " .. #Skillet.CONVERSION_GROUPS .. " groups")
+	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Creating conversion scroll data, found " ..
+		#Skillet.CONVERSION_GROUPS .. " groups")
 
 	-- Use hardcoded conversion groups directly
 	for _, group in ipairs(Skillet.CONVERSION_GROUPS) do
@@ -1408,7 +1411,7 @@ end
 
 function Skillet:UpdateExtractionList()
 	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] UpdateExtractionList called for tab: " .. tostring(currentTab))
-	
+
 	if currentTab == "MILLING" then
 		scrollData = createMillingScrollData()
 	elseif currentTab == "PROSPECTING" then

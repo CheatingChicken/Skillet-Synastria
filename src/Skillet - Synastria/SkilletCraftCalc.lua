@@ -25,6 +25,7 @@ local type = type
 -- Update frame for background processing
 local CalcUpdateFrame = CreateFrame("Frame")
 CalcUpdateFrame.running = false
+CalcUpdateFrame.paused = false
 CalcUpdateFrame.yieldCounter = 0
 CalcUpdateFrame.yieldInterval = 10 -- Yield every N recipe calculations (reduced from 50 to prevent freezing)
 
@@ -61,11 +62,14 @@ function SkilletCraftCalc:CalculateCraftability(profession, yieldInterval)
     local yieldCounter = 0
     local lastProgressReport = 0
 
+    Skillet:DebugLog("[Calc] Starting calculation for " .. (profession or "nil"), "|cFF00FFFF")
+
     -- Ensure at least one yield is called
     coroutine.yield()
 
     local lib = AceLibrary("SkilletStitch-1.1")
     if not lib or not lib.data or not lib.data[profession] then
+        Skillet:DebugLog("[Calc] ERROR: No data for profession " .. (profession or "nil"), "|cFFFF0000")
         return
     end
 
@@ -79,6 +83,8 @@ function SkilletCraftCalc:CalculateCraftability(profession, yieldInterval)
             totalRecipes = totalRecipes + 1
         end
     end
+
+    Skillet:DebugLog("[Calc] Found " .. totalRecipes .. " recipes to process", "|cFF00FFFF")
 
     -- Iterate through all recipes in the profession
     for index, recipeData in pairs(recipes) do
@@ -116,13 +122,23 @@ function SkilletCraftCalc:CalculateCraftability(profession, yieldInterval)
 
                 -- Yield periodically to prevent freezing
                 if yieldCounter >= yieldInterval then
+                    Skillet:DebugLog("[Calc] Yielding at recipe " .. count .. "/" .. totalRecipes)
                     yieldCounter = 0
                     coroutine.yield()
+                end
+
+                -- Report progress every 25%
+                local progressPercent = math.floor((count / totalRecipes) * 100)
+                if progressPercent >= lastProgressReport + 25 then
+                    lastProgressReport = progressPercent
+                    Skillet:DebugLog(
+                    "[Calc] Progress: " .. progressPercent .. "% (" .. count .. "/" .. totalRecipes .. ")", "|cFF00FFFF")
                 end
             end
         end
     end
 
+    Skillet:DebugLog("[Calc] Calculation complete! Processed " .. count .. " recipes", "|cFF00FF00")
     return count
 end
 
@@ -179,30 +195,37 @@ function SkilletCraftCalc:CalculateRecipeCraftability(recipe, lib, includeBank, 
         stats.calculations = stats.calculations + 1
     end
 
-    local num = 0
+    local num = -1 -- Use -1 as initial value to differentiate "not set" from "limited to 0"
 
     -- Synastria: Use modern reagents table format
     local reagents = recipe.reagents or {}
 
-    -- Total reagents debug removed
+    if verbose then
+        Skillet:DebugLog(indent .. "[CALC] Processing " .. recipe.name .. " (" .. #reagents .. " reagents)")
+    end
 
     for _, reagent in ipairs(reagents) do
         -- Synastria: Vendor-buyable reagents are treated as always available (infinite)
         if reagent.vendor == true then
+            if verbose then
+                Skillet:DebugLog(indent .. "  [VENDOR] " .. reagent.name .. " - skipped (vendor item)")
+            end
             -- Skip vendor items, they don't limit craftability
         else
             -- Non-vendor reagent - check availability and craftability
             local available = includeBank and reagent.numwbank or reagent.num
 
-            -- Titansteel reagent debug removed
+            if verbose then
+                Skillet:DebugLog(indent .. "  [REAGENT] " .. reagent.name .. ": " .. available .. "/" .. reagent.needed)
+            end
 
             -- Check if this reagent is craftable
-
             if available < reagent.needed then
-                -- Shortage debug removed
-
                 local reagentRecipe = lib:GetItemDataByName(reagent.name)
                 if reagentRecipe then
+                    if verbose then
+                        Skillet:DebugLog(indent .. "    -> Craftable recipe found, recursing...")
+                    end
                     -- Recursively calculate sub-reagent craftability
                     -- Pass forceRecalc to sub-recipes so they also bypass cache
                     local subCraftable = self:CalculateRecipeCraftability(reagentRecipe, lib, includeBank, verbose,
@@ -210,29 +233,49 @@ function SkilletCraftCalc:CalculateRecipeCraftability(recipe, lib, includeBank, 
                     if subCraftable > 0 then
                         local addedAmount = subCraftable * (reagentRecipe.nummade or 1)
                         available = available + addedAmount
-                        -- New total available debug removed
+                        if verbose then
+                            Skillet:DebugLog(indent ..
+                            "    -> Can craft " ..
+                            subCraftable .. ", adding " .. addedAmount .. " (total: " .. available .. ")")
+                        end
+                    else
+                        if verbose then
+                            Skillet:DebugLog(indent .. "    -> Cannot craft (0)")
+                        end
                     end
                 end
             end
 
             local max = math.floor(available / reagent.needed) * recipe.nummade
 
-            if num == 0 or max < num then
+            if verbose then
+                Skillet:DebugLog(indent .. "    -> Max from this reagent: " .. max .. " (num was: " .. num .. ")")
+            end
+
+            if num == -1 or max < num then
                 num = max
+                if verbose then
+                    Skillet:DebugLog(indent .. "    -> Updated num to: " .. num)
+                end
+
+                -- Early exit: if num is 0, no need to check remaining reagents
+                if num == 0 then
+                    if verbose then
+                        Skillet:DebugLog(indent .. "    -> Early exit: craftability is 0")
+                    end
+                    break
+                end
             end
         end
     end
 
-    if num == 0 then
-        for _, reagent in ipairs(reagents) do
-            -- Note: reagent.num now ALWAYS includes resource bank
-            local available = includeBank and reagent.numwbank or reagent.num
+    -- If num is still -1, no reagents were processed (shouldn't happen, but safe default)
+    if num == -1 then
+        num = 0
+    end
 
-            local max = math.floor(available / reagent.needed) * recipe.nummade
-            if max < num then
-                num = max
-            end
-        end
+    if verbose then
+        Skillet:DebugLog(indent .. "[CALC] " .. recipe.name .. " final result: " .. num)
     end
 
     -- Cache the result before returning
@@ -244,14 +287,21 @@ end
 
 -- OnUpdate handler for the calculation frame
 function CalcUpdateFrame:OnUpdate(elapsed)
+    -- Skip if paused
+    if self.paused then
+        return
+    end
+
     local status, count = coroutine.resume(self.co)
     if status then
         if coroutine.status(self.co) == "dead" then
             -- Calculation finished
+            Skillet:DebugLog("[Calc] OnUpdate: Coroutine finished, calling callback", "|cFF00FF00")
             self:SetScript("OnUpdate", nil)
             self.running = false
 
             if self.finishFunc then
+                Skillet:DebugLog("[Calc] Executing finish callback", "|cFF00FF00")
                 self.finishFunc(count)
                 self.finishFunc = nil
             end
@@ -261,6 +311,7 @@ function CalcUpdateFrame:OnUpdate(elapsed)
         end
     else
         -- Error occurred
+        Skillet:DebugLog("[Calc] ERROR in coroutine: " .. tostring(count), "|cFFFF0000")
         self:SetScript("OnUpdate", nil)
         self.running = false
         self.co = nil
@@ -273,6 +324,8 @@ end
 
 -- Start background calculation
 function SkilletCraftCalc:StartBackgroundCalculation(profession, finishCallback, yieldInterval)
+    Skillet:DebugLog("[Calc] StartBackgroundCalculation called for " .. (profession or "nil"), "|cFF00FFFF")
+
     if CalcUpdateFrame.running then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Skillet] Craftability calculation already in progress|r")
         return false
@@ -298,12 +351,14 @@ function SkilletCraftCalc:StartBackgroundCalculation(profession, finishCallback,
 
     local status = coroutine.resume(CalcUpdateFrame.co)
     if not status then
+        Skillet:DebugLog("[Calc] ERROR: Failed to start coroutine", "|cFFFF0000")
         CalcUpdateFrame.running = false
         CalcUpdateFrame:SetScript("OnUpdate", nil)
         CalcUpdateFrame.co = nil
         return false
     end
 
+    Skillet:DebugLog("[Calc] Background calculation started successfully", "|cFF00FF00")
     return true
 end
 
@@ -315,8 +370,21 @@ function SkilletCraftCalc:StopCalculation()
     if CalcUpdateFrame.running then
         CalcUpdateFrame:SetScript("OnUpdate", nil)
         CalcUpdateFrame.running = false
+        CalcUpdateFrame.paused = false
         CalcUpdateFrame.co = nil
         CalcUpdateFrame.finishFunc = nil
         CalcUpdateFrame.profession = nil
+    end
+end
+
+function SkilletCraftCalc:PauseCalculation()
+    if CalcUpdateFrame.running then
+        CalcUpdateFrame.paused = true
+    end
+end
+
+function SkilletCraftCalc:ResumeCalculation()
+    if CalcUpdateFrame.running then
+        CalcUpdateFrame.paused = false
     end
 end

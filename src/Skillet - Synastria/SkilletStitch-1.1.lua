@@ -82,7 +82,7 @@ local function squishlink(link)
     -- in:  |cffffffff|Hitem:13928:0:0:0:0:0:0:0|h[Grilled Squid]|h|r
     -- out: ffffff|13928|Grilled Squid
     local color, id, name = link:match(
-    "^|cff(......)|Hitem:(%d+):[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+|h%[([^%]]+)%]|h|r$")
+        "^|cff(......)|Hitem:(%d+):[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+|h%[([^%]]+)%]|h|r$")
     if id then
         return color .. "|" .. id .. "|" .. name
     else
@@ -613,7 +613,7 @@ function SkilletStitch:DecodeRecipe(datastring)
             -- Decode the encoded string for recipe metadata, then use stored reagents
             local itemchunk, _ = datastring.encoded:match("^([^;]-;[^;]-;[^;]-;[^;]-;)(.-)$")
             local nameoverride, link, difficultychar, numcrafted, tools = itemchunk:match(
-            "^([^;]-);([^;]+);(%a)(%d+);([^;]-);$")
+                "^([^;]-);([^;]+);(%a)(%d+);([^;]-);$")
             local isenchant
 
             link, isenchant = unsquishlink(link)
@@ -714,7 +714,7 @@ function SkilletStitch:DecodeRecipe(datastring)
         -- Check both the base PT vendor set and our Skillet extension
         if PT then
             vendor = (PT:ItemInSet(reagentlink, "Tradeskill.Mat.BySource.Vendor") or PT:ItemInSet(reagentlink, "Skillet.Vendor.Extended")) and
-            true or false
+                true or false
         end
 
         table.insert(s.reagents, setmetatable({
@@ -980,6 +980,11 @@ function SkilletStitch:ClearQueue()
 end
 
 function SkilletStitch:ProcessQueue()
+    -- Synastria: Pause craftability calculations while processing queue
+    if Skillet and Skillet.CraftCalc then
+        Skillet.CraftCalc:PauseCalculation()
+    end
+
     if not self.queue[1] or type(self.queue[1]) ~= "table" then
         -- Synastria: Clear the table contents while keeping the same reference
         for k in pairs(self.queue) do
@@ -1406,7 +1411,7 @@ function SkilletStitch:ProcessCraftCompletion()
     end
 
     -- Synastria: Check for bulk completion by comparing inventory changes
-    local actualCrafted = 1     -- Default to 1 if we can't detect
+    local actualCrafted = 1 -- Default to 1 if we can't detect
     if self.preCraftItemCount and self.expectedCraftCount then
         local recipe = self.queue[1]["recipe"]
         if recipe and recipe.link then
@@ -1648,8 +1653,8 @@ function SkilletStitch:AddToQueue(index, times, profession, addToTop)
             })
         end
 
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ QUEUED: " ..
-        (recipeData.name or "Unknown") .. " x" .. times .. " [" .. recenttrade .. "]|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUED] " ..
+            (recipeData.name or "Unknown") .. " x" .. times .. " [" .. recenttrade .. "]|r")
     end
 
     AceEvent:TriggerEvent("SkilletStitch_Queue_Add")
@@ -1720,7 +1725,7 @@ function SkilletStitch:ScanTrade()
                     newstr = ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
                 else
                     newstr = skillname ..
-                    ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
+                        ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
                 end
 
                 -- Synastria: Build reagents table with vendor info for new format
@@ -1741,7 +1746,7 @@ function SkilletStitch:ScanTrade()
                         -- Check both the base PT vendor set and our Skillet extension
                         if PT then
                             vendor = (PT:ItemInSet(reagentLink, "Tradeskill.Mat.BySource.Vendor") or PT:ItemInSet(reagentLink, "Skillet.Vendor.Extended")) and
-                            true or false
+                                true or false
                         end
 
                         -- Store reagent in new format

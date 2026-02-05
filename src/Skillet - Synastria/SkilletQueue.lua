@@ -74,8 +74,22 @@ local function add_items_to_queue(skillIndex, recipe, count, profession, addToTo
     end
 
     if Skillet.db.profile.queue_craftable_reagents then
-        -- Synastria: Use modern reagents table format
+        -- Synastria: Snapshot queue consumption BEFORE processing reagents
+        -- This prevents exponential growth when auto-queuing dependencies
+        local queueSnapshot = {}
         local reagents = recipe.reagents or {}
+        
+        for i=1, #reagents, 1 do
+            local reagent = reagents[i]
+            if reagent then
+                local itemId = tonumber(string.match(reagent.link, "item:(%d+)"))
+                if itemId and Skillet.GetQueuedReagentConsumption then
+                    queueSnapshot[itemId] = Skillet:GetQueuedReagentConsumption(itemId)
+                end
+            end
+        end
+        
+        -- Now process reagents using the snapshot
         for i=1, #reagents, 1 do
             reagent = reagents[i]
 
@@ -95,15 +109,16 @@ local function add_items_to_queue(skillIndex, recipe, count, profession, addToTo
             end
             
             -- Synastria: Subtract items already allocated to queued recipes
+            -- Use the snapshot taken BEFORE any modifications
             local itemId = tonumber(string.match(reagent.link, "item:(%d+)"))
-            if itemId and Skillet.GetQueuedReagentConsumption then
-                local queuedConsumption = Skillet:GetQueuedReagentConsumption(itemId)
+            if itemId and queueSnapshot[itemId] then
+                local queuedConsumption = queueSnapshot[itemId]
                 local haveBefore = have
                 have = have - queuedConsumption
                 
                 -- Debug output
                 local itemName = reagent.name or ("Item#" .. itemId)
-                Skillet:Print(string.format("|cFF888888[Queue Check] %s: bags %d, queued %d, avail %d, need %d|r", 
+                Skillet:DebugLog(string.format("[Queue Check] %s: bags %d, queued %d (snapshot), avail %d, need %d", 
                     itemName, haveBefore, queuedConsumption, have, needed))
             end
 
