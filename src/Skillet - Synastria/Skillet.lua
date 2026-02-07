@@ -3003,3 +3003,624 @@ frame:SetScript("OnEvent", function(self, event, addonName)
         TryRegisterPT()
     end
 end)
+
+-- ========================================
+-- Synastria: Custom Function Testing Utility
+-- ========================================
+
+--- Test if Custom_DoProfessionRecipe exists and determine its behavior
+--- Usage: /script Skillet:TestCustomDoProfessionRecipe()
+function Skillet:TestCustomDoProfessionRecipe()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Custom_DoProfessionRecipe Test|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    
+    -- 1. Check if function exists
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[RESULT] Custom_DoProfessionRecipe does NOT exist|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[INFO] Using standard DoTradeSkill instead|r")
+        return
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULT] Custom_DoProfessionRecipe EXISTS!|r")
+    
+    -- 2. Check function type and details
+    local funcType = type(Custom_DoProfessionRecipe)
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. funcType .. "|r")
+    
+    -- 3. Try to get function info (Lua debug library if available)
+    if debug and debug.getinfo then
+        local info = debug.getinfo(Custom_DoProfessionRecipe)
+        if info then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[DEBUG INFO]|r")
+            DEFAULT_CHAT_FRAME:AddMessage("  Source: " .. (info.source or "unknown"))
+            DEFAULT_CHAT_FRAME:AddMessage("  Line defined: " .. (info.linedefined or "unknown"))
+            DEFAULT_CHAT_FRAME:AddMessage("  Parameters: " .. (info.nparams or "unknown"))
+            DEFAULT_CHAT_FRAME:AddMessage("  Is vararg: " .. tostring(info.isvararg or false))
+        end
+    end
+    
+    -- 4. Check current tradeskill window
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[WARNING] No tradeskill window open|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00          Open a profession to test with real parameters|r")
+        return
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[TRADESKILL] " .. tradeskillName .. " is open|r")
+    
+    -- 5. Get first recipe as test
+    local numSkills = GetNumTradeSkills()
+    if numSkills and numSkills > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[AVAILABLE] " .. numSkills .. " recipes found|r")
+        
+        -- Find first craftable recipe
+        local testIndex = nil
+        local testName = nil
+        for i = 1, numSkills do
+            local name, skillType = GetTradeSkillInfo(i)
+            if skillType ~= "header" then
+                testIndex = i
+                testName = name
+                break
+            end
+        end
+        
+        if testIndex then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[TEST RECIPE] Index " .. testIndex .. ": " .. testName .. "|r")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[NOTE] To test the function, you would call:|r")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00        Custom_DoProfessionRecipe(" .. testIndex .. ", 1)|r")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00        (Not executed automatically to prevent unwanted crafts)|r")
+            
+            -- Check cooldown for comparison
+            local cooldown = GetTradeSkillCooldown(testIndex)
+            if cooldown and cooldown > 0 then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[COOLDOWN] Recipe has " .. SecondsToTime(cooldown) .. " remaining|r")
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COOLDOWN] No cooldown|r")
+            end
+        end
+    end
+    
+    -- 6. Suggested testing commands
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[MANUAL TESTING COMMANDS]|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF  Test call:|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00  /script Custom_DoProfessionRecipe(INDEX, 1)|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF  Compare to standard:|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00  /script DoTradeSkill(INDEX, 1)|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Monitor both DoTradeSkill and Custom_DoProfessionRecipe calls
+--- Usage: /script Skillet:MonitorCraftCalls(true)  -- enable
+---        /script Skillet:MonitorCraftCalls(false) -- disable
+function Skillet:MonitorCraftCalls(enable)
+    if enable then
+        if not self.originalDoTradeSkill then
+            -- Hook DoTradeSkill
+            self.originalDoTradeSkill = DoTradeSkill
+            DoTradeSkill = function(index, numCasts)
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[MONITOR] DoTradeSkill(" .. tostring(index) .. ", " .. tostring(numCasts) .. ") CALLED|r")
+                local result1, result2, result3 = self.originalDoTradeSkill(index, numCasts)
+                if result1 ~= nil or result2 ~= nil or result3 ~= nil then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[MONITOR] DoTradeSkill RETURNED: " .. tostring(result1) .. ", " .. tostring(result2) .. ", " .. tostring(result3) .. "|r")
+                else
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[MONITOR] DoTradeSkill RETURNED: nil|r")
+                end
+                return result1, result2, result3
+            end
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[MONITOR] DoTradeSkill monitoring ENABLED|r")
+        end
+        
+        if Custom_DoProfessionRecipe and not self.originalCustomDoProfessionRecipe then
+            -- Hook Custom_DoProfessionRecipe
+            self.originalCustomDoProfessionRecipe = Custom_DoProfessionRecipe
+            Custom_DoProfessionRecipe = function(...)
+                local args = {...}
+                local argStr = ""
+                for i, v in ipairs(args) do
+                    argStr = argStr .. tostring(v)
+                    if i < #args then argStr = argStr .. ", " end
+                end
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe(" .. argStr .. ") CALLED|r")
+                
+                -- Capture all return values
+                local results = {self.originalCustomDoProfessionRecipe(...)}
+                
+                -- Display return values
+                if #results > 0 then
+                    local retStr = ""
+                    for i, v in ipairs(results) do
+                        retStr = retStr .. tostring(v)
+                        if i < #results then retStr = retStr .. ", " end
+                    end
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe RETURNED: " .. retStr .. "|r")
+                else
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe RETURNED: nil|r")
+                end
+                
+                return unpack(results)
+            end
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe monitoring ENABLED|r")
+        elseif not Custom_DoProfessionRecipe then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[MONITOR] Custom_DoProfessionRecipe does not exist - cannot monitor|r")
+        end
+    else
+        -- Restore originals
+        if self.originalDoTradeSkill then
+            DoTradeSkill = self.originalDoTradeSkill
+            self.originalDoTradeSkill = nil
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[MONITOR] DoTradeSkill monitoring DISABLED|r")
+        end
+        
+        if self.originalCustomDoProfessionRecipe then
+            Custom_DoProfessionRecipe = self.originalCustomDoProfessionRecipe
+            self.originalCustomDoProfessionRecipe = nil
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[MONITOR] Custom_DoProfessionRecipe monitoring DISABLED|r")
+        end
+    end
+end
+
+--- Compare Custom_DoProfessionRecipe vs DoTradeSkill side-by-side
+--- Usage: /script Skillet:CompareCustomVsStandard(15, 1)
+function Skillet:CompareCustomVsStandard(index, numCasts)
+    index = index or 1
+    numCasts = numCasts or 1
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Comparing Craft Functions|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        return
+    end
+    
+    local recipeName, skillType = GetTradeSkillInfo(index)
+    local cooldown = GetTradeSkillCooldown(index)
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE] Index " .. index .. ": " .. (recipeName or "Unknown") .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. (skillType or "unknown") .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN] " .. (cooldown and (cooldown > 0 and SecondsToTime(cooldown) or "None") or "None") .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[CASTS] " .. numCasts .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    
+    -- Capture item count before
+    local itemLink = GetTradeSkillItemLink(index)
+    local itemCountBefore = 0
+    if itemLink then
+        itemCountBefore = GetItemCount(itemLink, true)
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[ITEM COUNT BEFORE] " .. itemCountBefore .. "|r")
+    end
+    
+    -- Test Custom_DoProfessionRecipe
+    if Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[TEST 1] Custom_DoProfessionRecipe exists|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800         Type: " .. type(Custom_DoProfessionRecipe) .. "|r")
+        
+        -- Try to call it and capture what happens
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800         Calling Custom_DoProfessionRecipe(" .. index .. ", " .. numCasts .. ")...|r")
+        local success, result1, result2, result3 = pcall(Custom_DoProfessionRecipe, index, numCasts)
+        
+        if success then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00         SUCCESS! Returned: " .. tostring(result1) .. ", " .. tostring(result2) .. ", " .. tostring(result3) .. "|r")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000         ERROR: " .. tostring(result1) .. "|r")
+        end
+        
+        -- Check if item count changed
+        if itemLink then
+            C_Timer.After(0.5, function()
+                local itemCountAfter = GetItemCount(itemLink, true)
+                if itemCountAfter > itemCountBefore then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULT] Item crafted! Count changed: " .. itemCountBefore .. " -> " .. itemCountAfter .. "|r")
+                else
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[RESULT] No item count change detected (might be queued or failed)|r")
+                end
+            end)
+        end
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[TEST 1] Custom_DoProfessionRecipe does NOT exist|r")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    
+    -- Test DoTradeSkill for comparison
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[TEST 2] DoTradeSkill (standard WoW API)|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF         Type: " .. type(DoTradeSkill) .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00         NOTE: Not calling to prevent unwanted craft|r")
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Test Custom_DoProfessionRecipe with different recipe types
+--- Usage: /script Skillet:TestCustomWithRecipeTypes()
+function Skillet:TestCustomWithRecipeTypes()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Testing Custom Function By Recipe Type|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
+        return
+    end
+    
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        return
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PROFESSION] " .. tradeskillName .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    
+    local numSkills = GetNumTradeSkills()
+    local testsByType = {}
+    
+    -- Scan all recipes and categorize
+    for i = 1, numSkills do
+        local name, skillType = GetTradeSkillInfo(i)
+        if skillType ~= "header" then
+            local cooldown = GetTradeSkillCooldown(i)
+            local hasCooldown = cooldown and cooldown > 0
+            local isTransmute = name and name:match("^Transmute:")
+            
+            local category = skillType
+            if hasCooldown then
+                category = category .. " (cooldown)"
+            end
+            if isTransmute then
+                category = category .. " (transmute)"
+            end
+            
+            if not testsByType[category] then
+                testsByType[category] = {index = i, name = name}
+            end
+        end
+    end
+    
+    -- Display findings
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE TYPES FOUND]|r")
+    for category, info in pairs(testsByType) do
+        DEFAULT_CHAT_FRAME:AddMessage("  |cFFFFAA00" .. category .. ":|r " .. info.name .. " (index " .. info.index .. ")")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[SUGGESTION] Test specific types with:|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00/script Skillet:CompareCustomVsStandard(INDEX, 1)|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Deep dive into Custom_DoProfessionRecipe internals
+--- Usage: /script Skillet:InspectCustomFunction()
+function Skillet:InspectCustomFunction()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Custom_DoProfessionRecipe Deep Inspection|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Function does not exist|r")
+        return
+    end
+    
+    -- Check if it's the same as DoTradeSkill
+    if Custom_DoProfessionRecipe == DoTradeSkill then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[FINDING] Custom_DoProfessionRecipe IS DoTradeSkill (same function)|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[FINDING] Custom_DoProfessionRecipe is a DIFFERENT function|r")
+    end
+    
+    -- Try to dump the function as a string (may not work)
+    local funcStr = tostring(Custom_DoProfessionRecipe)
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TOSTRING] " .. funcStr .. "|r")
+    
+    -- Check debug info
+    if debug and debug.getinfo then
+        local info = debug.getinfo(Custom_DoProfessionRecipe)
+        if info then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[DEBUG INFO]|r")
+            DEFAULT_CHAT_FRAME:AddMessage("  what: " .. tostring(info.what))
+            DEFAULT_CHAT_FRAME:AddMessage("  source: " .. tostring(info.source))
+            DEFAULT_CHAT_FRAME:AddMessage("  short_src: " .. tostring(info.short_src))
+            DEFAULT_CHAT_FRAME:AddMessage("  linedefined: " .. tostring(info.linedefined))
+            DEFAULT_CHAT_FRAME:AddMessage("  lastlinedefined: " .. tostring(info.lastlinedefined))
+            DEFAULT_CHAT_FRAME:AddMessage("  nparams: " .. tostring(info.nparams))
+            DEFAULT_CHAT_FRAME:AddMessage("  isvararg: " .. tostring(info.isvararg))
+            DEFAULT_CHAT_FRAME:AddMessage("  nups: " .. tostring(info.nups))
+        end
+        
+        -- Try to get upvalues
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[UPVALUES]|r")
+        local i = 1
+        while true do
+            local name, value = debug.getupvalue(Custom_DoProfessionRecipe, i)
+            if not name then break end
+            DEFAULT_CHAT_FRAME:AddMessage("  " .. name .. " = " .. tostring(value))
+            i = i + 1
+        end
+        if i == 1 then
+            DEFAULT_CHAT_FRAME:AddMessage("  (none)")
+        end
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[CONCLUSION] This is a SERVER-SIDE function.|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Client sends parameters, server handles crafting.|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Use behavior tests to understand its differences.|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Test server-side behavior of Custom_DoProfessionRecipe
+--- Usage: /script Skillet:TestServerSideBehavior(recipeIndex)
+function Skillet:TestServerSideBehavior(recipeIndex)
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
+        return
+    end
+    
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        return
+    end
+    
+    recipeIndex = recipeIndex or 1
+    local recipeName, skillType = GetTradeSkillInfo(recipeIndex)
+    local cooldownBefore = GetTradeSkillCooldown(recipeIndex)
+    local itemLink = GetTradeSkillItemLink(recipeIndex)
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Server-Side Behavior Test|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE] " .. (recipeName or "Unknown") .. " (index " .. recipeIndex .. ")|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. (skillType or "unknown") .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN BEFORE] " .. (cooldownBefore and (cooldownBefore > 0 and SecondsToTime(cooldownBefore) or "None") or "None") .. "|r")
+    
+    local itemCountBefore = 0
+    if itemLink then
+        itemCountBefore = GetItemCount(itemLink, true)
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[ITEM COUNT BEFORE] " .. itemCountBefore .. "|r")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800>>> Calling Custom_DoProfessionRecipe(" .. recipeIndex .. ", 1) <<<|r")
+    Custom_DoProfessionRecipe(recipeIndex, 1)
+    
+    -- Check results after delay
+    C_Timer.After(1.5, function()
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULTS AFTER 1.5s]|r")
+        
+        local cooldownAfter = GetTradeSkillCooldown(recipeIndex)
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN AFTER] " .. (cooldownAfter and (cooldownAfter > 0 and SecondsToTime(cooldownAfter) or "None") or "None") .. "|r")
+        
+        if itemLink then
+            local itemCountAfter = GetItemCount(itemLink, true)
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[ITEM COUNT AFTER] " .. itemCountAfter .. "|r")
+            
+            if itemCountAfter > itemCountBefore then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[SUCCESS] Item crafted! +" .. (itemCountAfter - itemCountBefore) .. " items|r")
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[NO CHANGE] Item count unchanged|r")
+            end
+        end
+        
+        if cooldownBefore ~= cooldownAfter then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COOLDOWN CHANGED] " .. 
+                (cooldownBefore and SecondsToTime(cooldownBefore) or "0") .. " -> " .. 
+                (cooldownAfter and SecondsToTime(cooldownAfter) or "0") .. "|r")
+        end
+        
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    end)
+end
+
+--- Compare Custom_DoProfessionRecipe vs DoTradeSkill on same recipe
+--- Tests if they behave differently (especially for cooldowns)
+--- Usage: /script Skillet:CompareBehaviorDifferences(recipeIndex)
+function Skillet:CompareBehaviorDifferences(recipeIndex)
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
+        return
+    end
+    
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        return
+    end
+    
+    recipeIndex = recipeIndex or 1
+    local recipeName, skillType = GetTradeSkillInfo(recipeIndex)
+    local cooldown = GetTradeSkillCooldown(recipeIndex)
+    local isTransmute = recipeName and recipeName:match("^Transmute:")
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Behavior Comparison Test|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE] " .. (recipeName or "Unknown") .. " (index " .. recipeIndex .. ")|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. (skillType or "unknown") .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TRANSMUTE] " .. tostring(isTransmute or false) .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN] " .. (cooldown and (cooldown > 0 and SecondsToTime(cooldown) or "None") or "None") .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    
+    if cooldown and cooldown > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[HYPOTHESIS] This recipe has a cooldown.|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800Does Custom_DoProfessionRecipe bypass it?|r")
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[TEST] Try calling Custom_DoProfessionRecipe(" .. recipeIndex .. ", 1)|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00If it crafts despite cooldown, we found the difference!|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[INFO] No cooldown - both functions should work the same|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[SUGGESTION] Find a cooldown recipe to test properly|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Use: /script Skillet:TestCustomWithRecipeTypes()|r")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Test with transmutation recipes specifically
+--- Usage: /script Skillet:TestTransmuteBehavior()
+function Skillet:TestTransmuteBehavior()
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
+        return
+    end
+    
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        return
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Transmute Recipe Finder|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    
+    local numSkills = GetNumTradeSkills()
+    local transmuteFound = false
+    
+    for i = 1, numSkills do
+        local name, skillType = GetTradeSkillInfo(i)
+        if name and name:match("^Transmute:") then
+            local cooldown = GetTradeSkillCooldown(i)
+            local hasCooldown = cooldown and cooldown > 0
+            local status = hasCooldown and "|cFFFF0000[ON COOLDOWN: " .. SecondsToTime(cooldown) .. "]|r" or "|cFF00FF00[READY]|r"
+            
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[" .. i .. "]|r " .. name .. " " .. status)
+            transmuteFound = true
+        end
+    end
+    
+    if not transmuteFound then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00No transmute recipes found in current profession|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Try opening Alchemy to test transmutes|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[TEST] Use index above with:|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00/script Skillet:TestServerSideBehavior(INDEX)|r")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Comprehensive systematic test of Custom_DoProfessionRecipe
+--- Tests: normal recipe, cooldown recipe, transmute, no materials, etc.
+--- Usage: /script Skillet:SystematicCustomTest()
+function Skillet:SystematicCustomTest()
+    if not Custom_DoProfessionRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
+        return
+    end
+    
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Open a profession window first|r")
+        return
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Systematic Custom Function Test|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Profession: " .. tradeskillName .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    
+    local numSkills = GetNumTradeSkills()
+    local testCases = {
+        normalRecipe = nil,
+        cooldownRecipe = nil,
+        transmuteRecipe = nil,
+        transmuteWithCooldown = nil
+    }
+    
+    -- Find one of each type
+    for i = 1, numSkills do
+        local name, skillType = GetTradeSkillInfo(i)
+        if skillType ~= "header" then
+            local cooldown = GetTradeSkillCooldown(i)
+            local hasCooldown = cooldown and cooldown > 0
+            local isTransmute = name and name:match("^Transmute:")
+            
+            if not testCases.normalRecipe and not hasCooldown and not isTransmute then
+                testCases.normalRecipe = {index = i, name = name}
+            end
+            
+            if not testCases.cooldownRecipe and hasCooldown and not isTransmute then
+                testCases.cooldownRecipe = {index = i, name = name, cooldown = cooldown}
+            end
+            
+            if not testCases.transmuteRecipe and isTransmute and not hasCooldown then
+                testCases.transmuteRecipe = {index = i, name = name}
+            end
+            
+            if not testCases.transmuteWithCooldown and isTransmute and hasCooldown then
+                testCases.transmuteWithCooldown = {index = i, name = name, cooldown = cooldown}
+            end
+        end
+    end
+    
+    -- Display what we found
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TEST CASES FOUND]|r")
+    
+    if testCases.normalRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Normal Recipe:|r " .. testCases.normalRecipe.name .. " [" .. testCases.normalRecipe.index .. "]")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000✗ Normal Recipe: Not found|r")
+    end
+    
+    if testCases.cooldownRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Cooldown Recipe:|r " .. testCases.cooldownRecipe.name .. " [" .. testCases.cooldownRecipe.index .. "]")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00✗ Cooldown Recipe: Not found|r")
+    end
+    
+    if testCases.transmuteRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Transmute Recipe:|r " .. testCases.transmuteRecipe.name .. " [" .. testCases.transmuteRecipe.index .. "]")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00✗ Transmute Recipe: Not found|r")
+    end
+    
+    if testCases.transmuteWithCooldown then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Transmute+Cooldown:|r " .. testCases.transmuteWithCooldown.name .. " [" .. testCases.transmuteWithCooldown.index .. "]")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00✗ Transmute+Cooldown: Not found|r")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[RECOMMENDED TESTS]|r")
+    
+    if testCases.normalRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF1. Normal recipe:|r")
+        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.normalRecipe.index .. ")|r")
+    end
+    
+    if testCases.cooldownRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF2. Recipe with cooldown (KEY TEST):|r")
+        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.cooldownRecipe.index .. ")|r")
+        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFF8800→ Does it bypass cooldown?|r")
+    end
+    
+    if testCases.transmuteRecipe then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF3. Transmute without cooldown:|r")
+        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.transmuteRecipe.index .. ")|r")
+    end
+    
+    if testCases.transmuteWithCooldown then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF4. Transmute WITH cooldown (CRITICAL TEST):|r")
+        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.transmuteWithCooldown.index .. ")|r")
+        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFF8800→ Does it bypass transmute cooldown?|r")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[HYPOTHESIS TO TEST]|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFIf Custom_DoProfessionRecipe can craft recipes|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFthat are on cooldown, we can use it to:|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  • Queue transmutes without cooldown restrictions|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  • Bypass daily/weekly craft limits|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  • Process queue without waiting|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end

@@ -906,8 +906,41 @@ function SkilletStitch:GetItemDataByName(name, prof)
             end
         end
 
-        -- If no Smelting or Mining, return first match
-        return matches[1].recipe
+        -- Third priority: Filter out transmutations with cooldowns when searching for subcrafts
+        -- This ensures we don't queue cooldown transmutes as dependencies
+        local nonCooldownMatches = {}
+        for _, match in ipairs(matches) do
+            local isTransmute = match.recipe.name and match.recipe.name:match("^Transmute:")
+            local hasCooldown = false
+
+            -- Hardcoded exception: Transmute: Titanium has no cooldown
+            local isTransmuteTitanium = match.recipe.name and match.recipe.name:match("^Transmute: Titanium")
+
+            if isTransmute and not isTransmuteTitanium and match.recipe.index and match.profession then
+                -- Check if this transmutation has a cooldown
+                -- We need to temporarily switch to the profession to check cooldown
+                local currentTrade = GetTradeSkillLine()
+                if currentTrade ~= match.profession then
+                    -- Can't reliably check cooldown without opening the profession
+                    -- Conservative approach: assume transmutes have cooldowns
+                    hasCooldown = true
+                else
+                    local cooldown = GetTradeSkillCooldown(match.recipe.index)
+                    hasCooldown = cooldown and cooldown > 0
+                end
+            end
+
+            if not (isTransmute and hasCooldown) then
+                table.insert(nonCooldownMatches, match)
+            end
+        end
+
+        -- Return first non-cooldown match, or first match if all have cooldowns
+        if #nonCooldownMatches > 0 then
+            return nonCooldownMatches[1].recipe
+        else
+            return matches[1].recipe
+        end
     elseif #matches == 1 then
         return matches[1].recipe
     end
