@@ -123,7 +123,7 @@ local function bagnondb_GetItemCount(item)
     ---@type string | nil
     local itemLink = select(2, GetItemInfo(item))
     if not itemLink then return 0 end
-    
+
     ---@type number
     local count = 0
     ---@type string
@@ -132,7 +132,7 @@ local function bagnondb_GetItemCount(item)
         --     not be included in the values we return.
         if playerName ~= PLAYER then
             ---@diagnostic disable-next-line: need-check-nil
-            for bag=0,(NUM_BAG_SLOTS or 0) do
+            for bag = 0, (NUM_BAG_SLOTS or 0) do
                 ---@type number
                 count = count + (BagnonDB:GetItemCount(itemLink, bag, playerName) or 0)
             end
@@ -357,11 +357,13 @@ local function oneview_GetItemCount(itemid)
                 ---@type integer
                 for bag = -1, 11 do
                     ---@type number, number, boolean, boolean, boolean
-                    local itemId, size, isAmmo, isSoul, isProf = OneView.storage:BagInfo(fact, (tonumber(charId) or 0) --[[@as number]], bag)
+                    local itemId, size, isAmmo, isSoul, isProf = OneView.storage:BagInfo(fact,
+                        (tonumber(charId) or 0) --[[@as number]], bag)
                     ---@type integer
                     for slot = 1, (tonumber(size) or 0) do
                         ---@type string | nil, number | nil
-                        local bag_itemId, qty = OneView.storage:SlotInfo(fact, (tonumber(charId) or 0) --[[@as number]], bag, slot)
+                        local bag_itemId, qty = OneView.storage:SlotInfo(fact, (tonumber(charId) or 0) --[[@as number]],
+                            bag, slot)
                         if bag_itemId then
                             ---@type number
                             local id = tonumber(bag_itemId:match('item:(%d+)')) or -1
