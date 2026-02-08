@@ -75,7 +75,8 @@ function Custom_IsPlayerNear(mapId, x, y, z, dist) end
 ---@param itemSubClassId? number Item subclass filter, negative to ignore (default: -1)
 ---@param itemInvTypeId? number Inventory slot filter, negative to ignore (default: -1)
 ---@return number[]|nil spellIds Array of spell IDs matching the filters, or nil on error
-function Custom_GetProfessionRecipes(professionId, mustFilter, notFilter, sort, filterString, forge, itemClassId, itemSubClassId, itemInvTypeId) end
+function Custom_GetProfessionRecipes(professionId, mustFilter, notFilter, sort, filterString, forge, itemClassId,
+                                     itemSubClassId, itemInvTypeId) end
 
 ---@param spellId number The crafting spell ID
 ---@return number|nil skillId The profession skill ID (e.g., 164 for Blacksmithing)

@@ -1428,9 +1428,7 @@
                     </Anchor>
                 </Anchors>
                 <Scripts>
-                    <OnClick>
-                        Skillet:EmptyQueue()
-                    </OnClick>
+                    <!-- OnClick removed: now handled by Lua SetScript for SkilletEmptyQueueButton -->
                 </Scripts>
             </Button>
 

@@ -64,6 +64,7 @@ UI\ShoppingList.lua
 UI\ShoppingList.xml
 UI\ExtractionFrame.lua
 UI\ExtractionFrame.xml
+UI\SkilletTestingUI.lua
 
 #### Integration files
 Integrations\ResourceTracker.lua

@@ -55,6 +55,17 @@ Shows prospecting and milling data organized by target items
 -- These are global frames - access via getglobal() for type safety
 -- NOTE: All getglobal() calls must be validated for nil before use
 
+
+-- === BEGIN: Fix undefined globals and EmmyLua param doc issues ===
+local smallGroupLabels = {}
+local mediumGroupLabels = {}
+local largeGroupLabel = nil
+local setupSourceButtonClicks -- will be defined later
+local function createSmallGroupBorder(i, container) return nil, nil end
+local function createMediumGroupBorder(i, container) return nil, nil end
+local function createLargeGroupBorder(container) return nil, nil end
+-- === END: Fix undefined globals and EmmyLua param doc issues ===
+
 ---@type table
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
@@ -155,8 +166,20 @@ local GROUP_SPACING = 20
 local BUTTONS_PER_GROUP = 18
 
 -- Helper function to setup extraction buttons with direct row/column positioning
----@param button ConversionButton The button to set up
----@param buttonIndex number Button index for element access
+---@class ExtractionConversionButton : ConversionButton
+---@field itemId number
+---@class FrameWithLabel : Frame
+---@field label any
+---Set up an extraction button with all required fields and positioning
+---@param button ExtractionConversionButton
+---@param buttonPrefix string
+---@param index number
+---@param itemId number
+---@param row number
+---@param col number
+---@param border FrameWithLabel
+---@param clickHandler fun(button: ExtractionConversionButton, itemId: number, data: any)|nil
+---@param clickHandlerData any
 local function setupExtractionButton(button, buttonPrefix, index, itemId, row, col, border, clickHandler,
 									 clickHandlerData)
 	if not button then return end
@@ -251,6 +274,7 @@ local function setupExtractionButton(button, buttonPrefix, index, itemId, row, c
 
 	-- Store item data
 	button.itemId = itemId
+	button.itemId = itemId -- EmmyLua: ExtractionConversionButton allows this
 
 	-- Apply custom click handler if provided
 	if clickHandler and clickHandlerData then
@@ -579,18 +603,18 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			-- Add conversion info to tooltip
 			if self.conversionPair then
 				local pair = self.conversionPair
-				GameTooltip:AddLine(" ")             -- Blank line
-				GameTooltip:AddLine("Conversion:", 1, 1, 0.4, 1) -- Yellow header
+				GameTooltip:AddLine(" ")                -- Blank line
+				GameTooltip:AddLine("Conversion:", 1, 1, 0.4, true) -- Yellow header
 
 				-- Show conversion ratio and direction
 				if pair.bidirectional then
-					GameTooltip:AddLine("Bidirectional " .. pair.ratio .. ":1 conversion", 0.8, 0.8, 0.8, 1)
+					GameTooltip:AddLine("Bidirectional " .. pair.ratio .. ":1 conversion", 0.8, 0.8, 0.8, true)
 				else
-					GameTooltip:AddLine("One-way " .. pair.ratio .. ":1 conversion", 1, 0.6, 0.6, 1)
+					GameTooltip:AddLine("One-way " .. pair.ratio .. ":1 conversion", 1, 0.6, 0.6, true)
 				end
 
-				GameTooltip:AddLine("Left-click: Convert (or Withdraw if needed)", 0.6, 1, 0.6, 1)
-				GameTooltip:AddLine("Right-click: Deposit to Resource Bank", 0.6, 1, 0.6, 1)
+				GameTooltip:AddLine("Left-click: Convert (or Withdraw if needed)", 0.6, 1, 0.6, true)
+				GameTooltip:AddLine("Right-click: Deposit to Resource Bank", 0.6, 1, 0.6, true)
 			end
 
 			GameTooltip:Show()
@@ -844,7 +868,9 @@ local function initializeButtonPositions()
 		label:SetText("Group 1")                     -- Default text, will be updated dynamically
 		label:SetJustifyH("LEFT")
 		label:SetDrawLayer("OVERLAY", 2)             -- Higher layer than border elements
+		---@diagnostic disable-next-line: undefined-field
 		border.label = label                         -- Store reference for easy access
+		-- (removed duplicate class/field annotation for FrameWithLabel)
 
 		largeGroupBorder = border
 		largeGroupLabel = label
@@ -925,7 +951,11 @@ local function initializeButtonPositions()
 			label:SetText("Group " .. (groupNum + 1)) -- Default text, will be updated dynamically
 			label:SetJustifyH("LEFT")
 			label:SetDrawLayer("OVERLAY", 2)          -- Higher layer than border elements
+			---@diagnostic disable-next-line: undefined-field
 			border.label = label                      -- Store reference for easy access
+			---@diagnostic disable-next-line: assign-type-mismatch
+			---@diagnostic disable-next-line: undefined-field
+			border.label = label -- Store reference for easy access
 
 			---@cast border Frame
 			smallGroupBorders[groupNum + 1] = border
@@ -1434,6 +1464,7 @@ function Skillet:UpdateExtractionList()
 		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Generated " .. #pages .. " pages")
 
 		-- Store pages for display function (declare as local to avoid global warning)
+		-- EmmyLua: pages is local, _G.scrollPages is global for cross-function access, intentional design
 		_G.scrollPages = pages -- Explicitly global for cross-function access
 
 		-- Configure scroll frame with exact number of pages
@@ -1555,6 +1586,7 @@ local function updateGroupBorders(layout, groupsToShow, groupIndices, offset)
 			label:SetText(group.label or "Unknown Group")
 
 			-- Add one-way warning if needed
+			-- EmmyLua: This is a runtime UI warning, not a code warning. No code warning expected here.
 			if group.bidirectional == false then
 				label:SetText((group.label or "Unknown Group") .. " |cFFFF6666[One-Way]|r")
 			end

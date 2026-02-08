@@ -1,8 +1,115 @@
 ---@meta
 
--- WoW 3.3.5 API Type Definitions for Lua Language Server
--- This file provides type information for WoW API functions used by Skillet
--- It is not executed, only used for type checking (---@meta directive)
+-- UIDropDownMenu API
+---@param frame Frame The dropdown frame
+---@param initFunction function The initialization function
+function UIDropDownMenu_Initialize(frame, initFunction) end
+
+---@param frame Frame The dropdown frame
+---@param width number The width to set
+function UIDropDownMenu_SetWidth(frame, width) end
+
+---@param frame Frame The dropdown frame
+---@param text string The text to display
+function UIDropDownMenu_SetText(frame, text) end
+
+---@param info table The button info table
+---@param level? number The menu level
+function UIDropDownMenu_AddButton(info, level) end
+
+---@return table info The dropdown info table
+function UIDropDownMenu_CreateInfo() end
+
+---@param frame Frame The dropdown frame
+---@param id number The ID to select
+function UIDropDownMenu_SetSelectedID(frame, id) end
+
+-- Merchant API
+---@return number count Number of merchant items
+function GetMerchantNumItems() end
+
+---@param index number The merchant item index
+---@return string|nil name, string|nil texture, number|nil price, number|nil quantity, number|nil numAvailable, boolean|nil isUsable
+function GetMerchantItemInfo(index) end
+
+---@param index number The merchant item index
+---@param quantity number Quantity to buy
+function BuyMerchantItem(index, quantity) end
+
+-- IsEquippableItem API
+---@param itemIdOrLink number|string Item ID or item link
+---@return boolean isEquippable True if the item can be equipped
+function IsEquippableItem(itemIdOrLink) end
+
+-- GameTooltip_SetDefaultAnchor API
+---@param tooltip Tooltip The tooltip frame
+---@param owner Frame The owner frame
+function GameTooltip_SetDefaultAnchor(tooltip, owner) end
+
+-- FauxScrollFrame API
+---@param frame Frame The scroll frame
+---@param numItems number Total number of items
+---@param numToDisplay number Number of items to display
+---@param itemHeight number Height of each item
+function FauxScrollFrame_Update(frame, numItems, numToDisplay, itemHeight) end
+
+---@param frame Frame|nil The scroll frame
+---@return number offset The current scroll offset
+function FauxScrollFrame_GetOffset(frame) end
+
+-- Container/Bag/Inventory API
+---@param bag number The bag index
+---@return number numSlots Number of slots in the bag
+function GetContainerNumSlots(bag) end
+
+---@param bag number The bag index
+---@param slot number The slot index
+---@return string|nil texture, number|nil count, boolean|nil locked, number|nil quality, boolean|nil readable, boolean|nil lootable, string|nil itemLink
+function GetContainerItemInfo(bag, slot) end
+
+---@param bag number The bag index
+---@param slot number The slot index
+---@return string|nil itemLink The item link
+function GetContainerItemLink(bag, slot) end
+
+---@param bag number The bag index
+---@param slot number The slot index
+function PickupContainerItem(bag, slot) end
+
+---@param bag number The bag index
+---@param slot number The slot index
+---@param count number Number of items to split
+function SplitContainerItem(bag, slot, count) end
+
+function PutItemInBackpack() end
+
+---@param inventorySlot number The inventory slot ID
+function PutItemInBag(inventorySlot) end
+
+function ClearCursor() end
+
+---@param bagId number The bag ID
+---@return number inventoryId The inventory slot ID
+function ContainerIDToInventoryID(bagId) end
+
+---@param unit string The unit (e.g., "player")
+---@param slot number The inventory slot ID
+---@return string|nil itemLink The item link
+function GetInventoryItemLink(unit, slot) end
+
+---@param itemId number The item ID
+---@return string|nil iconTexture The icon texture path
+function GetItemIcon(itemId) end
+
+---@type number
+BANK_CONTAINER = -1
+
+---@type string
+INVTYPE_BAG = ""
+
+-- ChatFontNormal global
+---@type table
+ChatFontNormal = {}
 
 -- Base WoW UI Object Classes
 ---@class FontString
@@ -114,11 +221,9 @@
 ---@field SetMultiLine fun(self: Frame, multiLine: boolean)
 ---@field SetFontObject fun(self: Frame, font: any)
 
----@class Texture
----@field SetTexture fun(self: Texture, texture: string|number, g?: number, b?: number, a?: number)
----@field SetPoint fun(self: Texture, point: string, relativeTo?: Frame|Texture|string|number, relativePoint?: string|number, xOffset?: number, yOffset?: number)
----@field SetHeight fun(self: Texture, height: number)
----@field SetGradientAlpha fun(self: Texture, orientation: string, startR: number, startG: number, startB: number, startA: number, endR: number, endG: number, endB: number, endA: number)
+---@class Texture : Frame
+---@field SetVertexColor fun(self: Texture, r: number, g: number, b: number, a?: number)
+---@field ClearAllPoints fun(self: Texture)
 
 ---@class LibStub
 ---@field GetLibrary fun(self: LibStub, name: string): any
@@ -152,19 +257,6 @@ function CreateFrame(frameType, name, parent, template) end
 function getglobal(name) end
 
 -- Tooltip Frames (Global UI Elements)
----@class Tooltip : Frame
----@field AddLine fun(self: Tooltip, text: string, r?: number, g?: number, b?: number, wrap?: boolean)
----@field SetOwner fun(self: Tooltip, owner: Frame, anchor?: string)
----@field Show fun(self: Tooltip)
----@field Hide fun(self: Tooltip)
----@field GetItem fun(self: Tooltip): string?, string?
----@field SetText fun(self: Tooltip, text: string, r?: number, g?: number, b?: number)
----@field ClearLines fun(self: Tooltip)
----@field SetTradeSkillItem fun(self: Tooltip, skill: number, index?: number)
----@field AppendText fun(self: Tooltip, text: string)
----@field SetHyperlink fun(self: Tooltip, link: string)
----@field NumLines fun(self: Tooltip): number
-
 ---@type Tooltip
 ---@diagnostic disable-next-line: missing-fields
 GameTooltip = {}
@@ -274,15 +366,11 @@ function GetTradeSkillLine() end
 function GetSkillLineInfo(index) end
 
 -- Global UI Elements and Tables
----@type Frame
----@diagnostic disable-next-line: missing-fields
+
 UIParent = {}
 
 ---@type Frame[]
 UISpecialFrames = {}
-
----@type Frame|nil
-SkilletShoppingList = nil
 
 -- Third-party addon globals (optional dependencies)
 ---@class ESeller
@@ -306,7 +394,7 @@ function IsControlKeyDown() end
 function IsSpellKnown(spellId) end
 
 ---@param spellId number The spell ID
----@return string? spellName, string? spellRank, string? spellIcon, number? castTime, number? minRange, number? maxRange, number? spellId
+---@return string|nil spellName, string|nil spellRank, string|nil spellIcon, number|nil castTime, number|nil minRange, number|nil maxRange, number|nil spellId
 function GetSpellInfo(spellId) end
 
 -- Timer Functions
@@ -330,6 +418,11 @@ FONT_COLOR_CODE_CLOSE = ""
 ---@param unit string The unit to check (e.g., "player")
 ---@return boolean inCombat True if the unit is in combat
 function UnitAffectingCombat(unit) end
+
+-- Unit Information
+---@param unit string The unit to get the name of (e.g., "player", "target", "party1")
+---@return string|nil name The unit's name, or nil if the unit doesn't exist or has no name
+function UnitName(unit) end
 
 -- Additional Combat/Lockdown Functions
 ---@return boolean inCombat True if the player is in combat lockdown
@@ -436,15 +529,7 @@ FRC_PriceSource = nil
 ---@type any
 this = nil
 
--- XML-defined Skillet Sort Buttons and Dropdowns
----@type Button|nil
-SkilletSortAscButton = nil
 
----@type Button|nil
-SkilletSortDescButton = nil
-
----@type Frame|nil
-SkilletSortDropdown = nil
 
 -- Global Constants
 ---@type string
@@ -515,127 +600,6 @@ COOLDOWN_REMAINING = ""
 function GetMerchantItemLink(index) end
 
 ---@return number count Number of merchant items
-function GetMerchantNumItems() end
-
----@param index number The merchant item index
----@return string|nil name, string|nil texture, number|nil price, number|nil quantity, number|nil numAvailable, boolean|nil isUsable
-function GetMerchantItemInfo(index) end
-
----@param index number The merchant item index
----@param quantity number Quantity to buy
-function BuyMerchantItem(index, quantity) end
-
--- Tooltip Functions
----@param tooltip Tooltip The tooltip frame
----@param owner Frame The owner frame
-function GameTooltip_SetDefaultAnchor(tooltip, owner) end
-
--- Special WoW Lua global `this` (pre-Wrath)
----@type Frame|nil
-this = nil
-
--- Additional WoW API Functions
----@param unit string The unit (e.g., "player")
----@param slot number The inventory slot ID
----@return string|nil itemLink The item link
-function GetInventoryItemLink(unit, slot) end
-
----@param containerIndex number The bag index
----@param slot number The slot index
----@return string|nil itemLink The item link
-function GetContainerItemLink(containerIndex, slot) end
-
----@param containerIndex number The bag index
----@param slot number The slot index
-function PickupContainerItem(containerIndex, slot) end
-
----@param containerIndex number The bag index
----@param slot number The slot index
----@param count number Number of items to split
-function SplitContainerItem(containerIndex, slot, count) end
-
-function PutItemInBackpack() end
-
----@param inventorySlot number The inventory slot ID
-function PutItemInBag(inventorySlot) end
-
-function ClearCursor() end
-
----@param bagId number The bag ID
----@return number inventoryId The inventory slot ID
-function ContainerIDToInventoryID(bagId) end
-
--- UIDropDownMenu Functions
----@param frame Frame The dropdown frame
----@param initFunction function The initialization function
-function UIDropDownMenu_Initialize(frame, initFunction) end
-
----@param frame Frame The dropdown frame
----@param width number The width to set
-function UIDropDownMenu_SetWidth(frame, width) end
-
----@param frame Frame The dropdown frame
----@param text string The text to display
-function UIDropDownMenu_SetText(frame, text) end
-
----@param info table The button info table
----@param level? number The menu level
-function UIDropDownMenu_AddButton(info, level) end
-
----@return table info The dropdown info table
-function UIDropDownMenu_CreateInfo() end
-
----@param frame Frame The dropdown frame
----@param id number The ID to select
-function UIDropDownMenu_SetSelectedID(frame, id) end
-
--- Global Constants
----@type number
-BANK_CONTAINER = -1
-
----@type string
-INVTYPE_BAG = ""
-
----@type table
-ChatFontNormal = {}
-
--- Container (Bag) Functions
----@param containerIndex number The bag index (0-4)
----@return number numSlots Number of slots in the bag
-function GetContainerNumSlots(containerIndex) end
-
----@param containerIndex number The bag index
----@param slot number The slot index
----@return string|nil texture, number|nil count, boolean|nil locked, number|nil quality, boolean|nil readable, boolean|nil lootable, string|nil itemLink
-function GetContainerItemInfo(containerIndex, slot) end
-
--- Scroll Frame Functions
----@param frame Frame The scroll frame
----@param numItems number Total number of items
----@param numToDisplay number Number of items to display
----@param itemHeight number Height of each item
-function FauxScrollFrame_Update(frame, numItems, numToDisplay, itemHeight) end
-
----@param frame Frame|nil The scroll frame
----@return number offset The current scroll offset
-function FauxScrollFrame_GetOffset(frame) end
-
--- Item Checks
----@param itemIdOrLink number|string Item ID or item link
----@return boolean isEquippable True if the item can be equipped
-function IsEquippableItem(itemIdOrLink) end
-
----@param itemId number The item ID
----@return string|nil iconTexture The icon texture path
-function GetItemIcon(itemId) end
-
--- Global UI Frames
----@type Frame
----@diagnostic disable-next-line: missing-fields
-WorldFrame = {}
-
----@type Frame|nil
-SkilletSlotFilterDropdown = nil
 
 ---@class SkilletExtractionFrameExtended : Frame
 ---@field bagUpdateRegistered boolean? Tracks if BAG_UPDATE event is registered
@@ -694,10 +658,11 @@ SkilletHighlightFrame = nil
 ---@type Texture
 SkilletHighlight = nil
 
----@type Frame|nil
+
+---@type Frame
 SkilletSkillListParent = nil
 
----@type Frame|nil
+---@type Frame
 SkilletQueueParent = nil
 
 ---@type Frame|nil

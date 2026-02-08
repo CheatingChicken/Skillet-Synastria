@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-]]--
+]] --
 
 --[[
 #
@@ -24,23 +24,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # of items that are required for queued receipes but are not currently
 # in the inventory
 #
-]]--
+]] --
 
 SKILLET_SHOPPING_LIST_HEIGHT = 16
 
-local L = AceLibrary("AceLocale-2.2"):new("Skillet")
+local L                      = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 -- Stolen from the Waterfall Ace2 addon.
-local ControlBackdrop  = {
+local ControlBackdrop        = {
     bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
     edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 16,
+    tile = true,
+    tileSize = 16,
+    edgeSize = 16,
     insets = { left = 3, right = 3, top = 3, bottom = 3 }
 }
-local FrameBackdrop = {
+local FrameBackdrop          = {
     bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
     edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 16,
+    tile = true,
+    tileSize = 16,
+    edgeSize = 16,
     insets = { left = 3, right = 3, top = 30, bottom = 3 }
 }
 
@@ -55,34 +59,34 @@ local function createShoppingListFrame(self)
     frame:SetBackdropColor(0.1, 0.1, 0.1)
 
     -- A title bar stolen from the Ace2 Waterfall window.
-    local r,g,b = 0, 0.7, 0; -- dark green
-    local titlebar = frame:CreateTexture(nil,"BACKGROUND")
-    local titlebar2 = frame:CreateTexture(nil,"BACKGROUND")
+    local r, g, b = 0, 0.7, 0; -- dark green
+    local titlebar = frame:CreateTexture(nil, "BACKGROUND")
+    local titlebar2 = frame:CreateTexture(nil, "BACKGROUND")
 
-    titlebar:SetPoint("TOPLEFT",frame,"TOPLEFT",3,-4)
-    titlebar:SetPoint("TOPRIGHT",frame,"TOPRIGHT",-3,-4)
+    titlebar:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -4)
+    titlebar:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -3, -4)
     titlebar:SetHeight(13)
 
-    titlebar2:SetPoint("TOPLEFT",titlebar,"BOTTOMLEFT",0,0)
-    titlebar2:SetPoint("TOPRIGHT",titlebar,"BOTTOMRIGHT",0,0)
+    titlebar2:SetPoint("TOPLEFT", titlebar, "BOTTOMLEFT", 0, 0)
+    titlebar2:SetPoint("TOPRIGHT", titlebar, "BOTTOMRIGHT", 0, 0)
     titlebar2:SetHeight(13)
 
-    titlebar:SetGradientAlpha("VERTICAL",r*0.6,g*0.6,b*0.6,1,r,g,b,1)
-    titlebar:SetTexture(r,g,b,1)
-    titlebar2:SetGradientAlpha("VERTICAL",r*0.9,g*0.9,b*0.9,1,r*0.6,g*0.6,b*0.6,1)
-    titlebar2:SetTexture(r,g,b,1)
+    titlebar:SetGradientAlpha("VERTICAL", r * 0.6, g * 0.6, b * 0.6, 1, r, g, b, 1)
+    titlebar:SetTexture(r, g, b, 1)
+    titlebar2:SetGradientAlpha("VERTICAL", r * 0.9, g * 0.9, b * 0.9, 1, r * 0.6, g * 0.6, b * 0.6, 1)
+    titlebar2:SetTexture(r, g, b, 1)
 
-    local title = CreateFrame("Frame",nil,frame)
-    title:SetPoint("TOPLEFT",titlebar,"TOPLEFT",0,0)
-    title:SetPoint("BOTTOMRIGHT",titlebar2,"BOTTOMRIGHT",0,0)
+    local title = CreateFrame("Frame", nil, frame)
+    title:SetPoint("TOPLEFT", titlebar, "TOPLEFT", 0, 0)
+    title:SetPoint("BOTTOMRIGHT", titlebar2, "BOTTOMRIGHT", 0, 0)
 
     local titletext = title:CreateFontString("SkilletShoppingListTitleText", "OVERLAY", "GameFontNormalLarge")
-    titletext:SetPoint("TOPLEFT",title,"TOPLEFT",0,0)
-    titletext:SetPoint("TOPRIGHT",title,"TOPRIGHT",0,0)
+    titletext:SetPoint("TOPLEFT", title, "TOPLEFT", 0, 0)
+    titletext:SetPoint("TOPRIGHT", title, "TOPRIGHT", 0, 0)
     titletext:SetHeight(26)
-    titletext:SetShadowColor(0,0,0)
-    titletext:SetShadowOffset(1,-1)
-    titletext:SetTextColor(1,1,1)
+    titletext:SetShadowColor(0, 0, 0)
+    titletext:SetShadowOffset(1, -1)
+    titletext:SetTextColor(1, 1, 1)
     titletext:SetText("Skillet: " .. L["Shopping List"])
 
     SkilletShowQueuesFromAllAltsText:SetText(L["Include alts"])
@@ -99,7 +103,7 @@ local function createShoppingListFrame(self)
 
     -- Button to retrieve items needed from the bank
     SkilletShoppingListRetrieveButton:SetText(L["Retrieve"])
-    
+
     -- Synastria: Show/hide Export to ResourceTracker button based on availability
     if SkilletShoppingListExportRTButton then
         if self.IsResourceTrackerAvailable and self:IsResourceTrackerAvailable() then
@@ -116,7 +120,7 @@ local function createShoppingListFrame(self)
         prefix = "shoppingListLocation_"
     }
     windowManger:RegisterConfig(frame, self.db.char, shoppingListLocation)
-    windowManger:RestorePosition(frame)  -- restores scale also
+    windowManger:RestorePosition(frame) -- restores scale also
     windowManger:MakeDraggable(frame)
 
     -- lets play the resize me game!
@@ -133,7 +137,7 @@ end
 local function getConversionMaps()
     local crystallizedToEternal = {}
     local eternalToCrystallized = {}
-    
+
     if Skillet and Skillet.CONVERSION_DEFINITIONS then
         for _, conversion in ipairs(Skillet.CONVERSION_DEFINITIONS) do
             if conversion.type == "combine" then
@@ -143,7 +147,7 @@ local function getConversionMaps()
             end
         end
     end
-    
+
     return crystallizedToEternal, eternalToCrystallized
 end
 
@@ -158,21 +162,30 @@ local CRYSTALLIZED_TO_ETERNAL_MAP, ETERNAL_TO_CRYSTALLIZED_MAP = getConversionMa
 -- Synastria: Updated to include resource bank, subtract items being crafted, and account for conversions
 function Skillet:GetShoppingList(playername, includeBank)
     local list = self:GetReagentsForQueuedRecipes(playername)
-    
+
     -- Synastria: Build a table of items being crafted in the queue
     -- Also track Crystallized/Eternal reserved for conversions
     local queuedCrafts = {}
     local reservedForConversion = {}
-    for player,playerqueues in pairs(self:GetAllQueues()) do
+    for player, playerqueues in pairs(self:GetAllQueues()) do
         if not playername or playername == player then
             local queue = playerqueues["AllProfessions"]
             if queue and #queue > 0 then
-                for i=1,#queue,1 do
+                for i = 1, #queue, 1 do
                     local queueItem = queue[i]
                     local count = queueItem.numcasts
-                    local link = queueItem.recipe.link
-                    local recipe = queueItem.recipe
-                    
+                    local spellId = queueItem.spellId
+
+                    -- Synastria: Get recipe info from Custom API
+                    local link = nil
+                    if spellId and Custom_GetProfessionRecipeInfo then
+                        local skillId, name, itemId, craftCount = Custom_GetProfessionRecipeInfo(spellId)
+                        if itemId then
+                            -- Create item link from item ID
+                            link = select(2, GetItemInfo(itemId))
+                        end
+                    end
+
                     -- Extract item ID from link to match properly
                     if link then
                         if queuedCrafts[link] then
@@ -181,11 +194,11 @@ function Skillet:GetShoppingList(playername, includeBank)
                             queuedCrafts[link] = count
                         end
                     end
-                    
-                    -- Track items reserved for conversions (both directions)
-                    if recipe and recipe.isVirtualConversion then
-                        local sourceId = recipe.sourceId
-                        local sourceNeeded = recipe.sourceNeeded
+
+                    -- Note: Conversions are no longer supported in the new queue structure
+                    if queueItem and queueItem.isVirtualConversion then
+                        local sourceId = queueItem.sourceId
+                        local sourceNeeded = queueItem.sourceNeeded
                         if sourceId and sourceNeeded then
                             if reservedForConversion[sourceId] then
                                 reservedForConversion[sourceId] = reservedForConversion[sourceId] + sourceNeeded
@@ -202,24 +215,23 @@ function Skillet:GetShoppingList(playername, includeBank)
     -- decrease counts by what we have on hand.
     -- work backwards so that removing items form the table
     -- does not screw up our indexing.
-    for i=#list, 1, -1 do
+    for i = #list, 1, -1 do
+        local link   = list[i].link
+        local count  = list[i].count
 
-        local link  = list[i].link
-        local count = list[i].count
+        local have   = GetItemCount(link, includeBank) or 0
 
-        local have = GetItemCount(link, includeBank) or 0
-        
         -- Synastria: Also check resource bank
         local itemId = tonumber(string.match(link, "item:(%d+)"))
         if GetCustomGameData and itemId then
             have = have + (GetCustomGameData(13, itemId) or 0)
         end
-        
+
         -- Synastria: Subtract items being crafted in queue
         if queuedCrafts[link] then
             have = have + queuedCrafts[link]
         end
-        
+
         -- Synastria: Account for Crystallized <-> Eternal conversions
         -- But don't count materials already reserved for conversion queue items
         local canConvert = 0
@@ -237,7 +249,7 @@ function Skillet:GetShoppingList(playername, includeBank)
                 -- 10 Crystallized = 1 Eternal
                 canConvert = math.floor(crystallizedCount / 10)
             end
-            
+
             -- If we need Crystallized, check if we have Eternal to break down
             local eternalId = CRYSTALLIZED_TO_ETERNAL_MAP[itemId]
             if eternalId then
@@ -251,16 +263,16 @@ function Skillet:GetShoppingList(playername, includeBank)
                 canConvert = eternalCount * 10
             end
         end
-        
+
         local totalAvailable = have + canConvert
-        
+
         if totalAvailable >= count then
             -- have enough between direct and conversion
             table.remove(list, i)
         else
             local stillNeed = count - totalAvailable
             list[i]["count"] = stillNeed
-            
+
             -- If we could partially cover with conversion, add the convertible item to the list
             if canConvert > 0 and itemId then
                 local convertibleId = ETERNAL_TO_CRYSTALLIZED_MAP[itemId] or CRYSTALLIZED_TO_ETERNAL_MAP[itemId]
@@ -277,7 +289,7 @@ function Skillet:GetShoppingList(playername, includeBank)
                             -- Need Crystallized, show Eternal needed
                             convertibleNeeded = math.ceil(stillNeed / 10)
                         end
-                        
+
                         -- Add to list
                         table.insert(list, {
                             ["link"] = convertibleLink,
@@ -288,7 +300,6 @@ function Skillet:GetShoppingList(playername, includeBank)
                 end
             end
         end
-
     end
 
     return list
@@ -350,11 +361,11 @@ local function indexBank()
     for i = 1, GetContainerNumSlots(container), 1 do
         local item = GetContainerItemLink(container, i)
         if item then
-            local _,count = GetContainerItemInfo(container, i)
+            local _, count = GetContainerItemInfo(container, i)
             table.insert(bank, {
                 ["bag"]   = container,
                 ["slot"]  = i,
-                ["id"]  = Skillet:GetItemIDFromLink(item),
+                ["id"]    = Skillet:GetItemIDFromLink(item),
                 ["count"] = count,
             })
         end
@@ -365,11 +376,11 @@ local function indexBank()
         for i = 1, GetContainerNumSlots(container), 1 do
             local item = GetContainerItemLink(container, i)
             if item then
-                local _,count = GetContainerItemInfo(container, i)
+                local _, count = GetContainerItemInfo(container, i)
                 table.insert(bank, {
                     ["bag"]   = container,
                     ["slot"]  = i,
-                    ["id"]  = Skillet:GetItemIDFromLink(item),
+                    ["id"]    = Skillet:GetItemIDFromLink(item),
                     ["count"] = count,
                 })
             end
@@ -411,8 +422,8 @@ local function findBagForItem(item, count)
                 if bagitem then
                     if id == Skillet:GetItemIDFromLink(bagitem) then
                         -- found some of the same, it is a full stack or locked?
-                        local _, num_in_bag, locked  = GetContainerItemInfo(container, slot)
-                        local space_available = itemStackCount - num_in_bag
+                        local _, num_in_bag, locked = GetContainerItemInfo(container, slot)
+                        local space_available       = itemStackCount - num_in_bag
                         if space_available >= count and not locked then
                             return container
                         end
@@ -464,9 +475,9 @@ function Skillet:GetReagentsFromBank()
 
     indexBank()
 
-    for _,v in pairs(list) do
+    for _, v in pairs(list) do
         local id = self:GetItemIDFromLink(v.link)
-        for _,item in pairs(bank) do
+        for _, item in pairs(bank) do
             if item.id == id and item.count > 0 then
                 -- taking stuff from the bank should cause a bag update event
                 -- to be fired, which will in turn cause Skillet:UpdateShoppingListWindow()
@@ -489,13 +500,14 @@ end
 
 local num_buttons = 0
 local function get_button(i)
-    local button = getglobal("SkilletShoppingListButton"..i)
+    local button = getglobal("SkilletShoppingListButton" .. i)
     if not button then
-        button = CreateFrame("Button", "SkilletShoppingListButton"..i, SkilletShoppingListParent, "SkilletShoppingListItemButtonTemplate")
+        button = CreateFrame("Button", "SkilletShoppingListButton" .. i, SkilletShoppingListParent,
+            "SkilletShoppingListItemButtonTemplate")
         if SkilletShoppingList then
             button:SetParent(SkilletShoppingList)
         end
-        button:SetPoint("TOPLEFT", "SkilletShoppingListButton"..(i-1), "BOTTOMLEFT")
+        button:SetPoint("TOPLEFT", "SkilletShoppingListButton" .. (i - 1), "BOTTOMLEFT")
     end
     return button
 end
@@ -522,25 +534,25 @@ function Skillet:UpdateShoppingListWindow(use_cached_recipes)
 
     -- Update the scroll frame
     ---@diagnostic disable-next-line: param-type-mismatch
-    FauxScrollFrame_Update(SkilletShoppingListList,         -- frame
-                           numItems,                        -- num items
-                           button_count,                    -- num to display
-                           SKILLET_SHOPPING_LIST_HEIGHT)    -- value step (item height)
+    FauxScrollFrame_Update(SkilletShoppingListList, -- frame
+        numItems,                                   -- num items
+        button_count,                               -- num to display
+        SKILLET_SHOPPING_LIST_HEIGHT)               -- value step (item height)
 
     -- Where in the list of items to start counting.
     local itemOffset = FauxScrollFrame_GetOffset(SkilletShoppingListList)
 
     local width = SkilletShoppingListList:GetWidth()
 
-    for i=1, button_count, 1 do
-        num_buttons = math.max(num_buttons, i)
+    for i = 1, button_count, 1 do
+        num_buttons     = math.max(num_buttons, i)
 
         local itemIndex = i + itemOffset
 
-        local button = get_button(i)
-        local count  = getglobal(button:GetName() .. "CountText")
-        local name   = getglobal(button:GetName() .. "NameText")
-        local player = getglobal(button:GetName() .. "PlayerText")
+        local button    = get_button(i)
+        local count     = getglobal(button:GetName() .. "CountText")
+        local name      = getglobal(button:GetName() .. "NameText")
+        local player    = getglobal(button:GetName() .. "PlayerText")
 
         button:SetWidth(width)
 
@@ -581,9 +593,9 @@ function Skillet:UpdateShoppingListWindow(use_cached_recipes)
 
 
     -- Hide any of the buttons that we created, but don't need right now
-    for i = button_count+1, num_buttons, 1 do
-       local button = get_button(i)
-       button:Hide()
+    for i = button_count + 1, num_buttons, 1 do
+        local button = get_button(i)
+        button:Hide()
     end
 end
 
@@ -594,7 +606,6 @@ end
 
 -- Fills out and displays the shopping list frame
 function Skillet:internal_DisplayShoppingList(atBank)
-
     if not self.shoppingList then
         self.shoppingList = createShoppingListFrame(self)
     end
@@ -605,7 +616,7 @@ function Skillet:internal_DisplayShoppingList(atBank)
     else
         SkilletShoppingListRetrieveButton:Show()
     end
-    
+
     -- Synastria: Update ResourceTracker button visibility
     if SkilletShoppingListExportRTButton then
         if self.IsResourceTrackerAvailable and self:IsResourceTrackerAvailable() then
@@ -623,7 +634,6 @@ function Skillet:internal_DisplayShoppingList(atBank)
 
     -- true == use cached recipes, we just loaded them after all
     self:UpdateShoppingListWindow(true)
-
 end
 
 -- Hides the shopping list window
@@ -633,4 +643,3 @@ function Skillet:internal_HideShoppingList()
     end
     self.cachedShoppingList = nil
 end
-

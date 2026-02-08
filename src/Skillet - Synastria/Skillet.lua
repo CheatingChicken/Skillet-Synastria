@@ -18,17 +18,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ]] --
 
+---@diagnostic disable:no-unknown,param-type-mismatch
+-- File includes many WoW API calls with untyped globals
+
 local MAJOR_VERSION    = "1.13"
 local MINOR_VERSION    = ("$Revision: 153 $"):match("%d+") or 1
 local DATE             = string.gsub("$Date: 2008-10-26 19:38:21 +0000 (Sun, 26 Oct 2008) $",
     "^.-(%d%d%d%d%-%d%d%-%d%d).-$", "%1")
 
+---@type SkilletClass
 Skillet                = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceEvent-2.0", "AceDB-2.0", "AceHook-2.1")
 Skillet.title          = "Skillet"
 Skillet.version        = MAJOR_VERSION .. "-" .. MINOR_VERSION
 Skillet.date           = DATE
 
 -- Pull it into the local namespace, it's faster to access that way
+---@type SkilletClass
 local Skillet          = Skillet
 
 -- Is a copy of LibPossessions is avaialable, use it for alt
@@ -77,12 +82,20 @@ Skillet:RegisterDefaults('char', {
 })
 
 -- Localization
+---@type table
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 -- Events
 local AceEvent = AceLibrary("AceEvent-2.0")
 
+-- Type definitions for EmmyLua
+---@class QueueEntry
+---@class Recipe
+---@class Reagent
+---@class DialogFrame
+
 -- All the options that we allow the user to control.
+---@type SkilletClass
 local Skillet = Skillet
 Skillet.options =
 {
@@ -421,6 +434,11 @@ Skillet.options =
 
 -- Called when the addon is loaded
 function Skillet:OnInitialize()
+    -- Synastria: Assume custom API is available on this server
+    -- Will be disabled if API call fails
+    self.customApiAvailable = true
+    self.customApiFailureReported = false
+
     -- hook default tooltips
     local tooltipsToHook = { ItemRefTooltip, GameTooltip, ShoppingTooltip1, ShoppingTooltip2 };
     for _, tooltip in pairs(tooltipsToHook) do
@@ -445,6 +463,7 @@ function Skillet:OnInitialize()
     -- self:Print("Skillet v" .. self.version .. " loaded");
 
     -- Track trade skill creation
+    ---@type SkilletStitch
     self.stitch = AceLibrary("SkilletStitch-1.1")
 
     -- Make sure this is done in initialize, not enable as we want the chat
@@ -462,6 +481,12 @@ function Skillet:OnInitialize()
                 DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[Skillet] Developer mode ENABLED|r")
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Skillet] Developer mode DISABLED|r")
+            end
+        elseif msg == "test" or msg == "phase2" then
+            if Skillet.ShowPhase2TestDialog then
+                Skillet:ShowPhase2TestDialog()
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet] Testing UI not loaded|r")
             end
         end
     end
@@ -552,10 +577,14 @@ function Skillet:OnEnable()
     end
 
     -- hook up our copy of stitch to the data for this character
-    if self.db.server.recipes[UnitName("player")] then
-        self.stitch.data = self.db.server.recipes[UnitName("player")]
+    ---@type string|nil
+    local playerName = UnitName("player")
+    if playerName and self.db.server.recipes[playerName] then
+        self.stitch.data = self.db.server.recipes[playerName]
     end
-    self.db.server.recipes[UnitName("player")] = self.stitch.data
+    if playerName then
+        self.db.server.recipes[playerName] = self.stitch.data
+    end
 
     -- Synastria: Populate recipe info cache from database
     if self.stitch.PopulateRecipeInfoCache then
@@ -640,6 +669,7 @@ function Skillet:ScanCompleted()
         end
 
         -- Synastria: Clear craftability cache after scan to force recalculation
+        ---@type SkilletStitch
         local lib = AceLibrary("SkilletStitch-1.1")
         if lib and lib.ClearCraftabilityCache then
             lib:ClearCraftabilityCache()
@@ -662,6 +692,7 @@ local function cache_recipes_if_needed(self, force)
         return true
     end
 
+    ---@type string|nil
     local trade = self:GetTradeSkillLine()
 
     if not trade or trade == "UNKNOWN" then
@@ -701,6 +732,7 @@ local function Skillet_rescan_skills()
         end
     end
 
+    ---@type string|nil
     local player = UnitName("player")
 
     -- Synastria: Virtual professions that should never be checked or removed
@@ -709,25 +741,27 @@ local function Skillet_rescan_skills()
     }
 
     local changed = false
-    for profession, _ in pairs(Skillet.db.server.recipes[player]) do
-        -- Skip virtual professions - they're not real professions
-        if not virtualProfessions[profession] and not skills[profession] then
-            changed = true
-            if profession ~= "UNKNOWN" then
-                -- where the hell does this come from?
-                Skillet:Print("No longer know: " .. profession)
+    if player then
+        for profession, _ in pairs(Skillet.db.server.recipes[player]) do
+            -- Skip virtual professions - they're not real professions
+            if not virtualProfessions[profession] and not skills[profession] then
+                changed = true
+                if profession ~= "UNKNOWN" then
+                    -- where the hell does this come from?
+                    Skillet:Print("No longer know: " .. profession)
+                end
+                Skillet.db.server.recipes[player][profession] = nil
             end
-            Skillet.db.server.recipes[player][profession] = nil
         end
-    end
 
-    if changed == true then
-        Skillet:HideAllWindows()
-        if Skillet.db.server.recipes[player] then
-            Skillet.stitch.data = Skillet.db.server.recipes[player]
+        if changed == true then
+            Skillet:HideAllWindows()
+            if Skillet.db.server.recipes[player] then
+                Skillet.stitch.data = Skillet.db.server.recipes[player]
+            end
+            Skillet.db.server.recipes[player] = Skillet.stitch.data
+            Skillet:internal_ResetCharacterCache()
         end
-        Skillet.db.server.recipes[player] = Skillet.stitch.data
-        Skillet:internal_ResetCharacterCache()
     end
 end
 
@@ -775,6 +809,7 @@ function Skillet:TRADE_SKILL_SHOW()
         self.stitch:TRADE_SKILL_SHOW()
 
         -- Synastria: Start background craftability calculation
+        ---@type string|nil
         local profession = GetTradeSkillLine()
         if profession and profession ~= "UNKNOWN" then
             if self.CraftCalc then
@@ -791,12 +826,16 @@ function Skillet:TRADE_SKILL_SHOW()
                     -- Don't update dialog text here - PostClick handles that when moving to next profession
                     if self.recipePromptDialog and self.recipePromptDialog:IsVisible() then
                         local dialog = self.recipePromptDialog
-                        if dialog.openButton then
-                            self:DebugLog("[ScanDialog] Re-enabling Open Next button after '" .. profession .. "' scan",
-                                "|cFF00FF00")
-                            dialog.openButton:Enable()
-                        else
-                            self:DebugLog("[ScanDialog] Cannot re-enable: button missing", "|cFFFFAA00")
+                        if dialog then
+                            local openBtn = (dialog --[[@as table]]).openButton
+                            if openBtn then
+                                self:DebugLog(
+                                    "[ScanDialog] Re-enabling Open Next button after '" .. profession .. "' scan",
+                                    "|cFF00FF00")
+                                openBtn:Enable()
+                            else
+                                self:DebugLog("[ScanDialog] Cannot re-enable: button missing", "|cFFFFAA00")
+                            end
                         end
                     end
                 end)
@@ -826,15 +865,16 @@ end
 
 -- Rescans the trades (and thus bags). Can only be called if the tradeskill
 -- window is open and a trade selected.
-local function Skillet_rescan_bags()
-    cache_recipes_if_needed(Skillet, false)
-    Skillet:UpdateTradeSkillWindow()
-    Skillet:UpdateShoppingListWindow()
-end
+-- local function Skillet_rescan_bags()
+--     cache_recipes_if_needed(Skillet, false)
+--     Skillet:UpdateTradeSkillWindow()
+--     Skillet:UpdateShoppingListWindow()
+-- end
 
 -- So we can track when the players inventory changes and update craftable counts
 function Skillet:BAG_UPDATE()
     -- Synastria: Clear craftability cache when inventory changes
+    ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
     if lib and lib.ClearCraftabilityCache then
         lib:ClearCraftabilityCache()
@@ -917,11 +957,11 @@ function Skillet:UNIT_SPELLCAST_SUCCEEDED(unit, spellName, rank, lineID, spellID
     -- Synastria: Handle queue removal for non-item-producing crafts (enchantments, improvements)
     -- These don't produce items in bags, so BAG_UPDATE never fires to remove them from queue
     if self.stitch and self.stitch.queuecasting and self.stitch.queue and self.stitch.queue[1] then
-        local recipe = self.stitch.queue[1].recipe
-        if recipe and recipe.link then
-            -- Check if this is a non-item craft (enchant:, spell:, etc.)
-            -- Item-producing crafts start with "item:" and will be handled by BAG_UPDATE
-            if not string.match(recipe.link, "^item:") then
+        local spellId = self.stitch.queue[1].spellId
+        if spellId and Custom_GetProfessionRecipeInfo then
+            local skillId, name, itemId = Custom_GetProfessionRecipeInfo(spellId)
+            -- If itemId is nil, this is a non-item craft (enchantment, improvement)
+            if not itemId then
                 -- This is an enchantment or improvement - process completion manually
                 -- Schedule it slightly delayed to ensure spell has completed
                 self:ScheduleEvent("Skillet_ProcessNonItemCraft", function()
@@ -985,7 +1025,7 @@ function Skillet:internal_ShowTradeSkillWindow()
 
     self:ResetTradeSkillWindow()
 
-    if not frame:IsVisible() then
+    if frame and not frame:IsVisible() then
         ShowUIPanel(frame)
     end
 end
@@ -994,6 +1034,7 @@ end
 -- Hides the Skillet trade skill window. Does nothing if the window is not visible
 --
 function Skillet:internal_HideTradeSkillWindow()
+    ---@type boolean|nil
     local closed -- was anything closed by us?
     local frame = self.tradeSkillFrame
 
@@ -1010,6 +1051,7 @@ end
 -- Hides any and all Skillet windows that are open
 --
 function Skillet:internal_HideAllWindows()
+    ---@type boolean|nil
     local closed -- was anything closed?
 
     -- Cancel anything currently being created
@@ -1052,6 +1094,7 @@ function Skillet:DebugSelectedRecipe()
         return
     end
 
+    ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
     local recipe = lib:GetItemDataByIndex(self.currentTrade, self.selectedSkill)
 
@@ -1311,6 +1354,10 @@ end
 
 -- Helper function: Get conversion info for an item
 -- Returns: targetId, ratio, type or nil if no conversion exists
+---@param itemId number The item ID to check for conversions
+---@return number|nil targetId The target item ID to convert to/from
+---@return number|nil ratio The conversion ratio
+---@return string|nil convType The conversion type ('combine' or 'split')
 function Skillet:GetConversionInfo(itemId)
     -- Check if this item is a TARGET (can be created FROM something else)
     -- We check TARGET first because when we need an item, we want to make it (not use it up)
@@ -1333,11 +1380,12 @@ function Skillet:GetConversionInfo(itemId)
 end
 
 -- Synastria: Calculate how many of an item will be consumed by queued recipes
----@param itemId number The item ID to check
----@return number consumed Number of items that will be consumed by the queue
+---@param itemId number|nil The item ID to check
+---@return number The total quantity needed from the queue
 function Skillet:GetQueuedReagentConsumption(itemId)
     if not itemId then return 0 end
 
+    ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
     if not lib or not lib.queue then return 0 end
 
@@ -1350,7 +1398,7 @@ function Skillet:GetQueuedReagentConsumption(itemId)
 
     -- Iterate through queue and count reagents needed
     for i = 1, #lib.queue do
-        local entry = lib.queue[i]
+        local entry = lib.queue[i] --as QueueEntry
         local recipeName = entry.recipe and entry.recipe.name or "Unknown"
         self:Print(string.format("|cFF888888  [%d] Recipe: %s|r", i, recipeName))
 
@@ -1382,9 +1430,9 @@ end
 
 -- Synastria: Queue conversions when needed (bidirectional support)
 -- Handles both Crystallized→Eternal (combine) and Eternal→Crystallized (split)
--- @param reagent: The reagent object from a recipe
--- @param needed: How many of this reagent we need total
--- @return: true if conversion was queued, false otherwise
+---@param reagent Reagent The reagent object from a recipe
+---@param needed number How many of this reagent we need total
+---@return boolean queued True if conversion was queued, false otherwise
 function Skillet:QueueConversionsIfNeeded(reagent, needed)
     if not reagent or not needed or needed <= 0 then
         return false
@@ -1420,14 +1468,17 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
         itemName, availableBeforeQueue, queuedConsumption, available, needed))
 
     if available >= needed then
-        self:DebugLog(string.format("[Conv Check] %s: Already have enough (avail %d >= need %d)", 
+        self:DebugLog(string.format("[Conv Check] %s: Already have enough (avail %d >= need %d)",
             itemName, available, needed))
         return false -- We already have enough (after accounting for queue)
     end
 
     -- Calculate the shortage - this is what we need to convert
     local shortage = needed - available
-    local conversionsNeeded, amountToConvert
+    ---@type number
+    local conversionsNeeded = 0
+    ---@type number
+    local amountToConvert = 0
 
     if conversionType == "combine" then
         -- Crystallized → Eternal (10:1 ratio)
@@ -1453,7 +1504,14 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
     local convertibleName = GetItemInfo(targetId) or "Item"
 
     -- Determine which item we're using and which we're making
-    local sourceId, sourceNeeded, outputId, outputAmount
+    ---@type number
+    local sourceId = 0
+    ---@type number
+    local sourceNeeded = 0
+    ---@type number
+    local outputId = 0
+    ---@type number
+    local outputAmount = 0
     if conversionType == "combine" then
         sourceId = targetId -- Crystallized (what we use)
         sourceNeeded = amountToConvert
@@ -1467,6 +1525,7 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
     end
 
     -- Add the virtual conversion recipe to the queue
+    ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
     if lib and lib.queue then
         -- Check if this exact conversion is already in the queue
@@ -1477,24 +1536,24 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
                 entry.recipe.outputId == outputId then
                 -- Found existing conversion - check if we need to increase it
                 local currentOutput = entry.recipe.outputAmount or 0
-                
-                self:DebugLog(string.format("[Conv] Found existing conversion for %s: currently %d, shortage is %d", 
+
+                self:DebugLog(string.format("[Conv] Found existing conversion for %s: currently %d, shortage is %d",
                     neededName, currentOutput, shortage))
-                
+
                 -- Calculate total we'll have after existing conversion completes
                 local totalAfterConversion = available + currentOutput
-                
+
                 if totalAfterConversion >= needed then
-                    self:DebugLog(string.format("[Conv] Existing conversion sufficient: %d + %d >= %d", 
+                    self:DebugLog(string.format("[Conv] Existing conversion sufficient: %d + %d >= %d",
                         available, currentOutput, needed))
                     return false -- Existing conversion is already sufficient
                 end
-                
+
                 -- Need more - add only the additional shortage
                 local additionalNeeded = needed - totalAfterConversion
-                
+
                 self:DebugLog(string.format("[Conv] Need %d more, updating conversion", additionalNeeded))
-                
+
                 if conversionType == "combine" then
                     entry.recipe.outputAmount = currentOutput + additionalNeeded
                     entry.recipe.sourceNeeded = entry.recipe.outputAmount * 10
@@ -1930,10 +1989,11 @@ end
 
 -- Synastria: Check for old encoded recipe data and show rescan dialog
 function Skillet:CheckForOldRecipeData()
+    ---@type string|nil
     local player = UnitName("player")
     local needsRescan = {}
 
-    if self.db.server.recipes[player] then
+    if player and self.db.server.recipes[player] then
         for profession, _ in pairs(self.db.server.recipes[player]) do
             if profession ~= "UNKNOWN" then
                 -- Check for Mining/Smelting mapping
@@ -2053,7 +2113,7 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
                 end)
                 return
             end
-            
+
             -- Disable button immediately to prevent double-clicks
             dialog.openButton:Disable()
 
@@ -2066,7 +2126,8 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
                     dialog.scannedProfessions[currentProf] = true
 
                     Skillet:DebugLog(
-                    "[ScanDialog] PostClick: Marking '" .. currentProf .. "' [" .. dialog.professionIndex .. "] as [OK]",
+                        "[ScanDialog] PostClick: Marking '" ..
+                        currentProf .. "' [" .. dialog.professionIndex .. "] as [OK]",
                         "|cFF00FF00")
 
                     -- Move to next profession first
@@ -2075,8 +2136,8 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
 
                     -- Update the profession list display
                     Skillet:DebugLog(
-                    "[ScanDialog] PostClick: Moving to '" ..
-                    (nextProf or "DONE") .. "' [" .. dialog.professionIndex .. "]", "|cFF00FFFF")
+                        "[ScanDialog] PostClick: Moving to '" ..
+                        (nextProf or "DONE") .. "' [" .. dialog.professionIndex .. "]", "|cFF00FFFF")
                     local promptText = "The following professions need to be rescanned:\n\n"
                     for i, prof in ipairs(dialog.professions) do
                         if i < dialog.professionIndex then
@@ -2102,7 +2163,9 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
                             dialog.openButton:SetAttribute("spell", spellId)
                             dialog.openButton:SetText("Open " .. nextProf)
                             -- Don't enable here - let calculation callback enable it when scan completes
-                            Skillet:DebugLog("[ScanDialog] PostClick: Button configured for '" .. nextProf .. "', waiting for calculation to complete", "|cFF888888")
+                            Skillet:DebugLog(
+                                "[ScanDialog] PostClick: Button configured for '" ..
+                                nextProf .. "', waiting for calculation to complete", "|cFF888888")
                         else
                             dialog.openButton:SetText("Not Learned")
                             dialog.openButton:Disable()
@@ -2115,9 +2178,10 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
 
                         -- Prompt to return to original profession if set
                         if dialog.originalProfession and dialog.originalProfession ~= "UNKNOWN" then
+                            ---@type number|nil
                             local spellId = dialog.professionSpellIds[dialog.originalProfession]
                             if not spellId then
-                                spellId = Skillet.stitch:FindProfessionSpellId(dialog.originalProfession)
+                                spellId = Skillet.stitch:FindProfessionSpellId(dialog.originalProfession) --[[@as number|nil]]
                             end
 
                             if spellId and IsSpellKnown(spellId) then
@@ -2156,6 +2220,9 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
     end
 
     local dialog = self.recipePromptDialog
+    if not dialog then
+        return
+    end
 
     -- Set up profession spell IDs
     dialog.professionSpellIds = {
@@ -2195,11 +2262,12 @@ function Skillet:ShowRecipePrompt(professionList, originalProfession)
     -- Set up the first profession to open
     if #professionList > 0 then
         local firstProf = professionList[1]
+        ---@type number|nil
         local spellId = dialog.professionSpellIds[firstProf]
 
         -- Try to find the spell ID if not in our basic list
         if not spellId then
-            spellId = self.stitch:FindProfessionSpellId(firstProf)
+            spellId = self.stitch:FindProfessionSpellId(firstProf) --[[@as number|nil]]
         end
 
         if spellId and IsSpellKnown(spellId) then
@@ -2235,7 +2303,8 @@ function Skillet:OnProfessionSwitchComplete()
     SetBinding("CTRL-MOUSEWHEELUP")
     SetBinding("CTRL-MOUSEWHEELDOWN")
 
-    local actionType = self.professionSwitchPrompt.actionType
+    ---@type string|nil
+    local actionType = (self.professionSwitchPrompt --[[@as table]]).actionType --[[@as string|nil]]
     self.professionSwitchPrompt:Hide()
 
     if actionType == "queue" then
@@ -2385,168 +2454,104 @@ function Skillet:ShowStartCraftingPrompt()
 
     -- Update the prompt with current queue info
     local frame = self.startCraftingPrompt
+    if not frame then
+        return
+    end
     local queueItem = self.stitch.queue[1]
 
-    if queueItem and queueItem.recipe then
-        local profession = queueItem.profession or "Unknown"
-        local itemName = queueItem.recipe.name or "Unknown Item"
-        local count = queueItem.numcasts or 1
+    if queueItem and queueItem.spellId then
+        -- Synastria: Get recipe info from spell ID
+        local spellId = queueItem.spellId
+        ---@type number
+        local count = (queueItem.numcasts or 1) --[[@as number]]
         local currentTrade = GetTradeSkillLine()
 
-        -- Synastria: Check if this is a virtual conversion recipe
-        local isVirtualConversion = queueItem.recipe.isVirtualConversion
+        -- Get recipe details from Custom API
+        local recipeName = "Unknown Item"
+        local profession = "Unknown"
+        if Custom_GetProfessionRecipeInfo then
+            local skillId, name, itemId, craftCount, canCraft, verb, header, difficulty = Custom_GetProfessionRecipeInfo(
+                spellId)
+            if name then
+                recipeName = name
+            end
+            -- Synastria: Try to determine profession from skill ID or header
+            -- For now, we'll use currentTrade or "Unknown"
+            if currentTrade and currentTrade ~= "" then
+                profession = currentTrade
+            end
+        end
 
-        if isVirtualConversion then
-            -- Handle conversion workflow with step-by-step buttons
-            local conversionType = queueItem.recipe.conversionType or "combine"
-            local sourceName = GetItemInfo(queueItem.recipe.sourceId) or "Item"
-            local outputName = GetItemInfo(queueItem.recipe.outputId) or "Item"
+        -- Synastria: Virtual conversions no longer supported with new queue structure
+        -- Regular crafting workflow only
+        frame.conversionStep = 1
+        frame.useItemButton:Hide()
 
-            local actionWord = conversionType == "combine" and "Combine" or "Split"
-            frame.text:SetText(string.format("%s |cFF00FF00%dx %s|r → |cFF00FF00%dx %s|r",
-                actionWord,
-                queueItem.recipe.sourceNeeded, sourceName,
-                queueItem.recipe.outputAmount, outputName))
-            frame.itemText:SetText("") -- No instruction text needed
+        -- Restore normal start button click handler
+        frame.startButton:SetScript("OnClick", function()
+            frame.errorText:SetText("") -- Clear error message
+            frame.startButton:Disable()
+            Skillet.stitch:ProcessQueue()
+        end)
+        frame.startButton:SetText("Start")
 
-            -- Hide switch button, show start button with conversion action
+        -- Synastria: Check if we can use windowless crafting
+        local canUseWindowlessCrafting = false
+        if self.customApiAvailable and spellId then
+            canUseWindowlessCrafting = true
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cFF00FF00[ShowStartCraftingPrompt] Windowless crafting available - spell ID: " ..
+                tostring(spellId) .. "|r")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[ShowStartCraftingPrompt] Windowless check: API=" ..
+                tostring(self.customApiAvailable) .. ", spellId=" .. tostring(spellId) .. "|r")
+        end
+
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[ShowStartCraftingPrompt] canUseWindowlessCrafting=" ..
+            tostring(canUseWindowlessCrafting) ..
+            ", currentTrade=" .. tostring(currentTrade) .. ", profession=" .. tostring(profession) .. "|r")
+
+        -- Check if we need to switch professions (only if NOT using windowless crafting)
+        if not canUseWindowlessCrafting and currentTrade ~= profession then
+            -- Need to switch profession
+            frame.text:SetText("Switch to " .. profession .. " to craft:")
+            frame.itemText:SetText("|cFF00FF00" .. count .. "x " .. recipeName .. "|r")
+
+            -- Show switch button, hide start button
+            frame.startButton:Hide()
+            frame.switchButton:Show()
+
+            -- Set spell for profession switch
+            local professionSpellId = self.stitch:FindProfessionSpellId(profession)
+            if professionSpellId then
+                frame.switchButton:SetAttribute("spell", professionSpellId)
+
+                -- Synastria: Bind to the switch button
+                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletSwitchProfessionButton")
+                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletSwitchProfessionButton")
+
+                -- Flag that we're waiting for profession switch
+                self.stitch.waitingForProfessionSwitch = true
+                self.stitch.targetProfession = profession
+            else
+                frame.errorText:SetText("Cannot find spell for " .. profession)
+            end
+        else
+            -- Either same profession OR using windowless crafting - ready to craft!
+            if canUseWindowlessCrafting then
+                frame.text:SetText("Ready to craft (windowless):")
+            else
+                frame.text:SetText("Ready to craft in " .. profession .. ":")
+            end
+            frame.itemText:SetText("|cFF00FF00" .. count .. "x " .. recipeName .. "|r")
+
+            -- Show start button, hide switch button
             frame.switchButton:Hide()
             frame.startButton:Show()
 
-            -- Initialize conversion step if not set
-            if not frame.conversionStep then
-                frame.conversionStep = 1
-            end
-
-            -- Calculate how many times we need to use the item
-            local totalUses
-            if conversionType == "combine" then
-                -- Crystallized→Eternal: need X uses to make X Eternals
-                totalUses = queueItem.recipe.outputAmount
-            else
-                -- Eternal→Crystallized: need X uses to split X Eternals
-                totalUses = queueItem.recipe.sourceNeeded
-            end
-
-            -- Set button based on current step
-            if frame.conversionStep == 1 then
-                -- Initialize conversion tracking
-                frame.totalCombinesNeeded = totalUses
-                frame.combinesCompleted = 0
-
-                frame.startButton:SetText("Withdraw")
-                frame.startButton:SetScript("OnClick", function()
-                    if queueItem.recipe.sourceId then
-                        Skillet:WithdrawFromResourceBank(queueItem.recipe.sourceId, true)
-                        Skillet:Print("|cFF00FF00Items withdrawn.|r")
-                        frame.conversionStep = 2
-                        Skillet:ShowStartCraftingPrompt() -- Refresh dialog to update button
-                    end
-                end)
-                frame.startButton:Show()
-                frame.useItemButton:Hide()
-
-                -- Bind to start button for Withdraw step
-                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
-                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
-            elseif frame.conversionStep == 2 then
-                -- Use secure button for item usage
-                local itemName = GetItemInfo(queueItem.recipe.sourceId)
-                if itemName then
-                    frame.useItemButton:SetAttribute("item", itemName)
-                    -- Update button text to show progress
-                    local buttonText = conversionType == "combine" and "Combine" or "Split"
-                    frame.useItemButton:SetText(string.format("%s (%d/%d)", buttonText, frame.combinesCompleted,
-                        frame.totalCombinesNeeded))
-                    frame.useItemButton:Show()
-                    frame.startButton:Hide()
-                end
-
-                -- Bind to use item button for Combine/Split step
-                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletUseItemButton")
-                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletUseItemButton")
-            elseif frame.conversionStep == 3 then
-                frame.startButton:SetText("Deposit")
-                frame.startButton:SetScript("OnClick", function()
-                    Skillet:DepositToResourceBank(true)
-                    Skillet:Print("|cFF00FF00Remaining items deposited. Conversion complete!|r")
-
-                    -- Reset for next conversion and remove from queue
-                    frame.conversionStep = 1
-                    Skillet.stitch:RemoveFromQueue(1)
-
-                    -- Continue to next queue item
-                    if #Skillet.stitch.queue > 0 then
-                        Skillet.stitch:ProcessQueue()
-                    else
-                        -- Queue empty, hide dialog and clear keybindings
-                        frame:Hide()
-                        SetBinding("CTRL-MOUSEWHEELUP")
-                        SetBinding("CTRL-MOUSEWHEELDOWN")
-                        AceLibrary("AceEvent-2.0"):TriggerEvent("SkilletStitch_Queue_Complete")
-                    end
-                end)
-                frame.startButton:Show()
-                frame.useItemButton:Hide()
-
-                -- Bind to start button for Deposit step
-                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
-                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
-            end
-        else
-            -- Regular crafting workflow
-            -- Reset conversion step when not a conversion
-            frame.conversionStep = 1
-
-            -- Hide the use item button (only for conversions)
-            frame.useItemButton:Hide()
-
-            -- Restore normal start button click handler
-            frame.startButton:SetScript("OnClick", function()
-                frame.errorText:SetText("") -- Clear error message
-                frame.startButton:Disable()
-                Skillet.stitch:ProcessQueue()
-            end)
-            frame.startButton:SetText("Start")
-
-            -- Check if we need to switch professions
-            if currentTrade ~= profession then
-                -- Need to switch profession
-                frame.text:SetText("Switch to " .. profession .. " to craft:")
-                frame.itemText:SetText("|cFF00FF00" .. count .. "x " .. itemName .. "|r")
-
-                -- Show switch button, hide start button
-                frame.startButton:Hide()
-                frame.switchButton:Show()
-
-                -- Set spell for profession switch
-                local spellId = self.stitch:FindProfessionSpellId(profession)
-                if spellId then
-                    frame.switchButton:SetAttribute("spell", spellId)
-
-                    -- Synastria: Bind to the switch button
-                    SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletSwitchProfessionButton")
-                    SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletSwitchProfessionButton")
-
-                    -- Flag that we're waiting for profession switch
-                    self.stitch.waitingForProfessionSwitch = true
-                    self.stitch.targetProfession = profession
-                else
-                    frame.errorText:SetText("Cannot find spell for " .. profession)
-                end
-            else
-                -- Same profession, ready to craft
-                frame.text:SetText("Ready to craft in " .. profession .. ":")
-                frame.itemText:SetText("|cFF00FF00" .. count .. "x " .. itemName .. "|r")
-
-                -- Show start button, hide switch button
-                frame.switchButton:Hide()
-                frame.startButton:Show()
-
-                -- Synastria: Bind to the start button
-                SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
-                SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
-            end
+            -- Synastria: Bind to the start button
+            SetBindingClick("CTRL-MOUSEWHEELUP", "SkilletStartCraftingButton")
+            SetBindingClick("CTRL-MOUSEWHEELDOWN", "SkilletStartCraftingButton")
         end
     else
         frame.text:SetText("Ready to start crafting")
@@ -2751,17 +2756,20 @@ function Skillet:QueueChanged()
 
     -- Synastria: If queue is empty and start crafting prompt is visible, hide it and clear keybindings
     if self.stitch.queue and #self.stitch.queue == 0 then
-        if self.startCraftingPrompt and self.startCraftingPrompt:IsVisible() then
-            self.startCraftingPrompt:Hide()
+        -- Try using self reference first, then fall back to global
+        local promptFrame = self.startCraftingPrompt or getglobal("SkilletStartCraftingPrompt")
+        if promptFrame and promptFrame:IsVisible() then
+            promptFrame:Hide()
             -- Clear keybindings
             SetBinding("CTRL-MOUSEWHEELUP")
             SetBinding("CTRL-MOUSEWHEELDOWN")
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Queue complete! Keybindings cleared.|r")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Queue complete! Dialog closed and keybindings cleared.|r")
         end
     end
 
     -- Synastria: Clear craftability cache when queue changes
     -- Simpler and more efficient than selective invalidation for multi-step crafts
+    ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
     if lib and lib.ClearCraftabilityCache then
         lib:ClearCraftabilityCache()
@@ -2823,22 +2831,25 @@ end
 -- If there is no user supplied note, then return nil
 -- The item can be either a recipe or reagent name
 function Skillet:GetItemNote(link)
+    ---@type string|nil
     local result
 
-    if not self.db.server.notes[UnitName("player")] then
+    ---@type string|nil
+    local playerName = UnitName("player")
+
+    if not playerName or not self.db.server.notes[playerName] then
         return
     end
 
     local id = self:GetItemIDFromLink(link)
-    if id and self.db.server.notes[UnitName("player")] then
-        result = self.db.server.notes[UnitName("player")][id]
+    if id and self.db.server.notes[playerName] then
+        result = self.db.server.notes[playerName][id]
     else
         self:Print("Error: Skillet:GetItemNote() could not determine item ID for " .. link);
     end
 
     if result and result == "" then
         result = nil
-        local playerName = UnitName("player")
         if playerName and self.db.server.notes[playerName] and id then
             self.db.server.notes[playerName][id] = nil
         end
@@ -2852,12 +2863,14 @@ end
 function Skillet:SetItemNote(link, note)
     local id = self:GetItemIDFromLink(link);
 
-    if not self.db.server.notes[UnitName("player")] then
-        self.db.server.notes[UnitName("player")] = {}
+    ---@type string|nil
+    local playerName = UnitName("player")
+    if playerName and not self.db.server.notes[playerName] then
+        self.db.server.notes[playerName] = {}
     end
 
-    if id then
-        self.db.server.notes[UnitName("player")][id] = note
+    if playerName and id then
+        self.db.server.notes[playerName][id] = note
     else
         self:Print("Error: Skillet:SetItemNote() could not determine item ID for " .. link);
     end
@@ -2887,15 +2900,17 @@ function Skillet:AddItemNotesToTooltip(tooltip)
     if not id then return end;
 
     if notes_enabled then
+        ---@type string|nil
+        local currentPlayer = UnitName("player")
         local header_added = false
-        for player, notes_table in pairs(self.db.server.notes) do
-            local note = notes_table[id]
+        for player, notes_table in pairs(self.db.server.notes) do --as string, NotesTable
+            local note = notes_table[id]                          --as string|nil
             if note then
                 if not header_added then
                     tooltip:AddLine("Skillet " .. L["Notes"] .. ":")
                     header_added = true
                 end
-                if player ~= UnitName("player") then
+                if currentPlayer and player ~= currentPlayer then
                     note = GRAY_FONT_COLOR_CODE .. player .. ": " .. FONT_COLOR_CODE_CLOSE .. note
                 end
                 tooltip:AddLine(" " .. note, 1, 1, 1, 1) -- r,g,b, wrap
@@ -2937,7 +2952,17 @@ end
 
 -- sets the state of a craft specific option
 function Skillet:SetTradeSkillOption(trade, option, value)
+    if not trade then
+        return
+    end
+
+    ---@type table<string, table>
     local options = self.db.char.tradeskill_options;
+
+    if not options then
+        options = {}
+        self.db.char.tradeskill_options = options
+    end
 
     if not options[trade] then
         options[trade] = {}
@@ -3004,623 +3029,765 @@ frame:SetScript("OnEvent", function(self, event, addonName)
     end
 end)
 
--- ========================================
--- Synastria: Custom Function Testing Utility
--- ========================================
+--- Helper: Get profession name from skill ID
+function Skillet:GetProfessionNameFromSkillId(skillId)
+    local map = {
+        [171] = "Alchemy",
+        [164] = "Blacksmithing",
+        [333] = "Enchanting",
+        [202] = "Engineering",
+        [755] = "Jewelcrafting",
+        [165] = "Leatherworking",
+        [197] = "Tailoring",
+        [185] = "Cooking",
+        [129] = "First Aid",
+    }
+    return map[skillId]
+end
 
---- Test if Custom_DoProfessionRecipe exists and determine its behavior
---- Usage: /script Skillet:TestCustomDoProfessionRecipe()
-function Skillet:TestCustomDoProfessionRecipe()
+--- Deep investigation: Compare window vs API data in detail
+--- Usage: /script Skillet:InvestigateDataConsistency()
+--- NOTE: Requires a tradeskill window to be open
+function Skillet:InvestigateDataConsistency()
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Custom_DoProfessionRecipe Test|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Data Consistency Investigation|r")
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    
-    -- 1. Check if function exists
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[RESULT] Custom_DoProfessionRecipe does NOT exist|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[INFO] Using standard DoTradeSkill instead|r")
-        return
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULT] Custom_DoProfessionRecipe EXISTS!|r")
-    
-    -- 2. Check function type and details
-    local funcType = type(Custom_DoProfessionRecipe)
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. funcType .. "|r")
-    
-    -- 3. Try to get function info (Lua debug library if available)
-    if debug and debug.getinfo then
-        local info = debug.getinfo(Custom_DoProfessionRecipe)
-        if info then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[DEBUG INFO]|r")
-            DEFAULT_CHAT_FRAME:AddMessage("  Source: " .. (info.source or "unknown"))
-            DEFAULT_CHAT_FRAME:AddMessage("  Line defined: " .. (info.linedefined or "unknown"))
-            DEFAULT_CHAT_FRAME:AddMessage("  Parameters: " .. (info.nparams or "unknown"))
-            DEFAULT_CHAT_FRAME:AddMessage("  Is vararg: " .. tostring(info.isvararg or false))
-        end
-    end
-    
-    -- 4. Check current tradeskill window
+
+    -- Check if window is open
     local tradeskillName = GetTradeSkillLine()
     if not tradeskillName or tradeskillName == "" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[WARNING] No tradeskill window open|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00          Open a profession to test with real parameters|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Open a profession window first|r")
         return
     end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[TRADESKILL] " .. tradeskillName .. " is open|r")
-    
-    -- 5. Get first recipe as test
-    local numSkills = GetNumTradeSkills()
-    if numSkills and numSkills > 0 then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[AVAILABLE] " .. numSkills .. " recipes found|r")
-        
-        -- Find first craftable recipe
-        local testIndex = nil
-        local testName = nil
-        for i = 1, numSkills do
-            local name, skillType = GetTradeSkillInfo(i)
-            if skillType ~= "header" then
-                testIndex = i
-                testName = name
+
+    if not Custom_GetProfessionRecipes or not Custom_GetProfessionRecipeInfo then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom APIs not available|r")
+        return
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[PROFESSION] " .. tradeskillName .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+
+    -- Get profession ID
+    local professionMap = {
+        ["Alchemy"] = 171,
+        ["Blacksmithing"] = 164,
+        ["Enchanting"] = 333,
+        ["Engineering"] = 202,
+        ["Jewelcrafting"] = 755,
+        ["Leatherworking"] = 165,
+        ["Tailoring"] = 197,
+        ["Cooking"] = 185,
+        ["First Aid"] = 129,
+    }
+
+    local professionId = professionMap[tradeskillName]
+    if not professionId then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Unknown profession|r")
+        return
+    end
+
+    -- Build API recipe lookup
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[STEP 1] Building API recipe database...|r")
+    local apiRecipes = Custom_GetProfessionRecipes(professionId)
+    if not apiRecipes then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Could not get API recipes|r")
+        return
+    end
+
+    local apiLookup = {} -- [recipeName] = {spellId, itemId, ...}
+    local apiByItem = {} -- [itemId] = {spellId, name, ...}
+
+    for _, spellId in ipairs(apiRecipes) do
+        local skillId, name, itemId = Custom_GetProfessionRecipeInfo(spellId)
+        if name then
+            apiLookup[name] = {
+                spellId = spellId,
+                itemId = itemId,
+                skillId = skillId
+            }
+            if itemId then
+                apiByItem[itemId] = {
+                    spellId = spellId,
+                    name = name,
+                    skillId = skillId
+                }
+            end
+        end
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  |cFF00FF00✓ Indexed %d API recipes|r",
+        #apiRecipes
+    ))
+
+    -- Scan window data
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[STEP 2] Scanning window data...|r")
+
+    local windowTotal = GetNumTradeSkills()
+    local categories = {
+        headers = 0,
+        matched = 0,
+        notInAPI = 0,
+        duplicates = 0
+    }
+
+    ---@type MissingRecipeInfo[]
+    local notFoundList = {}
+    ---@type string[]
+    local headerList = {}
+    local seenRecipes = {} -- Track duplicates
+
+    for i = 1, windowTotal do
+        local name, skillType = GetTradeSkillInfo(i)
+        local link = GetTradeSkillItemLink(i)
+
+        if skillType == "header" then
+            categories.headers = categories.headers + 1
+            table.insert(headerList, name)
+        else
+            -- Check if we've seen this exact recipe before
+            if seenRecipes[name] then
+                categories.duplicates = categories.duplicates + 1
+            else
+                seenRecipes[name] = true
+
+                -- Try to find in API
+                local found = false
+
+                -- Method 1: Direct name match
+                if apiLookup[name] then
+                    categories.matched = categories.matched + 1
+                    found = true
+                else
+                    -- Method 2: Try to match by item ID from link
+                    if link then
+                        local itemId = tonumber(link:match("item:(%d+)"))
+                        if itemId and apiByItem[itemId] then
+                            categories.matched = categories.matched + 1
+                            found = true
+
+                            -- Note if name differs
+                            if apiByItem[itemId].name ~= name then
+                                -- Name mismatch but same item
+                            end
+                        end
+                    end
+                end
+
+                if not found then
+                    categories.notInAPI = categories.notInAPI + 1
+                    table.insert(notFoundList, --as MissingRecipeInfo
+                        {
+                            index = i,
+                            name = name,
+                            skillType = skillType,
+                            link = link
+                        })
+                end
+            end
+        end
+    end
+
+    -- Report findings
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[ANALYSIS RESULTS]|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━|r")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFFFFFF  Total window entries:|r %d",
+        windowTotal
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFFFFFF  Total API recipes:|r %d",
+        #apiRecipes
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[BREAKDOWN]|r")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  |cFF888888Headers/Categories:|r %d",
+        categories.headers
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  |cFF00FF00Matched in API:|r %d",
+        categories.matched
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  |cFFFF8800Duplicates:|r %d",
+        categories.duplicates
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  |cFFFF0000Not in API:|r %d",
+        categories.notInAPI
+    ))
+
+    -- Calculate expected total
+    local expectedTotal = categories.headers + categories.matched + categories.duplicates + categories.notInAPI
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFFFFFF  Calculation: %d + %d + %d + %d = %d|r",
+        categories.headers, categories.matched, categories.duplicates,
+        categories.notInAPI, expectedTotal
+    ))
+
+    if expectedTotal == windowTotal then
+        DEFAULT_CHAT_FRAME:AddMessage("  |cFF00FF00✓ Totals match!|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF0000✗ Totals don't match!|r")
+    end
+
+    -- Show headers
+    if #headerList > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[HEADERS] (Cannot be crafted)|r")
+        for i, header in ipairs(headerList) do --as string
+            if i <= 10 then
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("  %d. %s", i, header))
+            elseif i == 11 then
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("  ... and %d more", #headerList - 10))
                 break
             end
         end
-        
-        if testIndex then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[TEST RECIPE] Index " .. testIndex .. ": " .. testName .. "|r")
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[NOTE] To test the function, you would call:|r")
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00        Custom_DoProfessionRecipe(" .. testIndex .. ", 1)|r")
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00        (Not executed automatically to prevent unwanted crafts)|r")
-            
-            -- Check cooldown for comparison
-            local cooldown = GetTradeSkillCooldown(testIndex)
-            if cooldown and cooldown > 0 then
-                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[COOLDOWN] Recipe has " .. SecondsToTime(cooldown) .. " remaining|r")
-            else
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COOLDOWN] No cooldown|r")
-            end
-        end
     end
-    
-    -- 6. Suggested testing commands
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[MANUAL TESTING COMMANDS]|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF  Test call:|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00  /script Custom_DoProfessionRecipe(INDEX, 1)|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF  Compare to standard:|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00  /script DoTradeSkill(INDEX, 1)|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-end
 
---- Monitor both DoTradeSkill and Custom_DoProfessionRecipe calls
---- Usage: /script Skillet:MonitorCraftCalls(true)  -- enable
----        /script Skillet:MonitorCraftCalls(false) -- disable
-function Skillet:MonitorCraftCalls(enable)
-    if enable then
-        if not self.originalDoTradeSkill then
-            -- Hook DoTradeSkill
-            self.originalDoTradeSkill = DoTradeSkill
-            DoTradeSkill = function(index, numCasts)
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[MONITOR] DoTradeSkill(" .. tostring(index) .. ", " .. tostring(numCasts) .. ") CALLED|r")
-                local result1, result2, result3 = self.originalDoTradeSkill(index, numCasts)
-                if result1 ~= nil or result2 ~= nil or result3 ~= nil then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[MONITOR] DoTradeSkill RETURNED: " .. tostring(result1) .. ", " .. tostring(result2) .. ", " .. tostring(result3) .. "|r")
-                else
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[MONITOR] DoTradeSkill RETURNED: nil|r")
-                end
-                return result1, result2, result3
-            end
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[MONITOR] DoTradeSkill monitoring ENABLED|r")
-        end
-        
-        if Custom_DoProfessionRecipe and not self.originalCustomDoProfessionRecipe then
-            -- Hook Custom_DoProfessionRecipe
-            self.originalCustomDoProfessionRecipe = Custom_DoProfessionRecipe
-            Custom_DoProfessionRecipe = function(...)
-                local args = {...}
-                local argStr = ""
-                for i, v in ipairs(args) do
-                    argStr = argStr .. tostring(v)
-                    if i < #args then argStr = argStr .. ", " end
-                end
-                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe(" .. argStr .. ") CALLED|r")
-                
-                -- Capture all return values
-                local results = {self.originalCustomDoProfessionRecipe(...)}
-                
-                -- Display return values
-                if #results > 0 then
-                    local retStr = ""
-                    for i, v in ipairs(results) do
-                        retStr = retStr .. tostring(v)
-                        if i < #results then retStr = retStr .. ", " end
-                    end
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe RETURNED: " .. retStr .. "|r")
-                else
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe RETURNED: nil|r")
-                end
-                
-                return unpack(results)
-            end
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[MONITOR] Custom_DoProfessionRecipe monitoring ENABLED|r")
-        elseif not Custom_DoProfessionRecipe then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[MONITOR] Custom_DoProfessionRecipe does not exist - cannot monitor|r")
-        end
-    else
-        -- Restore originals
-        if self.originalDoTradeSkill then
-            DoTradeSkill = self.originalDoTradeSkill
-            self.originalDoTradeSkill = nil
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[MONITOR] DoTradeSkill monitoring DISABLED|r")
-        end
-        
-        if self.originalCustomDoProfessionRecipe then
-            Custom_DoProfessionRecipe = self.originalCustomDoProfessionRecipe
-            self.originalCustomDoProfessionRecipe = nil
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[MONITOR] Custom_DoProfessionRecipe monitoring DISABLED|r")
-        end
-    end
-end
-
---- Compare Custom_DoProfessionRecipe vs DoTradeSkill side-by-side
---- Usage: /script Skillet:CompareCustomVsStandard(15, 1)
-function Skillet:CompareCustomVsStandard(index, numCasts)
-    index = index or 1
-    numCasts = numCasts or 1
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Comparing Craft Functions|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    
-    local tradeskillName = GetTradeSkillLine()
-    if not tradeskillName or tradeskillName == "" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
-        return
-    end
-    
-    local recipeName, skillType = GetTradeSkillInfo(index)
-    local cooldown = GetTradeSkillCooldown(index)
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE] Index " .. index .. ": " .. (recipeName or "Unknown") .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. (skillType or "unknown") .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN] " .. (cooldown and (cooldown > 0 and SecondsToTime(cooldown) or "None") or "None") .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[CASTS] " .. numCasts .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    
-    -- Capture item count before
-    local itemLink = GetTradeSkillItemLink(index)
-    local itemCountBefore = 0
-    if itemLink then
-        itemCountBefore = GetItemCount(itemLink, true)
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[ITEM COUNT BEFORE] " .. itemCountBefore .. "|r")
-    end
-    
-    -- Test Custom_DoProfessionRecipe
-    if Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[TEST 1] Custom_DoProfessionRecipe exists|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800         Type: " .. type(Custom_DoProfessionRecipe) .. "|r")
-        
-        -- Try to call it and capture what happens
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800         Calling Custom_DoProfessionRecipe(" .. index .. ", " .. numCasts .. ")...|r")
-        local success, result1, result2, result3 = pcall(Custom_DoProfessionRecipe, index, numCasts)
-        
-        if success then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00         SUCCESS! Returned: " .. tostring(result1) .. ", " .. tostring(result2) .. ", " .. tostring(result3) .. "|r")
-        else
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000         ERROR: " .. tostring(result1) .. "|r")
-        end
-        
-        -- Check if item count changed
-        if itemLink then
-            C_Timer.After(0.5, function()
-                local itemCountAfter = GetItemCount(itemLink, true)
-                if itemCountAfter > itemCountBefore then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULT] Item crafted! Count changed: " .. itemCountBefore .. " -> " .. itemCountAfter .. "|r")
-                else
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[RESULT] No item count change detected (might be queued or failed)|r")
-                end
-            end)
-        end
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[TEST 1] Custom_DoProfessionRecipe does NOT exist|r")
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    
-    -- Test DoTradeSkill for comparison
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[TEST 2] DoTradeSkill (standard WoW API)|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF         Type: " .. type(DoTradeSkill) .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00         NOTE: Not calling to prevent unwanted craft|r")
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-end
-
---- Test Custom_DoProfessionRecipe with different recipe types
---- Usage: /script Skillet:TestCustomWithRecipeTypes()
-function Skillet:TestCustomWithRecipeTypes()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Testing Custom Function By Recipe Type|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
-        return
-    end
-    
-    local tradeskillName = GetTradeSkillLine()
-    if not tradeskillName or tradeskillName == "" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
-        return
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PROFESSION] " .. tradeskillName .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    
-    local numSkills = GetNumTradeSkills()
-    local testsByType = {}
-    
-    -- Scan all recipes and categorize
-    for i = 1, numSkills do
-        local name, skillType = GetTradeSkillInfo(i)
-        if skillType ~= "header" then
-            local cooldown = GetTradeSkillCooldown(i)
-            local hasCooldown = cooldown and cooldown > 0
-            local isTransmute = name and name:match("^Transmute:")
-            
-            local category = skillType
-            if hasCooldown then
-                category = category .. " (cooldown)"
-            end
-            if isTransmute then
-                category = category .. " (transmute)"
-            end
-            
-            if not testsByType[category] then
-                testsByType[category] = {index = i, name = name}
-            end
-        end
-    end
-    
-    -- Display findings
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE TYPES FOUND]|r")
-    for category, info in pairs(testsByType) do
-        DEFAULT_CHAT_FRAME:AddMessage("  |cFFFFAA00" .. category .. ":|r " .. info.name .. " (index " .. info.index .. ")")
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[SUGGESTION] Test specific types with:|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00/script Skillet:CompareCustomVsStandard(INDEX, 1)|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-end
-
---- Deep dive into Custom_DoProfessionRecipe internals
---- Usage: /script Skillet:InspectCustomFunction()
-function Skillet:InspectCustomFunction()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Custom_DoProfessionRecipe Deep Inspection|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Function does not exist|r")
-        return
-    end
-    
-    -- Check if it's the same as DoTradeSkill
-    if Custom_DoProfessionRecipe == DoTradeSkill then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[FINDING] Custom_DoProfessionRecipe IS DoTradeSkill (same function)|r")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[FINDING] Custom_DoProfessionRecipe is a DIFFERENT function|r")
-    end
-    
-    -- Try to dump the function as a string (may not work)
-    local funcStr = tostring(Custom_DoProfessionRecipe)
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TOSTRING] " .. funcStr .. "|r")
-    
-    -- Check debug info
-    if debug and debug.getinfo then
-        local info = debug.getinfo(Custom_DoProfessionRecipe)
-        if info then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[DEBUG INFO]|r")
-            DEFAULT_CHAT_FRAME:AddMessage("  what: " .. tostring(info.what))
-            DEFAULT_CHAT_FRAME:AddMessage("  source: " .. tostring(info.source))
-            DEFAULT_CHAT_FRAME:AddMessage("  short_src: " .. tostring(info.short_src))
-            DEFAULT_CHAT_FRAME:AddMessage("  linedefined: " .. tostring(info.linedefined))
-            DEFAULT_CHAT_FRAME:AddMessage("  lastlinedefined: " .. tostring(info.lastlinedefined))
-            DEFAULT_CHAT_FRAME:AddMessage("  nparams: " .. tostring(info.nparams))
-            DEFAULT_CHAT_FRAME:AddMessage("  isvararg: " .. tostring(info.isvararg))
-            DEFAULT_CHAT_FRAME:AddMessage("  nups: " .. tostring(info.nups))
-        end
-        
-        -- Try to get upvalues
+    -- Show recipes not in API
+    if #notFoundList > 0 then
         DEFAULT_CHAT_FRAME:AddMessage("")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[UPVALUES]|r")
-        local i = 1
-        while true do
-            local name, value = debug.getupvalue(Custom_DoProfessionRecipe, i)
-            if not name then break end
-            DEFAULT_CHAT_FRAME:AddMessage("  " .. name .. " = " .. tostring(value))
-            i = i + 1
-        end
-        if i == 1 then
-            DEFAULT_CHAT_FRAME:AddMessage("  (none)")
-        end
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[CONCLUSION] This is a SERVER-SIDE function.|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Client sends parameters, server handles crafting.|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Use behavior tests to understand its differences.|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-end
-
---- Test server-side behavior of Custom_DoProfessionRecipe
---- Usage: /script Skillet:TestServerSideBehavior(recipeIndex)
-function Skillet:TestServerSideBehavior(recipeIndex)
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
-        return
-    end
-    
-    local tradeskillName = GetTradeSkillLine()
-    if not tradeskillName or tradeskillName == "" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
-        return
-    end
-    
-    recipeIndex = recipeIndex or 1
-    local recipeName, skillType = GetTradeSkillInfo(recipeIndex)
-    local cooldownBefore = GetTradeSkillCooldown(recipeIndex)
-    local itemLink = GetTradeSkillItemLink(recipeIndex)
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Server-Side Behavior Test|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE] " .. (recipeName or "Unknown") .. " (index " .. recipeIndex .. ")|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. (skillType or "unknown") .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN BEFORE] " .. (cooldownBefore and (cooldownBefore > 0 and SecondsToTime(cooldownBefore) or "None") or "None") .. "|r")
-    
-    local itemCountBefore = 0
-    if itemLink then
-        itemCountBefore = GetItemCount(itemLink, true)
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[ITEM COUNT BEFORE] " .. itemCountBefore .. "|r")
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800>>> Calling Custom_DoProfessionRecipe(" .. recipeIndex .. ", 1) <<<|r")
-    Custom_DoProfessionRecipe(recipeIndex, 1)
-    
-    -- Check results after delay
-    C_Timer.After(1.5, function()
-        DEFAULT_CHAT_FRAME:AddMessage("")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULTS AFTER 1.5s]|r")
-        
-        local cooldownAfter = GetTradeSkillCooldown(recipeIndex)
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN AFTER] " .. (cooldownAfter and (cooldownAfter > 0 and SecondsToTime(cooldownAfter) or "None") or "None") .. "|r")
-        
-        if itemLink then
-            local itemCountAfter = GetItemCount(itemLink, true)
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[ITEM COUNT AFTER] " .. itemCountAfter .. "|r")
-            
-            if itemCountAfter > itemCountBefore then
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[SUCCESS] Item crafted! +" .. (itemCountAfter - itemCountBefore) .. " items|r")
-            else
-                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[NO CHANGE] Item count unchanged|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[NOT IN API] Recipes in window but not in API:|r")
+        for i, recipe in ipairs(notFoundList) do
+            if i <= 20 then
+                local itemId = recipe.link and tonumber(recipe.link:match("item:(%d+)")) or "nil"
+                DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                    "  %d. [%d] %s (type:%s, item:%s)",
+                    i, recipe.index, recipe.name, recipe.skillType, tostring(itemId)
+                ))
+            elseif i == 21 then
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("  ... and %d more", #notFoundList - 20))
+                break
             end
         end
-        
-        if cooldownBefore ~= cooldownAfter then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COOLDOWN CHANGED] " .. 
-                (cooldownBefore and SecondsToTime(cooldownBefore) or "0") .. " -> " .. 
-                (cooldownAfter and SecondsToTime(cooldownAfter) or "0") .. "|r")
-        end
-        
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    end)
+
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[INVESTIGATION NEEDED]|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFThese recipes appear in the window but not in API.|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFPossible reasons:|r")
+        DEFAULT_CHAT_FRAME:AddMessage("  • Specialty/variant recipes (e.g., Mooncloth)")
+        DEFAULT_CHAT_FRAME:AddMessage("  • Quest-learned recipes")
+        DEFAULT_CHAT_FRAME:AddMessage("  • Faction-specific recipes")
+        DEFAULT_CHAT_FRAME:AddMessage("  • Name mismatches (different localization)")
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+
+    -- Summary
+    local uniqueRecipes = categories.matched + categories.notInAPI
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[SUMMARY]|r")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  Unique craftable recipes: %d",
+        uniqueRecipes
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  API coverage: %.1f%% (%d/%d)",
+        (categories.matched / uniqueRecipes * 100), categories.matched, uniqueRecipes
+    ))
+
+    if categories.notInAPI == 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("  |cFF00FF00✓ PERFECT API COVERAGE|r")
+    elseif categories.notInAPI <= 5 then
+        DEFAULT_CHAT_FRAME:AddMessage("  |cFFFFAA00! Minor gaps in API coverage|r")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF8800! Significant gaps in API coverage|r")
+    end
 end
 
---- Compare Custom_DoProfessionRecipe vs DoTradeSkill on same recipe
---- Tests if they behave differently (especially for cooldowns)
---- Usage: /script Skillet:CompareBehaviorDifferences(recipeIndex)
-function Skillet:CompareBehaviorDifferences(recipeIndex)
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
-        return
-    end
-    
+--- Investigate WHY recipes are missing from API
+--- Usage: /script Skillet:InvestigateMissingRecipes()
+--- NOTE: Requires a tradeskill window to be open
+function Skillet:InvestigateMissingRecipes()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Missing Recipe Investigation|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+
+    -- Check if window is open
     local tradeskillName = GetTradeSkillLine()
     if not tradeskillName or tradeskillName == "" then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
         return
     end
-    
-    recipeIndex = recipeIndex or 1
-    local recipeName, skillType = GetTradeSkillInfo(recipeIndex)
-    local cooldown = GetTradeSkillCooldown(recipeIndex)
-    local isTransmute = recipeName and recipeName:match("^Transmute:")
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Behavior Comparison Test|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[RECIPE] " .. (recipeName or "Unknown") .. " (index " .. recipeIndex .. ")|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TYPE] " .. (skillType or "unknown") .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TRANSMUTE] " .. tostring(isTransmute or false) .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[COOLDOWN] " .. (cooldown and (cooldown > 0 and SecondsToTime(cooldown) or "None") or "None") .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    
-    if cooldown and cooldown > 0 then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[HYPOTHESIS] This recipe has a cooldown.|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800Does Custom_DoProfessionRecipe bypass it?|r")
-        DEFAULT_CHAT_FRAME:AddMessage("")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[TEST] Try calling Custom_DoProfessionRecipe(" .. recipeIndex .. ", 1)|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00If it crafts despite cooldown, we found the difference!|r")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[INFO] No cooldown - both functions should work the same|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[SUGGESTION] Find a cooldown recipe to test properly|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Use: /script Skillet:TestCustomWithRecipeTypes()|r")
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-end
 
---- Test with transmutation recipes specifically
---- Usage: /script Skillet:TestTransmuteBehavior()
-function Skillet:TestTransmuteBehavior()
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
+    if not Custom_GetProfessionRecipes or not Custom_GetProfessionRecipeInfo then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom APIs not available|r")
         return
     end
-    
-    local tradeskillName = GetTradeSkillLine()
-    if not tradeskillName or tradeskillName == "" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
-        return
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Transmute Recipe Finder|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    
-    local numSkills = GetNumTradeSkills()
-    local transmuteFound = false
-    
-    for i = 1, numSkills do
-        local name, skillType = GetTradeSkillInfo(i)
-        if name and name:match("^Transmute:") then
-            local cooldown = GetTradeSkillCooldown(i)
-            local hasCooldown = cooldown and cooldown > 0
-            local status = hasCooldown and "|cFFFF0000[ON COOLDOWN: " .. SecondsToTime(cooldown) .. "]|r" or "|cFF00FF00[READY]|r"
-            
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[" .. i .. "]|r " .. name .. " " .. status)
-            transmuteFound = true
-        end
-    end
-    
-    if not transmuteFound then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00No transmute recipes found in current profession|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Try opening Alchemy to test transmutes|r")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[TEST] Use index above with:|r")
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00/script Skillet:TestServerSideBehavior(INDEX)|r")
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-end
 
---- Comprehensive systematic test of Custom_DoProfessionRecipe
---- Tests: normal recipe, cooldown recipe, transmute, no materials, etc.
---- Usage: /script Skillet:SystematicCustomTest()
-function Skillet:SystematicCustomTest()
-    if not Custom_DoProfessionRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom_DoProfessionRecipe does not exist|r")
-        return
-    end
-    
-    local tradeskillName = GetTradeSkillLine()
-    if not tradeskillName or tradeskillName == "" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Open a profession window first|r")
-        return
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Systematic Custom Function Test|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Profession: " .. tradeskillName .. "|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
-    DEFAULT_CHAT_FRAME:AddMessage("")
-    
-    local numSkills = GetNumTradeSkills()
-    local testCases = {
-        normalRecipe = nil,
-        cooldownRecipe = nil,
-        transmuteRecipe = nil,
-        transmuteWithCooldown = nil
+    local professionMap = {
+        ["Alchemy"] = 171,
+        ["Blacksmithing"] = 164,
+        ["Enchanting"] = 333,
+        ["Engineering"] = 202,
+        ["Jewelcrafting"] = 755,
+        ["Leatherworking"] = 165,
+        ["Tailoring"] = 197,
+        ["Cooking"] = 185,
+        ["First Aid"] = 129,
     }
-    
-    -- Find one of each type
-    for i = 1, numSkills do
-        local name, skillType = GetTradeSkillInfo(i)
-        if skillType ~= "header" then
-            local cooldown = GetTradeSkillCooldown(i)
-            local hasCooldown = cooldown and cooldown > 0
-            local isTransmute = name and name:match("^Transmute:")
-            
-            if not testCases.normalRecipe and not hasCooldown and not isTransmute then
-                testCases.normalRecipe = {index = i, name = name}
-            end
-            
-            if not testCases.cooldownRecipe and hasCooldown and not isTransmute then
-                testCases.cooldownRecipe = {index = i, name = name, cooldown = cooldown}
-            end
-            
-            if not testCases.transmuteRecipe and isTransmute and not hasCooldown then
-                testCases.transmuteRecipe = {index = i, name = name}
-            end
-            
-            if not testCases.transmuteWithCooldown and isTransmute and hasCooldown then
-                testCases.transmuteWithCooldown = {index = i, name = name, cooldown = cooldown}
+
+    local professionId = professionMap[tradeskillName]
+    if not professionId then return end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[PROFESSION] " .. tradeskillName .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+
+    -- Build API lookup
+    ---@type number[]|nil
+    local apiRecipes = Custom_GetProfessionRecipes(professionId)
+    local apiLookup = {}
+    local apiByItem = {}
+
+    if apiRecipes then
+        ---@type number[]
+        local spellIds = apiRecipes
+        for _, spellId in ipairs(spellIds) do
+            local skillId, name, itemId = Custom_GetProfessionRecipeInfo(spellId)
+            if name then
+                apiLookup[name] = spellId
+                if itemId then
+                    apiByItem[itemId] = spellId
+                end
             end
         end
     end
-    
-    -- Display what we found
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TEST CASES FOUND]|r")
-    
-    if testCases.normalRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Normal Recipe:|r " .. testCases.normalRecipe.name .. " [" .. testCases.normalRecipe.index .. "]")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000✗ Normal Recipe: Not found|r")
+
+    -- Find missing recipes
+    ---@type MissingRecipeInfo[]
+    local missing = {}
+    local windowTotal = GetNumTradeSkills()
+
+    for i = 1, windowTotal do
+        local name, skillType = GetTradeSkillInfo(i)
+        local link = GetTradeSkillItemLink(i)
+
+        if skillType ~= "header" then
+            local found = apiLookup[name]
+
+            if not found and link then
+                local itemId = tonumber(link:match("item:(%d+)"))
+                if itemId then
+                    found = apiByItem[itemId]
+                end
+            end
+
+            if not found then
+                table.insert(missing, {
+                    index = i,
+                    name = name,
+                    skillType = skillType,
+                    link = link
+                })
+            end
+        end
     end
-    
-    if testCases.cooldownRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Cooldown Recipe:|r " .. testCases.cooldownRecipe.name .. " [" .. testCases.cooldownRecipe.index .. "]")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00✗ Cooldown Recipe: Not found|r")
-    end
-    
-    if testCases.transmuteRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Transmute Recipe:|r " .. testCases.transmuteRecipe.name .. " [" .. testCases.transmuteRecipe.index .. "]")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00✗ Transmute Recipe: Not found|r")
-    end
-    
-    if testCases.transmuteWithCooldown then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00✓ Transmute+Cooldown:|r " .. testCases.transmuteWithCooldown.name .. " [" .. testCases.transmuteWithCooldown.index .. "]")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00✗ Transmute+Cooldown: Not found|r")
-    end
-    
+
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFFFFFF[FOUND] %d missing recipes|r",
+        #missing
+    ))
     DEFAULT_CHAT_FRAME:AddMessage("")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[RECOMMENDED TESTS]|r")
-    
-    if testCases.normalRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF1. Normal recipe:|r")
-        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.normalRecipe.index .. ")|r")
+
+    if #missing == 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[RESULT] No missing recipes!|r")
+        return
     end
-    
-    if testCases.cooldownRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF2. Recipe with cooldown (KEY TEST):|r")
-        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.cooldownRecipe.index .. ")|r")
-        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFF8800→ Does it bypass cooldown?|r")
-    end
-    
-    if testCases.transmuteRecipe then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF3. Transmute without cooldown:|r")
-        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.transmuteRecipe.index .. ")|r")
-    end
-    
-    if testCases.transmuteWithCooldown then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF4. Transmute WITH cooldown (CRITICAL TEST):|r")
-        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFFAA00/script Skillet:TestServerSideBehavior(" .. testCases.transmuteWithCooldown.index .. ")|r")
-        DEFAULT_CHAT_FRAME:AddMessage("   |cFFFF8800→ Does it bypass transmute cooldown?|r")
-    end
-    
+
+    -- Investigate each missing recipe
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[INVESTIGATING] First 10 missing recipes...|r")
     DEFAULT_CHAT_FRAME:AddMessage("")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[HYPOTHESIS TO TEST]|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFIf Custom_DoProfessionRecipe can craft recipes|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFthat are on cooldown, we can use it to:|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  • Queue transmutes without cooldown restrictions|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  • Bypass daily/weekly craft limits|r")
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  • Process queue without waiting|r")
+
+    for i = 1, math.min(10, #missing) do
+        local recipe = missing[i] --as MissingRecipeInfo
+        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+            "|cFFFFAA00[%d] %s|r",
+            i, recipe.name
+        ))
+
+        -- Get window data
+        local numReagents = GetTradeSkillNumReagents(recipe.index)
+        local cooldown = GetTradeSkillCooldown(recipe.index)
+        local numMade = GetTradeSkillNumMade(recipe.index)
+        local minMade, maxMade = numMade, numMade
+
+        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+            "  Window Data: type=%s, reagents=%s, cooldown=%s, makes=%s",
+            recipe.skillType,
+            tostring(numReagents),
+            tostring(cooldown and (cooldown > 0) or false),
+            tostring(numMade)
+        ))
+
+        -- Try to find via item ID
+        if recipe.link then
+            local itemId = tonumber(recipe.link:match("item:(%d+)"))
+            if itemId then
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("  ItemId: %d", itemId))
+
+                -- Try reverse lookup
+                if Custom_GetProfessionRecipeFromCraftedItem then
+                    local spellId = Custom_GetProfessionRecipeFromCraftedItem(itemId)
+                    if spellId then
+                        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                            "  |cFF00FF00✓ Found via reverse lookup: SpellId %d|r",
+                            spellId
+                        ))
+
+                        -- Check if this spell is in our API list
+                        local found = false
+                        if apiRecipes then
+                            ---@type number[]
+                            local apiSpellIds = apiRecipes
+                            for _, apiSpellId in ipairs(apiSpellIds) do
+                                if apiSpellId == spellId then
+                                    found = true
+                                    break
+                                end
+                            end
+                        end
+
+                        if found then
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                                "  |cFFFF8800⚠ SpellId IS in API list but name didn't match!|r")
+                        else
+                            DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF0000✗ SpellId NOT in API list|r")
+                        end
+
+                        -- Get API info for this spell
+                        local skillId, apiName, apiItemId = Custom_GetProfessionRecipeInfo(spellId)
+                        if apiName then
+                            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                                "  API Name: '%s' vs Window Name: '%s'",
+                                apiName, recipe.name
+                            ))
+                            if apiName ~= recipe.name then
+                                DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF8800⚠ NAME MISMATCH!|r")
+                            end
+                        end
+                    else
+                        DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF0000✗ Reverse lookup returned nil|r")
+                    end
+                end
+            else
+                DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF8800⚠ No item ID in link|r")
+            end
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("  |cFFFF8800⚠ No item link|r")
+        end
+
+        DEFAULT_CHAT_FRAME:AddMessage("")
+    end
+
+    -- Pattern analysis
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[PATTERN ANALYSIS]|r")
+
+    local patterns = {
+        sharpening = 0,
+        weightstone = 0,
+        skeleton = 0,
+        chain = 0,
+        plating = 0,
+        socket = 0,
+        other = 0
+    }
+
+    ---@type MissingRecipeInfo[]
+    for _, recipe in ipairs(missing) do --as MissingRecipeInfo
+        local nameLower = string.lower(recipe.name)
+        if string.find(nameLower, "sharpening") then
+            patterns.sharpening = patterns.sharpening + 1
+        elseif string.find(nameLower, "weightstone") then
+            patterns.weightstone = patterns.weightstone + 1
+        elseif string.find(nameLower, "skeleton") then
+            patterns.skeleton = patterns.skeleton + 1
+        elseif string.find(nameLower, "chain") then
+            patterns.chain = patterns.chain + 1
+        elseif string.find(nameLower, "plating") then
+            patterns.plating = patterns.plating + 1
+        elseif string.find(nameLower, "socket") then
+            patterns.socket = patterns.socket + 1
+        else
+            patterns.other = patterns.other + 1
+        end
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("  Sharpening Stones: " .. patterns.sharpening)
+    DEFAULT_CHAT_FRAME:AddMessage("  Weightstones: " .. patterns.weightstone)
+    DEFAULT_CHAT_FRAME:AddMessage("  Skeleton Keys: " .. patterns.skeleton)
+    DEFAULT_CHAT_FRAME:AddMessage("  Chains: " .. patterns.chain)
+    DEFAULT_CHAT_FRAME:AddMessage("  Plating: " .. patterns.plating)
+    DEFAULT_CHAT_FRAME:AddMessage("  Socket items: " .. patterns.socket)
+    DEFAULT_CHAT_FRAME:AddMessage("  Other weapons/items: " .. patterns.other)
+
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[HYPOTHESIS]|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFThe API may be filtering out:|r")
+    DEFAULT_CHAT_FRAME:AddMessage("  • Temporary item enhancements")
+    DEFAULT_CHAT_FRAME:AddMessage("  • Non-equippable items")
+    DEFAULT_CHAT_FRAME:AddMessage("  • Utility items (keys, etc.)")
+    DEFAULT_CHAT_FRAME:AddMessage("  • Or using different spell ID mapping|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+--- Check if missing recipes exist in the global (-1) dataset
+--- Usage: /script Skillet:CheckMissingInGlobalDataset()
+--- NOTE: Requires a tradeskill window to be open
+function Skillet:CheckMissingInGlobalDataset()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF   Global Dataset Check|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+
+    -- Check if window is open
+    local tradeskillName = GetTradeSkillLine()
+    if not tradeskillName or tradeskillName == "" then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] No tradeskill window open|r")
+        return
+    end
+
+    if not Custom_GetProfessionRecipes or not Custom_GetProfessionRecipeInfo then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ERROR] Custom APIs not available|r")
+        return
+    end
+
+    local professionMap = {
+        ["Alchemy"] = 171,
+        ["Blacksmithing"] = 164,
+        ["Enchanting"] = 333,
+        ["Engineering"] = 202,
+        ["Jewelcrafting"] = 755,
+        ["Leatherworking"] = 165,
+        ["Tailoring"] = 197,
+        ["Cooking"] = 185,
+        ["First Aid"] = 129,
+    }
+
+    local professionId = professionMap[tradeskillName]
+    if not professionId then return end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[PROFESSION] " .. tradeskillName .. " (ID: " .. professionId .. ")|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+
+    -- Get profession-specific recipes
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[STEP 1] Getting profession-specific recipes...|r")
+    local profRecipes = Custom_GetProfessionRecipes(professionId) or {}
+    local profLookup = {}
+    local profByItem = {}
+
+    ---@type number[]
+    local profSpellIds = profRecipes
+    for _, spellId in ipairs(profSpellIds) do
+        local skillId, name, itemId = Custom_GetProfessionRecipeInfo(spellId)
+        if name then
+            profLookup[name] = spellId
+            if itemId then
+                profByItem[itemId] = spellId
+            end
+        end
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  ✓ Indexed %d recipes", #profRecipes))
+
+    -- Get ALL recipes globally
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[STEP 2] Getting ALL recipes (professionId = -1)...|r")
+    local allRecipes = Custom_GetProfessionRecipes(-1) or {}
+    local globalLookup = {}
+    local globalByItem = {}
+    local globalBySpell = {}
+
+    ---@type number[]
+    local allSpellIds = allRecipes
+    for _, spellId in ipairs(allSpellIds) do
+        local skillId, name, itemId = Custom_GetProfessionRecipeInfo(spellId)
+        if name then
+            globalLookup[name] = { spellId = spellId, skillId = skillId, itemId = itemId }
+            if itemId then
+                globalByItem[itemId] = { spellId = spellId, skillId = skillId, name = name }
+            end
+            globalBySpell[spellId] = { name = name, skillId = skillId, itemId = itemId }
+        end
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  ✓ Indexed %d global recipes", #allRecipes))
+
+    -- Find missing recipes in window
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[STEP 3] Finding missing recipes from window...|r")
+    ---@type MissingRecipeInfo[]
+    local missing = {}
+    local windowTotal = GetNumTradeSkills()
+
+    for i = 1, windowTotal do
+        local name, skillType = GetTradeSkillInfo(i)
+        local link = GetTradeSkillItemLink(i)
+
+        if skillType ~= "header" then
+            local found = profLookup[name]
+
+            if not found and link then
+                local itemId = tonumber(link:match("item:(%d+)"))
+                if itemId then
+                    found = profByItem[itemId]
+                end
+            end
+
+            if not found then
+                table.insert(missing, {
+                    index = i,
+                    name = name,
+                    skillType = skillType,
+                    link = link
+                })
+            end
+        end
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  ✓ Found %d missing recipes", #missing))
+
+    -- Check if missing recipes exist in global dataset
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[STEP 4] Checking missing recipes in global dataset...|r")
+    DEFAULT_CHAT_FRAME:AddMessage("")
+
+    local foundInGlobal = 0
+    local wrongProfession = 0
+    local notFoundAnywhere = 0
+    ---@type WrongProfessionInfo[]
+    local wrongProfessionList = {}
+    ---@type string[]
+    local notFoundList = {}
+
+    for i, recipe in ipairs(missing) do
+        local foundGlobally = false
+        ---@type table|nil
+        local globalData = nil
+
+        -- Check by name
+        if globalLookup[recipe.name] then
+            foundGlobally = true
+            globalData = globalLookup[recipe.name]
+        end
+
+        -- Check by item ID
+        if not foundGlobally and recipe.link then
+            local itemId = tonumber(recipe.link:match("item:(%d+)"))
+            if itemId and globalByItem[itemId] then
+                foundGlobally = true
+                globalData = globalByItem[itemId]
+            end
+        end
+
+        if foundGlobally and globalData then
+            foundInGlobal = foundInGlobal + 1
+
+            -- Check if it's under the correct profession
+            local skillId = globalData.skillId or 0
+            if skillId ~= professionId then
+                wrongProfession = wrongProfession + 1
+                table.insert(wrongProfessionList, {
+                    name = recipe.name,
+                    expectedProf = professionId,
+                    actualProf = skillId,
+                    spellId = globalData.spellId
+                })
+            end
+        else
+            notFoundAnywhere = notFoundAnywhere + 1
+            if i <= 20 then
+                table.insert(notFoundList, recipe.name)
+            end
+        end
+    end
+
+    -- Report results
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[RESULTS]|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━|r")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFFFFFF  Missing from profession list:|r %d",
+        #missing
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFF00FF00  Found in global dataset:|r %d",
+        foundInGlobal
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFF8800  Under wrong profession:|r %d",
+        wrongProfession
+    ))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "|cFFFF0000  Not found anywhere:|r %d",
+        notFoundAnywhere
+    ))
+
+    -- Show wrong profession details
+    if #wrongProfessionList > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[WRONG PROFESSION] Recipes under wrong profession ID:|r")
+        for i, item in ipairs(wrongProfessionList) do
+            if i <= 10 then
+                local profName = self:GetProfessionNameFromSkillId(item.actualProf)
+                DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                    "  %d. %s → Listed under: %s (%d)",
+                    i, item.name, profName or "Unknown", item.actualProf
+                ))
+            elseif i == 11 then
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("  ... and %d more", #wrongProfessionList - 10))
+                break
+            end
+        end
+    end
+
+    -- Show not found anywhere
+    if #notFoundList > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[NOT FOUND ANYWHERE] Missing from all API data:|r")
+        for i, name in ipairs(notFoundList) do
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("  %d. %s", i, name))
+        end
+        if notFoundAnywhere > #notFoundList then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("  ... and %d more", notFoundAnywhere - #notFoundList))
+        end
+    end
+
+    -- Summary
+    DEFAULT_CHAT_FRAME:AddMessage("")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[ANALYSIS]|r")
+
+    local coverage = (foundInGlobal / #missing) * 100
+    DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "  Global dataset coverage: %.1f%% (%d/%d)",
+        coverage, foundInGlobal, #missing
+    ))
+
+    if wrongProfession > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800[ISSUE] Some recipes are categorized under wrong profession!|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFThis is a server-side API bug.|r")
+    end
+
+    if notFoundAnywhere > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[ISSUE] Some recipes missing from API entirely!|r")
+        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+            "|cFFFFFFFF%d recipes cannot be accessed via Custom_GetProfessionRecipes|r",
+            notFoundAnywhere
+        ))
+    end
+
+    if foundInGlobal == #missing then
+        DEFAULT_CHAT_FRAME:AddMessage("")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[GOOD NEWS] All missing recipes exist in global dataset!|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFWe can use professionId=-1 and filter client-side.|r")
+    end
+
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
 end

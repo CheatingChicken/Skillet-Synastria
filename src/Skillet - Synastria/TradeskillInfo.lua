@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-]]--
+]] --
 
 -- This file contains all the code I use to access recipe/tradeskill information
 
@@ -31,15 +31,18 @@ function Skillet:GetLevelRequiredToUse(item)
 end
 
 -- Extracts the numeric item id from an item link
+---@param link string|nil Item link to parse
+---@return number|nil itemId The extracted item ID, or nil if not found
 function Skillet:GetItemIDFromLink(link)
+    ---@type string|number|nil
     local id
     if link then
-        _,_,id = string.find(link, "|Hitem:(%d+):")
+        _, _, id = string.find(link, "|Hitem:(%d+):")
     end
 
     if link and not id then
         -- might be an enchant ...
-        _,_,id = string.find(link, "|Henchant:(%d+)|")
+        _, _, id = string.find(link, "|Henchant:(%d+)|")
     end
 
     if id then id = tonumber(id) end
@@ -117,7 +120,7 @@ end
 -- thing depending on whether or not this is a craft.
 function Skillet:GetTradeSkillLine()
     local tradeskillName, currentLevel, maxLevel = GetTradeSkillLine()
-    if(tradeskillName==nil) then
+    if (tradeskillName == nil) then
         tradeskillName = "";
     end
     return tradeskillName, currentLevel, maxLevel;
@@ -139,9 +142,38 @@ end
 --                      TradeSkill Query API
 -- =====================================================================
 
+---@class CharacterReagent
+---@field name string Reagent name
+---@field link string Item link
+---@field needed number Count needed per craft
+---@field texture string Item texture
+
+---@class CharacterSkill
+---@field name string Recipe name
+---@field link string Item link
+---@field texture string Item texture
+---@field difficulty string Recipe difficulty
+---@field numname number Number of items made
+---@field count number Number of reagents
+---@field [integer] CharacterReagent Array of reagents
+
+---@class CharacterProfession
+---@field name string Profession name
+---@field [integer] CharacterSkill Array of skills
+
+---@class CharacterData
+---@field name string Character name
+---@field [integer] CharacterProfession Array of professions
+
+---@type CharacterData[] | nil
 local characters
 
+---@param self SkilletClass
+---@param s Recipe
+---@param reagent Reagent
+---@return CharacterReagent
 local function build_reagents(self, s, reagent)
+    ---@type CharacterReagent
     local r = {
         name = reagent.name,
         link = reagent.link,
@@ -152,8 +184,18 @@ local function build_reagents(self, s, reagent)
     return r
 end
 
+---@param self SkilletClass
+---@param name string Character name
+---@param prof string Profession name
+---@param skill_index integer Recipe index
+---@return CharacterSkill|nil
 local function build_skills(self, name, prof, skill_index)
     local s = self.stitch:DecodeRecipe(self.db.server.recipes[name][prof][skill_index])
+    if not s then
+        return nil
+    end
+
+    ---@type CharacterSkill
     local c = {
         name = s.name,
         link = s.link,
@@ -165,27 +207,42 @@ local function build_skills(self, name, prof, skill_index)
 
     -- Synastria: Use modern reagents table format
     local reagents = s.reagents or {}
-    for i=1, #reagents, 1 do
-        table.insert(c, build_reagents(self, s, reagents[i]))
-    end
-
-    return c
-end
-
-local function build_profs(self, name, prof)
-    local c = {name = prof}
-
-    for skill, _ in pairs(self.db.server.recipes[name][prof]) do
-        if self.db.server.recipes[name][prof][skill] ~= nil then
-            table.insert(c, build_skills(self, name, prof, skill))
+    for i = 1, #reagents, 1 do
+        local reagent = build_reagents(self, s, reagents[i])
+        if reagent then
+            table.insert(c, reagent)
         end
     end
 
     return c
 end
 
+---@param self SkilletClass
+---@param name string Character name
+---@param prof string Profession name
+---@return CharacterProfession
+local function build_profs(self, name, prof)
+    ---@type CharacterProfession
+    local c = { name = prof }
+
+    for skill, _ in pairs(self.db.server.recipes[name][prof]) do
+        if self.db.server.recipes[name][prof][skill] ~= nil then
+            local skill_data = build_skills(self, name, prof, skill)
+            if skill_data then
+                table.insert(c, skill_data)
+            end
+        end
+    end
+
+    return c
+end
+
+---@param self SkilletClass
+---@param name string Character name
+---@return CharacterData
 local function build_character(self, name)
-    local c = {name = name}
+    ---@type CharacterData
+    local c = { name = name }
 
     for prof, _ in pairs(self.db.server.recipes[name]) do
         if prof and prof ~= "" and prof ~= "UNKNOWN" then
@@ -196,7 +253,10 @@ local function build_character(self, name)
     return c
 end
 
+---@param self SkilletClass
+---@return CharacterData[]
 local function build_characters(self)
+    ---@type CharacterData[]
     local c = {}
 
     for name, _ in pairs(self.db.server.recipes) do
@@ -222,18 +282,18 @@ end
 function Skillet:internal_GetCharacterProfessions(character_name)
     local chars = self:internal_GetCharacters()
 
-    for i=1, #chars, 1 do
+    for i = 1, #chars, 1 do
         if chars[i].name == character_name then
             return chars[i]
         end
     end
 end
 
-function  Skillet:internal_GetCharacterTradeskills(character_name, profession)
+function Skillet:internal_GetCharacterTradeskills(character_name, profession)
     local profs = self:internal_GetCharacterProfessions(character_name)
 
     if profs then
-        for i=1, #profs, 1 do
+        for i = 1, #profs, 1 do
             if profs[i].name == profession then
                 return profs[i]
             end
@@ -242,27 +302,26 @@ function  Skillet:internal_GetCharacterTradeskills(character_name, profession)
 end
 
 function Skillet:internal_GetCraftersForItem(itemId)
-	local crafters = nil
+    local crafters = nil
 
-	local chars = self:internal_GetCharacters()
-	for i=1, #chars, 1 do
-		local profs = self:internal_GetCharacterProfessions(chars[i].name)
-		local found = false
+    local chars = self:internal_GetCharacters()
+    for i = 1, #chars, 1 do
+        local profs = self:internal_GetCharacterProfessions(chars[i].name)
+        local found = false
 
-		for j=1,#profs,1 do
-			local skills = self:internal_GetCharacterTradeskills(chars[i].name, profs[j].name)
-			for k=1,#skills,1 do
-				if self:GetItemIDFromLink(skills[k].link) == itemId then
-					if not crafters then crafters = {} end
-					table.insert(crafters, chars[i].name)
-					found = true
-					break
-				end
-			end
-			if found then break end
-		end
+        for j = 1, #profs, 1 do
+            local skills = self:internal_GetCharacterTradeskills(chars[i].name, profs[j].name)
+            for k = 1, #skills, 1 do
+                if self:GetItemIDFromLink(skills[k].link) == itemId then
+                    if not crafters then crafters = {} end
+                    table.insert(crafters, chars[i].name)
+                    found = true
+                    break
+                end
+            end
+            if found then break end
+        end
+    end
 
-	end
-
-	return crafters
+    return crafters
 end
