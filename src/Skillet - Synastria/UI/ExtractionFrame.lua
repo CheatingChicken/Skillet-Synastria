@@ -2,10 +2,12 @@
 Skillet: Extraction Frame
 Shows prospecting and milling data organized by target items
 ]] --
-
 ---@class Frame
 ---@class ScrollFrame : Frame
 ---@class Button : Frame
+
+---@class Skillet
+---@field CONVERSION_GROUPS ConversionGroup[]
 
 ---@class ConversionButton : Button
 ---@field conversionData ConversionDefinition?
@@ -20,6 +22,8 @@ Shows prospecting and milling data organized by target items
 ---@field type string Group type identifier
 ---@field result MillingResult The common pigment and associated rare pigments
 ---@field sources number[] Array of herb IDs that produce this pigment
+---@field extended boolean? Special flag for extended layout
+---@field title string? Display title for the group
 
 ---@class GemData
 ---@field id number The gem ID
@@ -46,27 +50,137 @@ Shows prospecting and milling data organized by target items
 ---@field items ConversionDefinition[] Array of conversions in this group
 
 ---@class ConversionGroup
----@field type string Group type identifier ("conversion_group")
----@field title string Group display title
----@field conversions ConversionDefinition[] Array of conversion definitions
----@field hasWarnings boolean Whether group contains non-bidirectional conversions
+---@field bidirectional boolean
+---@field conversions ConversionDefinition[]
+---@field conversionPairs ConversionPair[] Array of conversion pairs for display
+---@field extended boolean?
+---@field hasWarnings boolean
+---@field label string
+---@field ratio number
+---@field resultItems number[]
+---@field sourceItems number[]
+---@field title string
+---@field type string
+---@class ExtractionContainerFrame : Frame
+---@field label FontString
+---@field SetPoint fun(self: Frame, point: string, relativeTo: Frame, relativePoint: string, x: number, y: number)
+---@field SetWidth fun(self: Frame, width: number)
+---@field SetHeight fun(self: Frame, height: number)
+---@field Hide fun(self: Frame)
+---@field Show fun(self: Frame)
+---@field SetBackdrop fun(self: Frame, backdrop: table)
+---@field SetBackdropColor fun(self: Frame, r: number, g: number, b: number, a: number)
+---@field SetBackdropBorderColor fun(self: Frame, r: number, g: number, b: number, a: number)
 
 -- XML-defined frames (defined in ExtractionFrame.xml)
 -- These are global frames - access via getglobal() for type safety
 -- NOTE: All getglobal() calls must be validated for nil before use
 
+---@type ExtractionPageData[] Global pages array for cross-function access
+_G.scrollPages = {}
 
 -- === BEGIN: Fix undefined globals and EmmyLua param doc issues ===
+-- Fixed layout constants (must be above border creation functions)
+local BORDER_EDGE_SIZE = 12
+---@type FontString[]
 local smallGroupLabels = {}
+---@type FontString[]
 local mediumGroupLabels = {}
+---@type FontString|nil
 local largeGroupLabel = nil
+---@type function|nil
 local setupSourceButtonClicks -- will be defined later
-local function createSmallGroupBorder(i, container) return nil, nil end
-local function createMediumGroupBorder(i, container) return nil, nil end
-local function createLargeGroupBorder(container) return nil, nil end
+---
+---@param i number
+---@param container Frame
+---@return Frame, FontString
+local function createSmallGroupBorder(i, container)
+	local borderName = "SkilletExtractionSmallGroupBorder" .. i
+	---@type Frame
+	local border = CreateFrame("Frame", borderName, container)
+	border:SetFrameStrata("LOW")
+	border:SetBackdrop({
+		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = true,
+		tileSize = 16,
+		edgeSize = BORDER_EDGE_SIZE,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 }
+	})
+	border:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+	border:SetBackdropBorderColor(0.6, 0.6, 0.6, 0.8)
+	border:Hide()
+
+	local labelName = "SkilletExtractionSmallGroupBorderLabel" .. i
+	---@type FontString
+	---@type FontString
+	local label = container:CreateFontString(labelName, "OVERLAY", "GameFontNormalSmall")
+	label:SetTextColor(1, 1, 0.4, 1)
+	label:SetJustifyH("LEFT")
+	label:SetDrawLayer("OVERLAY", 2)
+	border.label = label
+	return border, label
+end
+
+---@param i number
+---@param container Frame
+---@return Frame, FontString
+local function createMediumGroupBorder(i, container)
+	local borderName = "SkilletExtractionMediumGroupBorder" .. i
+	---@type Frame
+	local border = CreateFrame("Frame", borderName, container)
+	border:SetFrameStrata("LOW")
+	border:SetBackdrop({
+		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = true,
+		tileSize = 16,
+		edgeSize = BORDER_EDGE_SIZE,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 }
+	})
+	border:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+	border:SetBackdropBorderColor(0.6, 0.6, 0.6, 0.8)
+	border:Hide()
+
+	local labelName = "SkilletExtractionMediumGroupBorderLabel" .. i
+	---@type FontString
+	---@type FontString
+	local label = container:CreateFontString(labelName, "OVERLAY", "GameFontNormalSmall")
+	label:SetTextColor(1, 1, 0.4, 1)
+	label:SetJustifyH("LEFT")
+	label:SetDrawLayer("OVERLAY", 2)
+	border.label = label
+	return border, label
+end
+
+---@param container Frame
+---@return Frame, FontString
+local function createLargeGroupBorder(container)
+	---@type Frame
+	local border = CreateFrame("Frame", "SkilletExtractionLargeGroupBorder", container)
+	border:SetFrameStrata("LOW")
+	border:SetBackdrop({
+		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = true,
+		tileSize = 16,
+		edgeSize = BORDER_EDGE_SIZE,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 }
+	})
+	border:SetBackdropColor(0.08, 0.08, 0.08, 0.9)
+	border:SetBackdropBorderColor(0.6, 0.6, 0.6, 0.8)
+	border:Hide()
+
+	local label = container:CreateFontString("SkilletExtractionLargeGroupBorderLabel", "OVERLAY", "GameFontNormalSmall")
+	label:SetTextColor(1, 1, 0.4, 1)
+	label:SetJustifyH("LEFT")
+	label:SetDrawLayer("OVERLAY", 2)
+	border.label = label
+	return border, label
+end
 -- === END: Fix undefined globals and EmmyLua param doc issues ===
 
----@type table
+---@type table<string, string>
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 -- DEBUG: Check if CONVERSION_GROUPS exists at file load time
@@ -88,6 +202,7 @@ local ControlBackdrop  = {
 	insets = { left = 3, right = 3, top = 3, bottom = 3 }
 }
 
+---@type table<string, any>
 local FrameBackdrop    = {
 	bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
 	edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -98,15 +213,19 @@ local FrameBackdrop    = {
 }
 
 -- Current tab: "MILLING" or "PROSPECTING"
+---@type string
 local currentTab       = "MILLING"
 
 -- Track if frame has been initialized
+---@type boolean
 local frameInitialized = false
 
 -- Bulk mode flag (default true)
+---@type boolean
 local bulkMode         = true
 
 -- Current page index (1-based)
+---@type number
 local currentPageIndex = 1
 
 -- Helper function to get item quality for sorting
@@ -168,6 +287,7 @@ local BUTTONS_PER_GROUP = 18
 -- Helper function to setup extraction buttons with direct row/column positioning
 ---@class ExtractionConversionButton : ConversionButton
 ---@field itemId number
+---@field conversionPair { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number }
 ---@class FrameWithLabel : Frame
 ---@field label any
 ---Set up an extraction button with all required fields and positioning
@@ -283,6 +403,8 @@ local function setupExtractionButton(button, buttonPrefix, index, itemId, row, c
 
 	-- Default tooltip handling
 	button:SetScript("OnEnter", function(self)
+		---@type ExtractionConversionButton
+		self = self
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		if self.itemId then
 			local itemLink = select(2, GetItemInfo(self.itemId))
@@ -293,7 +415,9 @@ local function setupExtractionButton(button, buttonPrefix, index, itemId, row, c
 		GameTooltip:Show()
 	end)
 
-	button:SetScript("OnLeave", function()
+	button:SetScript("OnLeave", function(self)
+		---@type ExtractionConversionButton
+		self = self
 		GameTooltip:Hide()
 	end)
 end
@@ -376,44 +500,12 @@ local function buildMillingMap()
 end
 
 -- Build map of gem -> ores
-local function buildProspectingMap()
-	---@type table<number, {type: string, ores: table}>
-	local gemToOres = {}
-
-	for oreId, data in pairs(Skillet.PROSPECTING_DATA) do
-		-- Add to common gems map
-		if data.commonGems then
-			---@type number
-			for _, gemId in ipairs(data.commonGems) do
-				gemToOres[gemId] = gemToOres[gemId] or {
-					type = "common",
-					ores = {}
-				}
-				table.insert(gemToOres[gemId].ores, oreId)
-			end
-		end
-
-		-- Add to uncommon gems map
-		if data.uncommonGems then
-			---@type number
-			for _, gemId in ipairs(data.uncommonGems) do
-				gemToOres[gemId] = gemToOres[gemId] or {
-					type = "uncommon",
-					ores = {}
-				}
-				table.insert(gemToOres[gemId].ores, oreId)
-			end
-		end
-	end
-
-	return gemToOres
-end
 
 -- Additional layout constants
 local RESULT_BUTTONS_PER_GROUP = 6
 local SOURCE_BUTTONS_PER_ROW = 6
 
----@type MillingGroup[]|ProspectingGroup[]
+---@type ConversionGroup[]|MillingGroup[]|ProspectingGroup[]
 local scrollData = {}
 ---@type Frame[]
 local mediumGroupBorders = {}
@@ -503,18 +595,31 @@ local function performActualConversion(sourceItemId, targetItemId, ratio, source
 end
 
 -- Perform conversion between items
+---
+---@param clickedItemId number The item ID that was clicked
+---@param conversionPair { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number } The conversion definition for this pair
+---@param itemName string The name of the clicked item
 local function performConversion(clickedItemId, conversionPair, itemName)
 	if not conversionPair then return end
 
-	local sourceItemId, targetItemId, isReverse
+	---@type number|nil
+	local sourceItemId
+	---@type number|nil
+	local targetItemId
+	---@type boolean|nil
+	local isReverse
+	---@type number
 	local ratio = conversionPair.ratio or 10
 
 	-- Determine conversion direction based on clicked item
 	if clickedItemId == conversionPair.resultItem then
 		-- Clicked result item - check if bidirectional for reverse conversion
 		if conversionPair.bidirectional then
+			---@type number
 			sourceItemId = conversionPair.resultItem
+			---@type number
 			targetItemId = conversionPair.sourceItem
+			---@type boolean
 			isReverse = true
 		else
 			-- Can't reverse convert, treat as deposit request
@@ -526,8 +631,11 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 		end
 	elseif clickedItemId == conversionPair.sourceItem then
 		-- Clicked source item - normal conversion
+		---@type number
 		sourceItemId = conversionPair.sourceItem
+		---@type number
 		targetItemId = conversionPair.resultItem
+		---@type boolean
 		isReverse = false
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000Error: Item not part of conversion pair|r")
@@ -535,7 +643,9 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	end
 
 	-- Check if we have source items in inventory first
+	---@type number
 	local bagsCount = GetItemCount(sourceItemId, false) or 0
+	---@type number
 	local bankCount = 0
 
 	-- Get resource bank count if available
@@ -543,8 +653,11 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 		bankCount = GetCustomGameData(13, sourceItemId) or 0
 	end
 
+	---@type number
 	local totalAvailable = bagsCount + bankCount
+	---@type string
 	local sourceItemName = GetItemInfo(sourceItemId) or ("Item " .. tostring(sourceItemId))
+	---@type string
 	local targetItemName = GetItemInfo(targetItemId) or ("Item " .. tostring(targetItemId))
 
 	-- Check if we have enough resources for at least one conversion
@@ -556,6 +669,7 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	-- If we have enough in bags, convert immediately
 	if bagsCount >= ratio then
 		-- Check if we have inventory space for the result
+		---@type number|nil
 		local targetBag, targetSlot = findEmptySlotOrStack(targetItemId)
 		if not targetBag then
 			Skillet:Print("|cFFFF6666No inventory space for " .. targetItemName .. "|r")
@@ -567,12 +681,13 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	end
 
 	-- Not enough in bags - withdraw from resource bank (no conversion yet)
+	---@type number
 	local neededFromBank = ratio - bagsCount
 	if bankCount >= neededFromBank then
 		if Skillet and Skillet.WithdrawFromResourceBank then
 			Skillet:Print("|cFF66AAFF Withdrawing " ..
 				neededFromBank .. "x " .. sourceItemName .. " from Resource Bank. Click again to convert.|r")
-			Skillet:WithdrawFromResourceBank(sourceItemId, neededFromBank)
+			Skillet:WithdrawFromResourceBank(sourceItemId, true)
 		else
 			Skillet:Print("|cFFFF6666Cannot withdraw from Resource Bank - functionality not available|r")
 		end
@@ -582,6 +697,9 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	end
 end
 
+---@param button ExtractionConversionButton
+---@param itemId number
+---@param conversionPair { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number }
 local function setupConversionButtonClicks(button, itemId, conversionPair)
 	if not button or not conversionPair then
 		return
@@ -596,6 +714,8 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 
 	-- Tooltip handling with conversion info
 	button:SetScript("OnEnter", function(self)
+		---@type ExtractionConversionButton
+		self = self
 		if GameTooltip and self.itemId then
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 			GameTooltip:SetHyperlink("item:" .. self.itemId)
@@ -621,7 +741,9 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 		end
 	end)
 
-	button:SetScript("OnLeave", function()
+	button:SetScript("OnLeave", function(self)
+		---@type ExtractionConversionButton
+		self = self
 		if GameTooltip then
 			GameTooltip:Hide()
 		end
@@ -640,15 +762,25 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 
 	-- PreClick: Check for withdraw needs before using item
 	button:SetScript("PreClick", function(self, mouseButton)
+		---@type ExtractionConversionButton
+		self = self
 		if not self.conversionPair then return end
 
+		---@type { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number }
 		local pair = self.conversionPair
+		---@type string
 		local itemName = GetItemInfo(itemId) or ("Item " .. tostring(itemId))
 
 		-- Only handle left-click for conversions
 		if mouseButton == "LeftButton" then
 			-- Determine conversion direction based on clicked item
-			local sourceId, targetId, isReverse
+			---@type number|nil
+			local sourceId
+			---@type number|nil
+			local targetId
+			---@type boolean|nil
+			local isReverse
+			---@type number
 			local ratio = pair.ratio or 10
 
 			if itemId == pair.resultItem then
@@ -682,14 +814,19 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			end
 
 			-- Check if we have enough items in bags
+
+			---@type number
 			local bagsCount = GetItemCount(sourceId, false) or 0
+			---@type number
 			local bankCount = 0
 
 			if GetCustomGameData then
 				bankCount = GetCustomGameData(13, sourceId) or 0
 			end
 
+			---@type number
 			local totalAvailable = bagsCount + bankCount
+			---@type string
 			local sourceItemName = GetItemInfo(sourceId) or ("Item " .. tostring(sourceId))
 
 			-- Need at least ratio items for conversion
@@ -701,11 +838,12 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 
 			-- If not enough in bags, withdraw from bank first
 			if bagsCount < ratio then
+				---@type number
 				local neededFromBank = ratio - bagsCount
 				if bankCount >= neededFromBank and Skillet.WithdrawFromResourceBank then
 					Skillet:Print("|cFF66AAFFWithdrawing " ..
 						neededFromBank .. "x " .. sourceItemName .. " from Resource Bank. Click again to convert.|r")
-					Skillet:WithdrawFromResourceBank(sourceId, neededFromBank)
+					Skillet:WithdrawFromResourceBank(sourceId, true)
 					return "block" -- Prevent conversion this click
 				end
 			end
@@ -716,14 +854,24 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 
 	-- PostClick: Handle right-click deposits and conversion feedback
 	button:SetScript("PostClick", function(self, mouseButton)
+		---@type ExtractionConversionButton
+		self = self
 		if not self.conversionPair then return end
 
+		---@type { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number }
 		local pair = self.conversionPair
+		---@type string
 		local itemName = GetItemInfo(itemId) or ("Item " .. tostring(itemId))
 
 		if mouseButton == "LeftButton" then
 			-- Conversion was performed by SecureActionButton - provide feedback
-			local sourceId, targetId, isReverse
+			---@type number|nil
+			local sourceId
+			---@type number|nil
+			local targetId
+			---@type boolean|nil
+			local isReverse
+			---@type number
 			local ratio = pair.ratio or 10
 
 			if itemId == pair.resultItem and pair.bidirectional then
@@ -736,8 +884,11 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 				isReverse = false
 			end
 
+			---@type string
 			local sourceItemName = GetItemInfo(sourceId) or ("Item " .. tostring(sourceId))
+			---@type string
 			local targetItemName = GetItemInfo(targetId) or ("Item " .. tostring(targetId))
+			---@type number
 			local targetCount = isReverse and ratio or 1
 
 			Skillet:Print("|cFF66FF66Converting " ..
@@ -793,6 +944,7 @@ end
 -- Initialize fixed button positions (called once on frame creation)
 -- Initialize button positions for both Medium and Large layouts
 local function initializeButtonPositions()
+	---@type ExtractionContainerFrame
 	local container = getglobal("SkilletExtractionContainer")
 	if not container then
 		return
@@ -862,6 +1014,7 @@ local function initializeButtonPositions()
 
 		-- Create group label text as child of container (not border) to avoid transparency issues
 		local labelName = "SkilletExtractionLargeGroupBorderLabel"
+		---@type FontString
 		local label = container:CreateFontString(labelName, "OVERLAY", "GameFontNormalSmall")
 		label:SetPoint("TOPLEFT", border, "TOPLEFT", 8, 2) -- Position relative to border but as container child
 		label:SetTextColor(1, 1, 0.4, 1)             -- Bright yellow-gold text for better visibility
@@ -1263,7 +1416,6 @@ local function createProspectingScrollData()
 	return data
 end
 
----@return ConversionGroup[]
 local function createConversionsScrollData()
 	local data = {} ---@type ConversionGroup[]
 
@@ -1277,6 +1429,8 @@ local function createConversionsScrollData()
 		#Skillet.CONVERSION_GROUPS .. " groups")
 
 	-- Use hardcoded conversion groups directly
+	---@type ConversionGroup[]
+	Skillet.CONVERSION_GROUPS = Skillet.CONVERSION_GROUPS
 	for _, group in ipairs(Skillet.CONVERSION_GROUPS) do
 		-- Create conversion pairs from the hardcoded structure
 		local conversionPairs = {}
@@ -1285,7 +1439,9 @@ local function createConversionsScrollData()
 		local maxItems = math.min(#group.resultItems, #group.sourceItems)
 
 		for i = 1, maxItems do
+			---@type number
 			local resultItem = group.resultItems[i]
+			---@type number
 			local sourceItem = group.sourceItems[i]
 
 			-- Create the pair entry (compatible with existing display logic)
@@ -1312,49 +1468,13 @@ local function createConversionsScrollData()
 	return data
 end
 
--- Generate pages for scroll display
-local function generatePages(scrollData, currentTab)
-	local pages = {}
-
-	-- Determine layout and groups per page
-	local layout, groupsPerPage
-	if currentTab == "CONVERSIONS" then
-		layout = "small"
-		groupsPerPage = 3
-	else
-		-- Check if first group is extended layout
-		local firstGroup = scrollData[1]
-		if firstGroup and firstGroup.extended then
-			layout = "large"
-			groupsPerPage = 1
-		else
-			layout = "medium"
-			groupsPerPage = 2
-		end
-	end
-
-	-- Generate pages
-	local totalGroups = #scrollData
-	for startIndex = 1, totalGroups, groupsPerPage do
-		local groupIndices = {}
-		for i = startIndex, math.min(startIndex + groupsPerPage - 1, totalGroups) do
-			table.insert(groupIndices, i)
-		end
-
-		table.insert(pages, {
-			layout = layout,
-			groupIndices = groupIndices,
-			startGroup = startIndex,
-			endGroup = math.min(startIndex + groupsPerPage - 1, totalGroups)
-		})
-	end
-
-	return pages
-end
 
 -- Generate pages from scroll data - each page contains layout info and group indices
+---@param scrollData ConversionGroup[]|MillingGroup[]|ProspectingGroup[]
+---@param currentTab string
+---@return ExtractionPageData[]
 local function generatePages(scrollData, currentTab)
-	local pages = {}
+	local pages = {} ---@type ExtractionPageData[]
 
 	if not scrollData or #scrollData == 0 then
 		return pages
@@ -1362,9 +1482,10 @@ local function generatePages(scrollData, currentTab)
 
 	if currentTab == "CONVERSIONS" then
 		-- Conversions: check each group for extended layout
+		---@cast scrollData ConversionGroup[]
 		local i = 1
 		while i <= #scrollData do
-			local currentGroup = scrollData[i]
+			local currentGroup = scrollData[i] ---@type ConversionGroup
 			local page = {
 				groupIndices = {}
 			}
@@ -1384,7 +1505,7 @@ local function generatePages(scrollData, currentTab)
 				-- Add up to 3 non-extended groups
 				for j = 1, 3 do
 					if i <= #scrollData then
-						local group = scrollData[i]
+						local group = scrollData[i] ---@type ConversionGroup
 						if not (group and group.extended) then
 							table.insert(page.groupIndices, i)
 							i = i + 1
@@ -1399,9 +1520,10 @@ local function generatePages(scrollData, currentTab)
 		end
 	else
 		-- For milling/prospecting, check each group individually for extended layout
+		---@cast scrollData MillingGroup[]|ProspectingGroup[]
 		local i = 1
 		while i <= #scrollData do
-			local currentGroup = scrollData[i]
+			local currentGroup = scrollData[i] ---@type MillingGroup|ProspectingGroup
 			local page = {
 				groupIndices = {}
 			}
@@ -1424,7 +1546,7 @@ local function generatePages(scrollData, currentTab)
 
 				-- Try to add second group if it's not extended
 				if i <= #scrollData then
-					local nextGroup = scrollData[i]
+					local nextGroup = scrollData[i] ---@type MillingGroup|ProspectingGroup
 					if not (nextGroup and nextGroup.extended) then
 						table.insert(page.groupIndices, i)
 						i = i + 1
@@ -1539,10 +1661,17 @@ local function updateGroupBorders(layout, groupsToShow, groupIndices, offset)
 	if not container then return end
 
 	for i = 1, groupsToShow do
+		---@type integer|nil
+		---@type integer|nil
 		local groupIndex = groupIndices[i]
 		if groupIndex and scrollData[groupIndex + 1] then -- Convert to 1-based index
+			---@type table
 			local group = scrollData[groupIndex + 1]
-			local border, label
+			---@type Frame|nil
+			local border
+			---@type FontString|nil
+			local label
+			---@type number
 			local baseY
 
 			if layout == "small" then
@@ -1578,6 +1707,8 @@ local function updateGroupBorders(layout, groupsToShow, groupIndices, offset)
 			end
 
 			-- Position and show border
+			assert(border, "Border frame is nil")
+			assert(label, "Label is nil")
 			border:SetPoint("TOPLEFT", container, "TOPLEFT", 5, baseY)
 			border:Show()
 
@@ -1586,7 +1717,6 @@ local function updateGroupBorders(layout, groupsToShow, groupIndices, offset)
 			label:SetText(group.label or "Unknown Group")
 
 			-- Add one-way warning if needed
-			-- EmmyLua: This is a runtime UI warning, not a code warning. No code warning expected here.
 			if group.bidirectional == false then
 				label:SetText((group.label or "Unknown Group") .. " |cFFFF6666[One-Way]|r")
 			end
@@ -1634,7 +1764,7 @@ local function clearUnusedBorders(layout, groupsToShow)
 end
 
 ---@param buttonName string The button name (e.g. "SkilletExtractionSmallButton1")
----@param group table The group data to display in this button
+---@param group ConversionGroup|MillingGroup|ProspectingGroup The group data to display in this button
 local function updateButtonForGroup(buttonName, group)
 	local button = getglobal(buttonName)
 	if not button or not group then return end
@@ -1642,6 +1772,7 @@ local function updateButtonForGroup(buttonName, group)
 	-- Determine button positioning based on tab type and group structure
 	if currentTab == "CONVERSIONS" and group.conversionPairs then
 		-- Handle conversions: display conversion pairs in result/source layout
+		---@cast group ConversionGroup
 		local buttonsPerGroup = 12 -- 6 result + 6 source
 		local buttonIndex = tonumber(string.match(buttonName, "%d+"))
 		local groupSlot = math.floor((buttonIndex - 1) / buttonsPerGroup) + 1
@@ -1649,7 +1780,7 @@ local function updateButtonForGroup(buttonName, group)
 
 		if positionInGroup <= 6 then
 			-- Result buttons (1-6): show result items
-			local pair = group.conversionPairs[positionInGroup]
+			local pair = group.conversionPairs[positionInGroup] ---@type ConversionPair
 			if pair and pair.resultItem then
 				local border = smallGroupBorders and smallGroupBorders[groupSlot]
 				setupExtractionButton(button, "SkilletExtractionSmallButton", buttonIndex,
@@ -1661,7 +1792,7 @@ local function updateButtonForGroup(buttonName, group)
 		else
 			-- Source buttons (7-12): show source items
 			local pairIndex = positionInGroup - 6
-			local pair = group.conversionPairs[pairIndex]
+			local pair = group.conversionPairs[pairIndex] ---@type ConversionPair
 			if pair and pair.sourceItem then
 				local border = smallGroupBorders and smallGroupBorders[groupSlot]
 				setupExtractionButton(button, "SkilletExtractionSmallButton", buttonIndex,
@@ -1673,6 +1804,7 @@ local function updateButtonForGroup(buttonName, group)
 		end
 	elseif currentTab == "MILLING" and group.result then
 		-- Handle milling: main pigment + rare pigments in result row, herbs in source rows
+		---@cast group MillingGroup
 		local buttonIndex = tonumber(string.match(buttonName, "%d+"))
 		local buttonPrefix = string.match(buttonName, "(.+)%d+")
 		local groupSlot = math.floor((buttonIndex - 1) / BUTTONS_PER_GROUP) + 1
@@ -1706,6 +1838,7 @@ local function updateButtonForGroup(buttonName, group)
 		end
 	elseif currentTab == "PROSPECTING" and group.ores then
 		-- Handle prospecting: ores in result row, gems in source rows
+		---@cast group ProspectingGroup
 		local buttonIndex = tonumber(string.match(buttonName, "%d+"))
 		local buttonPrefix = string.match(buttonName, "(.+)%d+")
 		local groupSlot = math.floor((buttonIndex - 1) / BUTTONS_PER_GROUP) + 1
@@ -1725,7 +1858,7 @@ local function updateButtonForGroup(buttonName, group)
 			local gemIndex = positionInGroup - 6
 			local maxGems = group.extended and 30 or 12
 			if gemIndex <= maxGems and group.gems and group.gems[gemIndex] then
-				local gemData = group.gems[gemIndex]
+				local gemData = group.gems[gemIndex] ---@type GemData
 				if gemData and gemData.id then
 					local row = math.floor((gemIndex - 1) / 6) + 1 -- Row 1+ for gems (after row 0 ores)
 					local col = ((gemIndex - 1) % 6) + 1
@@ -1784,6 +1917,8 @@ local function GetItemContainerAndSlot(itemId)
 end
 
 -- Setup click handler for a source button
+---@param button ExtractionConversionButton
+---@param sourceId number
 local function setupSourceButtonClicks(button, sourceId)
 	if not button then return end
 	if not sourceId or type(sourceId) ~= "number" then return end
@@ -1914,7 +2049,7 @@ function Skillet:UpdateExtractionListDisplay()
 	if currentPageIndex < 1 then currentPageIndex = 1 end
 	if currentPageIndex > #_G.scrollPages then currentPageIndex = #_G.scrollPages end
 
-	local currentPage = _G.scrollPages[currentPageIndex]
+	local currentPage = _G.scrollPages[currentPageIndex] ---@type ExtractionPageData
 	if not currentPage then return end
 
 	-- Hide all buttons first
@@ -1948,7 +2083,7 @@ function Skillet:UpdateExtractionListDisplay()
 
 	-- Display groups for current page
 	for displaySlot, groupIndex in ipairs(currentPage.groupIndices) do
-		local group = scrollData[groupIndex]
+		local group = scrollData[groupIndex] ---@type ConversionGroup|MillingGroup|ProspectingGroup
 		if group then
 			-- Show appropriate border and populate data
 			if currentPage.layout == "small" then

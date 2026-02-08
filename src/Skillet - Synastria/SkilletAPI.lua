@@ -98,6 +98,7 @@ SkilletItemCountInputBox = nil
 
 ---@class SkilletQueuedItem
 ---@field name string
+---@field link string
 ---@field count number
 ---@field player string
 
@@ -150,7 +151,7 @@ Skillet = {}
 ---@class SkilletDBServer
 ---@field recipes table<string, table<string, table<integer, RecipeData>>>?  -- Map of player -> profession -> recipe_index -> recipe data
 ---@field notes table<string, any>?  -- Generalized for legacy/ambiguous data
----@field queues table<string, SkilletQueue>?  -- Map of player -> profession queue
+---@field queues SkilletAllQueues?  -- Map of player -> queues
 
 ---@class GlobalFrameRegistry
 ---@field RBankFrame? Frame
@@ -221,13 +222,33 @@ function debugprofilestop() end
 
 ---@class SkilletProfessionSwitchPromptFrame : Frame
 
+---@class SkilletCraftCalc
+---@field ResetTimingStats fun(self: SkilletCraftCalc)
+---@field GetTimingStats fun(self: SkilletCraftCalc): number, number, number
+---@field ClearCache fun(self: SkilletCraftCalc)
+---@field GetCachedCraftability fun(self: SkilletCraftCalc, profession: string, recipeIndex: number, includeBank: boolean, includeResBank: boolean, includeAlts: boolean): number|nil
+---@field SetCachedCraftability fun(self: SkilletCraftCalc, profession: string, recipeIndex: number, includeBank: boolean, includeResBank: boolean, includeAlts: boolean, value: number)
+---@field CalculateCraftability fun(self: SkilletCraftCalc, profession: string, yieldInterval?: number)
+---@field CalculateRecipeCraftability fun(self: SkilletCraftCalc, recipe: Recipe, lib: SkilletStitch, includeBank: boolean, verbose?: boolean, depth?: number, forceRecalc?: boolean): number
+---@field CalculateRecipeCraftabilityCustomAPI fun(self: SkilletCraftCalc, spellId: number, includeBank: boolean, verbose?: boolean, depth?: number, cache?: table): number
+---@field StartBackgroundCalculation fun(self: SkilletCraftCalc, profession: string, finishCallback: function, yieldInterval?: number)
+---@field IsCalculationRunning fun(self: SkilletCraftCalc): boolean, string|nil
+---@field StopCalculation fun(self: SkilletCraftCalc)
+---@field PauseCalculation fun(self: SkilletCraftCalc)
+---@field ResumeCalculation fun(self: SkilletCraftCalc)
+---@field BenchmarkCraftability fun(self: SkilletCraftCalc, recipe: Recipe, lib: SkilletStitch, includeBank: boolean)
+---@field BenchmarkAllRecipes fun(self: SkilletCraftCalc, includeBank: boolean)
+
+---@class LibPossessions
+---@field GetItemCount fun(self: LibPossessions, item: number|string): number
+---@field IsAvailable fun(self: LibPossessions): boolean
+
 ---@class SkilletClass
 ---@field version string
 ---@field title string
 ---@field date string
 ---@field stitch SkilletStitch
 ---@field db SkilletDB
----@field inventoryCheck any
 ---@field tradeSkillFrame Frame|nil
 ---@field shoppingList Frame|nil
 ---@field notesFrame Frame|nil
@@ -238,12 +259,19 @@ function debugprofilestop() end
 ---@field hideTrivialRecipes boolean
 ---@field customApiAvailable boolean
 ---@field customApiFailureReported boolean
----@field CraftCalc any
+---@field inventoryCheck LibPossessions|nil
+---@field CraftCalc SkilletCraftCalc|nil
 ---@field extractionFrame Frame|nil
+---@field toggleBackdrop Frame|nil
+---@field charToggle CheckButton|nil
+---@field forgeToggleUn CheckButton|nil
+---@field forgeToggleAtt CheckButton|nil
+---@field forgeToggleTf CheckButton|nil
+---@field forgeToggleWf CheckButton|nil
+---@field forgeToggleLf CheckButton|nil
 ---@field startCraftingPrompt SkilletStartCraftingPrompt|nil
 ---@field recipePromptDialog SkilletRecipePromptDialog|nil
 ---@field professionSwitchPrompt SkilletProfessionSwitchPromptFrame|nil
----@field AutoExportQueueToResourceTracker? function
 ---@field needsRecipeScan string[]|nil
 ---@field headerCollapsedState table<string, boolean>|nil
 ---@field options table<string, any>
@@ -258,7 +286,16 @@ function debugprofilestop() end
 ---@field GetNumTradeSkills fun(self: SkilletClass, trade: string|nil): integer
 ---@field GetTradeSkillOption fun(self: SkilletClass, trade: string|nil, option: string): any
 ---@field SetTradeSkillOption fun(self: SkilletClass, trade: string|nil, option: string, value: any)
----@field GetReagentsForQueuedRecipes fun(self: SkilletClass, player: string): table<any, any>|nil
+---@field GetReagentsForQueuedRecipes fun(self: SkilletClass, player: string|nil): SkilletQueuedItem[]|nil
+---@field GetAllQueues fun(self: SkilletClass): SkilletAllQueues
+---@field GetQueues fun(self: SkilletClass, player: string): SkilletPlayerQueues
+---@field GetPlayerQueues fun(self: SkilletClass): SkilletPlayerQueues
+---@field IsResourceTrackerAvailable fun(self: SkilletClass): boolean
+---@field ExportShoppingListToResourceTracker fun(self: SkilletClass, playername: string|nil, includeBank: boolean, silent: boolean): boolean, number
+---@field ExportItemToResourceTracker fun(self: SkilletClass, itemLink: string|number, goalAmount: number): boolean
+---@field ExportToResourceTrackerCommand fun(self: SkilletClass)
+---@field AutoExportQueueToResourceTracker fun(self: SkilletClass)
+---@field UpdateResourceTrackerAfterCraft fun(self: SkilletClass, recipe: Recipe, numCrafted: number)
 ---@field UpdateTradeSkill fun(self: SkilletClass)
 ---@field UpdateTradeSkillWindow fun(self: SkilletClass)
 ---@field UpdateQueueWindow fun(self: SkilletClass)
@@ -275,8 +312,8 @@ function debugprofilestop() end
 ---@field SetSelectedTrade fun(self: SkilletClass, trade: string|nil)
 ---@field SetSelectedSkill fun(self: SkilletClass, skill: number|nil, noQueue?: boolean)
 ---@field RescanTrade fun(self: SkilletClass, quick: boolean|nil)
----@field LoadQueue fun(self: SkilletClass, queues: table, profession: string)
----@field SaveQueue fun(self: SkilletClass, db: table, tradeskill: string)
+---@field LoadQueue fun(self: SkilletClass, queues: SkilletAllQueues, profession: string)
+---@field SaveQueue fun(self: SkilletClass, db: SkilletAllQueues, tradeskill: string)
 ---@field WithdrawFromResourceBank fun(self: SkilletClass, itemId: number, autoClose?: boolean): boolean
 ---@field WithdrawMultipleFromResourceBank fun(self: SkilletClass, itemIds: number[]): number, number
 ---@field CloseResourceBank fun(self: SkilletClass)

@@ -20,16 +20,16 @@ WoW TradeSkill Window → SkilletStitch → Skillet Core → UI Components
 ```
 
 ### Key Components
-- **[SkilletStitch-1.1.lua](Skillet%20-%20Synastria/SkilletStitch-1.1.lua)**: Recipe scanning/caching engine. Tracks all known recipes across professions.
-- **[SkilletQueue.lua](Skillet%20-%20Synastria/SkilletQueue.lua)**: Cross-profession queue with dependency resolution and auto-switching.
-- **[SkilletCraftCalc.lua](Skillet%20-%20Synastria/SkilletCraftCalc.lua)**: Calculates craftability based on bags+bank+resource bank+alts.
-- **[SynastryAPI.lua](Skillet%20-%20Synastria/SynastryAPI.lua)**: Type definitions for custom server APIs (annotation-only file, not executed).
+- **SkilletStitch-1.1.lua**: Recipe scanning/caching engine. Tracks all known recipes across professions.
+- **SkilletQueue.lua**: Cross-profession queue with dependency resolution and auto-switching.
+- **SkilletCraftCalc.lua**: Calculates craftability based on bags+bank+resource bank+alts.
+- **SynastryAPI.lua**: Type definitions for custom server APIs (annotation-only file, not executed).
 - **UI/**: Modular UI components with paired `.lua` (logic) and `.xml` (layout) files.
 
 ## Critical API Knowledge
 
 ### Synastria Custom APIs
-The Synastria server provides custom APIs beyond standard WoW 3.3.5. **Always consult [SYNASTRIA_CUSTOM_API.md](Skillet%20-%20Synastria/SYNASTRIA_CUSTOM_API.md) before implementing server features.**
+The Synastria server provides custom APIs beyond standard WoW 3.3.5. Always consult SYNASTRIA_CUSTOM_API.md (in src/Skillet - Synastria/) before implementing server features.
 
 **Working APIs** (verified):
 - `Custom_GetProfessionRecipeInfo(spellId)` - Get recipe details by spell ID
@@ -38,7 +38,7 @@ The Synastria server provides custom APIs beyond standard WoW 3.3.5. **Always co
 - `GetHighestAttunePct(itemId, forge)` - Check attunement status
 - `GetCustomGameData(type, param)` - Type 13 = resource bank count
 
-**Incomplete APIs** (see [API-LIMITATIONS.md](Planning/Skillet/API-LIMITATIONS.md)):
+**Incomplete APIs** (see API-LIMITATIONS.md in Planning/Skillet/):
 - `Custom_GetProfessionRecipes()` - Returns ~60% of recipes (missing consumables/enhancements)
 - Use traditional window scanning (`GetNumTradeSkills()`) for complete data
 
@@ -101,7 +101,7 @@ end
 local recipeCache = {}
 ```
 
-**Reference Pattern**: See [SynastryAPI.lua](Skillet%20-%20Synastria/SynastryAPI.lua) for server API annotations using `---@meta` directive.
+**Reference Pattern**: See SynastryAPI.lua (in src/Skillet - Synastria/) for server API annotations using `---@meta` directive.
 
 **Before Committing**:
 1. Run language server check in VS Code (no warnings should appear)
@@ -186,7 +186,7 @@ local count = GetCustomGameData(13, itemId) or 0
 3. **Verify** - Check VS Code Problems panel (Ctrl+Shift+M) - MUST show 0 warnings
 4. **Syntax Check** - Run `luac -p file.lua` to verify Lua syntax
 5. **Reload in WoW** - Type `/reload` in-game to reload UI
-6. **Test via commands** - Use `/script` commands from [TESTING-PHASE-*.md](Planning/Skillet/) files
+6. **Test via commands** - Use `/script` commands from TESTING-PHASE-*.md files (in Planning/Skillet/)
 7. **Check errors** - Monitor chat for Lua errors (red text)
 
 ### Manual Testing Commands
@@ -208,9 +208,58 @@ local count = GetCustomGameData(13, itemId) or 0
 - **No build system** - Files are loaded directly by WoW client
 - **No linter** - Use `luac -p file.lua` for syntax validation only
 
+## ✨ Annotation Purity (CRITICAL)
+
+**As of 2026-02-08**: All UI files have achieved **ZERO type errors**. This is a purified state that MUST be maintained.
+
+**IMPORTANT**: See annotation-purity.instructions.md (in .github/instructions/) for comprehensive maintenance guidelines.
+
+### Current Purified Files (0 Errors Each)
+- ✅ All 12 UI files: ExtractionFrame, MerchantWindow, ProfessionSelector, RecipeNotes, ShoppingList, UITypes, Sorting, SlotFilter, AttunabilityFilter, Utils, SkilletTestingUI, MainFrame
+- ✅ Upgrades.lua (with justified diagnostic suppressions)
+
+### Before Every Commit
+**ZERO TOLERANCE RULE**: Any committed code must have zero language server errors.
+
+```bash
+# Verify your changes:
+1. Run: get_errors [filePath]
+2. Check VS Code Problems panel (Ctrl+Shift+M) - must show 0 errors
+3. If errors exist, fix them BEFORE committing
+4. Never commit with warnings
+```
+
+### When Adding New Code
+```lua
+-- ✅ Every function annotated
+---@param tradeskill string The profession name
+---@return boolean isValid True if valid
+function Skillet:ValidateProfession(tradeskill)
+    -- implementation
+end
+
+-- ✅ Every complex local variable typed
+---@type table<string, number>
+local itemCounts = {}
+
+-- ❌ Never commit unannotated code
+function SomeFunction() -- Missing annotations!
+    return true
+end
+```
+
+### Key Rules to Maintain Purity
+1. **No generic `table` type** - Always define specific `---@class` structures
+2. **No bare `any` type** - Use specific class definitions instead
+3. **Nil safety guards required** - Check before accessing table fields
+4. **Explicit frame type casts** - Use `--[[@as FrameType]]` after `CreateFrame()`
+5. **Loop variable typing** - Type variables in `ipairs()` and `pairs()` iterations when needed
+
+See annotation-purity.instructions.md (in .github/instructions/) for detailed patterns and examples.
+
 ## File Organization
 
-### Load Order (from [Skillet - Synastria.toc](Skillet%20-%20Synastria/Skillet%20-%20Synastria.toc))
+### Load Order (from Skillet - Synastria.toc in src/Skillet - Synastria/)
 ```
 embeds.xml           # Ace2 + library dependencies
 Locale/*.lua         # Localization strings
@@ -263,16 +312,16 @@ end
 
 ## Common Pitfalls
 
-1. **API Assumptions**: Don't assume custom APIs are complete. Check [API-LIMITATIONS.md](Planning/Skillet/API-LIMITATIONS.md) first.
+1. **API Assumptions**: Don't assume custom APIs are complete. Check API-LIMITATIONS.md (in Planning/Skillet/) first.
 2. **Event Timing**: Profession switches aren't instant. Use `TRADE_SKILL_SHOW` event, not immediate checks.
-3. **Queue Recursion**: Prevent infinite loops when queueing dependencies (see `queueSnapshot` pattern in [SkilletQueue.lua](Skillet%20-%20Synastria/SkilletQueue.lua#L60-L80)).
+3. **Queue Recursion**: Prevent infinite loops when queueing dependencies (see `queueSnapshot` pattern in SkilletQueue.lua in src/Skillet - Synastria/, lines 60-80).
 4. **Global Pollution**: All WoW addons share global namespace. Prefix globals with `Skillet` or use locals.
 5. **TOC Version**: Must match WoW client (`## Interface: 30300` = 3.3.0).
 6. **Missing Type Annotations**: NEVER commit code with language server warnings. All functions, parameters, and complex types MUST be annotated.
 
 ## Active Development Focus
 
-Current work revolves around spell-based crafting (see [Planning/Skillet/](Planning/Skillet/)):
+Current work revolves around spell-based crafting (see Planning/Skillet/ directory):
 - Phase 1: Recipe scanning (COMPLETE)
 - Phase 2: Spell-based crafting via `Custom_DoProfessionRecipe()` (IN PROGRESS)
 - Phase 3: Multi-profession queue optimization (PLANNED)
@@ -305,4 +354,4 @@ end
 
 ---
 
-**When in doubt**: Check existing code patterns in [Skillet.lua](Skillet%20-%20Synastria/Skillet.lua), consult [SYNASTRIA_CUSTOM_API.md](Skillet%20-%20Synastria/SYNASTRIA_CUSTOM_API.md), and test in-game early and often.
+**When in doubt**: Check existing code patterns in Skillet.lua (in src/Skillet - Synastria/), consult SYNASTRIA_CUSTOM_API.md (in src/Skillet - Synastria/), and test in-game early and often.

@@ -248,7 +248,7 @@ local function add_items_to_queue(spellId, recipe, count, profession, addToTop)
 end
 
 -- Save the current queue into the provided database
----@param db table<string, table>
+---@param db SkilletAllQueues
 ---@param tradeskill string
 ---@return nil
 function Skillet:SaveQueue(db, tradeskill)
@@ -268,7 +268,7 @@ function Skillet:SaveQueue(db, tradeskill)
 end
 
 -- Loads the queue for the provided tradeskill name from the database
----@param db table<string, table>
+---@param db SkilletAllQueues
 ---@param tradeskill string
 ---@return nil
 function Skillet:LoadQueue(db, tradeskill)
@@ -403,7 +403,7 @@ end
 
 -- Returns a table {playername, queues} containing all queued
 -- items
----@return table<string, table>
+---@return SkilletAllQueues
 function Skillet:GetAllQueues()
     if not self.db.server.queues then
         return {}
@@ -414,7 +414,7 @@ end
 
 -- Returns the list of queues for the specified player
 ---@param player string
----@return table<string, table>
+---@return SkilletPlayerQueues
 function Skillet:GetQueues(player)
     assert(tostring(player), "Usage: GetQueues('player_name')")
 
@@ -430,7 +430,7 @@ function Skillet:GetQueues(player)
 end
 
 -- Returns the list of queues for the current player
----@return table<string, table>
+---@return SkilletPlayerQueues
 function Skillet:GetPlayerQueues()
     local playerName = GetSafePlayerName()
     return self:GetQueues(playerName)
@@ -479,7 +479,8 @@ end
 --     count : how many of this item is needed
 --     player : comma separated list of players that need the item for their queues
 --
----@return table<any, any>
+---@param playername string|nil Optional player name filter
+---@return SkilletQueuedItem[]|nil
 function Skillet:GetReagentsForQueuedRecipes(playername)
     local list = {}
 

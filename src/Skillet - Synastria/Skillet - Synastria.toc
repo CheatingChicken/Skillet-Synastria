@@ -69,4 +69,3 @@ UI\SkilletTestingUI.lua
 #### Integration files
 Integrations\ResourceTracker.lua
 
-SkilletItemIDValidator.lua

@@ -28,7 +28,10 @@ function Skillet:UpgradeDataAndOptions()
     -- Upgrade from Skillet 1.2 and earlier where recipes where (stupidly)
     -- stored per-charcter where no one else could see them
     if self.db.char.recipes then
-        self.db.server.recipes[UnitName("player")] = self.db.char.recipes
+        ---@type any
+        local recipes = self.db.char.recipes
+        ---@diagnostic disable-next-line
+        self.db.server.recipes[UnitName("player")] = recipes
         self.db.char.recipes = nil
     end
 
@@ -57,7 +60,10 @@ function Skillet:UpgradeDataAndOptions()
 
     -- Moved any recipe notes to the server level so all alts can see then
     if self.db.char.notes then
-        self.db.server.notes[UnitName("player")] = self.db.char.notes
+        ---@type any
+        local notes = self.db.char.notes
+        ---@diagnostic disable-next-line
+        self.db.server.notes[UnitName("player")] = notes
         self.db.char.notes = nil
     end
 

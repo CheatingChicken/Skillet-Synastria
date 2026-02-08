@@ -157,7 +157,7 @@ ChatFontNormal = {}
 ---@field GetMinMaxValues fun(self: Slider): number, number
 
 ---@class CheckButton : Button
----@field SetChecked fun(self: CheckButton, checked: boolean)
+---@field SetChecked fun(self: CheckButton, checked: boolean|number|nil)
 ---@field GetChecked fun(self: CheckButton): boolean
 
 ---@class Frame

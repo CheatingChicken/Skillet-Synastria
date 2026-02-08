@@ -23,7 +23,9 @@ Reload-friendly - changes apply with /reload only.
 
 -- Test recipe database: recipes with 100+ materials available
 -- Helper to get current profession name
+---@return string|nil profession The current profession name, or nil if none
 local function GetCurrentProfession()
+    ---@type string|nil
     local tradeName = GetTradeSkillLine()
     if tradeName and tradeName ~= "UNKNOWN" then
         return tradeName
@@ -32,6 +34,10 @@ local function GetCurrentProfession()
 end
 
 -- Helper function to find most craftable recipe with minimum craftable count
+---@param minCraftable number|nil Minimum number of craftable items required (default: 100)
+---@return number|nil spellId The spell ID of the best recipe, or nil if not found
+---@return string|nil recipeName The recipe name, or nil if not found
+---@return number bestCraftable The number of items craftable
 local function FindMostCraftableRecipe(minCraftable)
     minCraftable = minCraftable or 100
 
@@ -81,19 +87,27 @@ end
 -- Get spell ID by recipe name (not tradeskill window index!)
 local function GetRecipeSpellIdByName(recipeName, profession)
     -- Check if the requested profession is currently open
+    ---@type string|nil
     local currentProf = GetTradeSkillLine()
     if currentProf ~= profession then
         return nil -- Profession not open
     end
 
     -- Scan tradeskill window for matching recipe name
+    ---@type number
     local numSkills = GetNumTradeSkills()
     for i = 1, numSkills do
-        local skillName, skillType = GetTradeSkillInfo(i)
+        ---@type string|nil
+        local skillName = nil
+        ---@type string|nil
+        local skillType = nil
+        skillName, skillType = GetTradeSkillInfo(i)
         if skillType ~= "header" and skillName == recipeName then
             -- Get spell ID from recipe link
+            ---@type string|nil
             local recipeLink = GetTradeSkillRecipeLink(i)
             if recipeLink then
+                ---@type number|nil
                 local spellId = tonumber(recipeLink:match("|Henchant:(%d+)|h"))
                 return spellId
             end
@@ -111,7 +125,13 @@ local function GetRecipeIdByName(recipeName, profession)
 
     -- Search Skillet's profession data
     if Skillet.data[profession] then
-        for recipeId, recipeData in pairs(Skillet.data[profession]) do
+        ---@type table<any, any>
+        local profData = Skillet.data[profession]
+        for recipeId, recipeData in pairs(profData) do
+            ---@type any
+            recipeId = recipeId
+            ---@type any
+            recipeData = recipeData
             if type(recipeData) == "table" and recipeData.name == recipeName then
                 return recipeId
             end
@@ -207,8 +227,11 @@ function Skillet:CreatePhase2TestDialog()
         table.insert(dialog.testResults, string.format("%s%s|r %s: %s", color, status, testName, message))
 
         -- Update copyable log
+        ---@type string
         local resultText = ""
-        for i, result in ipairs(dialog.testResults) do
+        ---@type string[]
+        local results = dialog.testResults
+        for i, result in ipairs(results) do
             resultText = resultText .. result .. "\n"
         end
         dialog.logEditBox:SetText(resultText)
@@ -219,9 +242,7 @@ function Skillet:CreatePhase2TestDialog()
 
     -- Test 1: Basic API Check (SAFE)
     DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Debug] Creating Test 1 button...|r")
-    dialog.testBasicButton = CreateFrame("Button", "SkilletPhase2TestBasic", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.testBasicButton = dialog.testBasicButton
+    dialog.testBasicButton = CreateFrame("Button", "SkilletPhase2TestBasic", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.testBasicButton:SetSize(250, 32)
     dialog.testBasicButton:SetPoint("TOP", scrollFrame, "BOTTOM", 0, -20)
     dialog.testBasicButton:SetText("Test 1: Basic API Check")
@@ -240,9 +261,7 @@ function Skillet:CreatePhase2TestDialog()
 
     -- Test 2: Window-Free Crafting ⚠️
     DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Debug] Creating Test 2 button...|r")
-    dialog.testWindowlessButton = CreateFrame("Button", "SkilletPhase2TestWindowless", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.testWindowlessButton = dialog.testWindowlessButton
+    dialog.testWindowlessButton = CreateFrame("Button", "SkilletPhase2TestWindowless", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.testWindowlessButton:SetSize(250, 32)
     dialog.testWindowlessButton:SetPoint("TOP", dialog.testBasicButton, "BOTTOM", 0, -8)
     dialog.testWindowlessButton:SetText("Test 2: Windowless Craft ⚠")
@@ -274,9 +293,7 @@ function Skillet:CreatePhase2TestDialog()
 
     -- Test 3: Cooldown Verification
     DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Debug] Creating Test 3 button...|r")
-    dialog.testCooldownButton = CreateFrame("Button", "SkilletPhase2TestCooldown", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.testCooldownButton = dialog.testCooldownButton
+    dialog.testCooldownButton = CreateFrame("Button", "SkilletPhase2TestCooldown", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.testCooldownButton:SetSize(250, 32)
     dialog.testCooldownButton:SetPoint("TOP", dialog.testWindowlessButton, "BOTTOM", 0, -8)
     dialog.testCooldownButton:SetText("Test 3: Cooldown Respect")
@@ -308,9 +325,13 @@ function Skillet:CreatePhase2TestDialog()
 
         if success then
             -- Check cooldown after craft (delayed check)
+            ---@type number
             local elapsed = 0
-            local timerFrame = CreateFrame("Frame")
+            ---@type Frame
+            local timerFrame = CreateFrame("Frame") --[[@as Frame]]
             timerFrame:SetScript("OnUpdate", function(self, delta)
+                ---@type number
+                delta = delta
                 elapsed = elapsed + delta
                 if elapsed >= 1.0 then
                     self:SetScript("OnUpdate", nil)
@@ -329,9 +350,7 @@ function Skillet:CreatePhase2TestDialog()
     end)
     -- Test 4: Batch Crafting (Direct API Call)
     DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Debug] Creating Test 4 button...|r")
-    dialog.testBatchButton = CreateFrame("Button", "SkilletPhase2TestBatch", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.testBatchButton = dialog.testBatchButton
+    dialog.testBatchButton = CreateFrame("Button", "SkilletPhase2TestBatch", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.testBatchButton:SetSize(250, 32)
     dialog.testBatchButton:SetPoint("TOP", dialog.testCooldownButton, "BOTTOM", 0, -8)
     dialog.testBatchButton:SetText("Test 4: Batch Craft x5")
@@ -370,9 +389,7 @@ function Skillet:CreatePhase2TestDialog()
     end)
     -- Test 5: Multi-Profession
     DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Debug] Creating Test 5 button...|r")
-    dialog.testMultiProfButton = CreateFrame("Button", "SkilletPhase2TestMultiProf", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.testMultiProfButton = dialog.testMultiProfButton
+    dialog.testMultiProfButton = CreateFrame("Button", "SkilletPhase2TestMultiProf", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.testMultiProfButton:SetSize(250, 32)
     dialog.testMultiProfButton:SetPoint("TOP", dialog.testBatchButton, "BOTTOM", 0, -8)
     dialog.testMultiProfButton:SetText("Test 5: Multi-Profession")
@@ -396,9 +413,7 @@ function Skillet:CreatePhase2TestDialog()
 
     -- Clear Results button
     DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Debug] Creating Clear/Close buttons...|r")
-    dialog.clearButton = CreateFrame("Button", "SkilletPhase2TestClear", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.clearButton = dialog.clearButton
+    dialog.clearButton = CreateFrame("Button", "SkilletPhase2TestClear", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.clearButton:SetSize(120, 32)
     dialog.clearButton:SetPoint("TOP", dialog.testMultiProfButton, "BOTTOM", -65, -15)
     dialog.clearButton:SetText("Clear Results")
@@ -410,9 +425,7 @@ function Skillet:CreatePhase2TestDialog()
     end)
 
     -- Close button
-    dialog.closeButton = CreateFrame("Button", "SkilletPhase2TestClose", dialog, "UIPanelButtonTemplate")
-    ---@type Button
-    dialog.closeButton = dialog.closeButton
+    dialog.closeButton = CreateFrame("Button", "SkilletPhase2TestClose", dialog, "UIPanelButtonTemplate") --[[@as Button]]
     dialog.closeButton:SetSize(120, 32)
     dialog.closeButton:SetPoint("TOP", dialog.testMultiProfButton, "BOTTOM", 65, -15)
     dialog.closeButton:SetText("Close")

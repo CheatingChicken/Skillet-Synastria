@@ -16,17 +16,24 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-]]--
+]] --
 
----@type table
+---@type AceLocale
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
+---@class SkillStyleType
+---@field r number Red component (0-1)
+---@field g number Green component (0-1)
+---@field b number Blue component (0-1)
+---@field level integer Difficulty level ranking
+
+---@type table<string, SkillStyleType>
 local skill_style_type = {
-    ["optimal"]         = { r = 1.00, g = 0.50, b = 0.25, level = 4},
-    ["medium"]          = { r = 1.00, g = 1.00, b = 0.00, level = 3},
-    ["easy"]            = { r = 0.25, g = 0.75, b = 0.25, level = 2},
-    ["trivial"]         = { r = 0.50, g = 0.50, b = 0.50, level = 1},
-    ["header"]          = { r = 1.00, g = 0.82, b = 0,    level = 0},
+    ["optimal"] = { r = 1.00, g = 0.50, b = 0.25, level = 4 },
+    ["medium"]  = { r = 1.00, g = 1.00, b = 0.00, level = 3 },
+    ["easy"]    = { r = 0.25, g = 0.75, b = 0.25, level = 2 },
+    ["trivial"] = { r = 0.50, g = 0.50, b = 0.50, level = 1 },
+    ["header"]  = { r = 1.00, g = 0.82, b = 0, level = 0 },
 }
 
 ---@class SorterEntry
@@ -38,11 +45,17 @@ local skill_style_type = {
 ---@type SorterEntry[]
 local sorters = {}
 
----@type function|nil
+---@type (fun(tradeskill: string, a: integer, b: integer, stitch_left?: table, stitch_right?: table): boolean)|nil
 local recipe_sort_method = nil
 
+---@param tradeskill string The current tradeskill name
+---@param a integer Index of first recipe
+---@param b integer Index of second recipe
+---@param stitch_left table|nil Pre-fetched recipe data for left item (optional)
+---@param stitch_right table|nil Pre-fetched recipe data for right item (optional)
+---@return boolean sorted True if a should come before b
 local function sort_recipe_by_name(tradeskill, a, b, stitch_left, stitch_right)
-    local  left_r = stitch_left  or Skillet.stitch:GetItemDataByIndex(tradeskill, a)
+    local left_r = stitch_left or Skillet.stitch:GetItemDataByIndex(tradeskill, a)
     local right_r = stitch_right or Skillet.stitch:GetItemDataByIndex(tradeskill, b)
 
     -- Theoretically, we should never get a nil here, but I'm
@@ -56,9 +69,16 @@ local function sort_recipe_by_name(tradeskill, a, b, stitch_left, stitch_right)
         return true
     end
 
+    if not left_r or not right_r then return false end
     return left_r.name < right_r.name
 end
 
+---@param tradeskill string The current tradeskill name
+---@param a integer Index of first recipe
+---@param b integer Index of second recipe
+---@param stitch_left table|nil Pre-fetched recipe data for left item (optional)
+---@param stitch_right table|nil Pre-fetched recipe data for right item (optional)
+---@return boolean sorted True if a should come before b
 local function sort_recipe_by_difficulty(tradeskill, a, b, stitch_left, stitch_right)
     local __, left_skillType = Skillet:GetTradeSkillInfo(a)
     local _, right_skillType = Skillet:GetTradeSkillInfo(b)
@@ -86,8 +106,14 @@ local function sort_recipe_by_difficulty(tradeskill, a, b, stitch_left, stitch_r
     end
 end
 
+---@param tradeskill string The current tradeskill name
+---@param a integer Index of first recipe
+---@param b integer Index of second recipe
+---@param stitch_left table|nil Pre-fetched recipe data for left item (optional)
+---@param stitch_right table|nil Pre-fetched recipe data for right item (optional)
+---@return boolean sorted True if a should come before b
 local function sort_by_required_level(tradeskill, a, b, stitch_left, stitch_right)
-    local  left_r = stitch_left  or Skillet.stitch:GetItemDataByIndex(tradeskill, a)
+    local left_r = stitch_left or Skillet.stitch:GetItemDataByIndex(tradeskill, a)
     local right_r = stitch_right or Skillet.stitch:GetItemDataByIndex(tradeskill, b)
 
     -- Theoretically, we should never get a nil here, but I'm
@@ -101,10 +127,11 @@ local function sort_by_required_level(tradeskill, a, b, stitch_left, stitch_righ
         return true
     end
 
+    if not left_r or not right_r then return false end
     local left  = Skillet:GetLevelRequiredToUse(left_r.link)
     local right = Skillet:GetLevelRequiredToUse(right_r.link)
 
-    if not left  then  left = 0 end
+    if not left then left = 0 end
     if not right then right = 0 end
 
     if left == right then
@@ -115,8 +142,14 @@ local function sort_by_required_level(tradeskill, a, b, stitch_left, stitch_righ
     end
 end
 
+---@param tradeskill string The current tradeskill name
+---@param a integer Index of first recipe
+---@param b integer Index of second recipe
+---@param stitch_left table|nil Pre-fetched recipe data for left item (optional)
+---@param stitch_right table|nil Pre-fetched recipe data for right item (optional)
+---@return boolean sorted True if a should come before b
 local function sort_by_item_quality(tradeskill, a, b, stitch_left, stitch_right)
-    local  left_r = stitch_left  or Skillet.stitch:GetItemDataByIndex(tradeskill, a)
+    local left_r = stitch_left or Skillet.stitch:GetItemDataByIndex(tradeskill, a)
     local right_r = stitch_right or Skillet.stitch:GetItemDataByIndex(tradeskill, b)
 
     -- Theoretically, we should never get a nil here, but I'm
@@ -130,10 +163,11 @@ local function sort_by_item_quality(tradeskill, a, b, stitch_left, stitch_right)
         return true
     end
 
+    if not left_r or not right_r then return false end
     local left = select(1, Skillet:GetQualityFromLink(left_r.link))
     local right = select(1, Skillet:GetQualityFromLink(right_r.link))
 
-    if not left  then  left = 0 end
+    if not left then left = 0 end
     if not right then right = 0 end
 
     if left == right then
@@ -142,23 +176,29 @@ local function sort_by_item_quality(tradeskill, a, b, stitch_left, stitch_right)
     else
         return left < right
     end
-
 end
 
+---@param tradeskill string The current tradeskill name
+---@param a integer Index of first recipe
+---@param b integer Index of second recipe
+---@return boolean sorted Always true (no sorting applied)
 local function NOSORT(tradeskill, a, b)
     return true
 end
 
+---@type integer[]
 local sorted_recipes = {}
+---@type integer
 local last_num_trade_skills = 0
--- Track last trade for sorting state
 ---@type string|nil
 local last_trade_skill = nil
+---@type (fun(tradeskill: number, a: number, b: number): boolean)|nil
 local last_recipe_sort_method = nil
+
 -- Builds a sorted list of recipes (no headers) for the
 -- currently selected tradekskill and sorting method
+---@return nil
 local function sort_recipes()
-
     local num_skills = Skillet:GetNumTradeSkills()
 
     if recipe_sort_method == last_recipe_sort_method then
@@ -185,7 +225,7 @@ local function sort_recipes()
 
     local button_index = 1
     if Skillet:AreRecipesSorted() then
-        for i=1, num_skills, 1 do
+        for i = 1, num_skills, 1 do
             local _, skillType = Skillet:GetTradeSkillInfo(i)
             if skillType ~= "header" then
                 -- only add recipes, not headers. Headers are never displayed
@@ -197,24 +237,28 @@ local function sort_recipes()
 
         -- Only actually sort if we have a valid sort method (not just slot filter)
         if recipe_sort_method and recipe_sort_method ~= NOSORT then
-            table.sort(sorted_recipes, function(a,b)
-                return recipe_sort_method(Skillet.currentTrade, a, b)
+            ---@type string
+            local currentTrade = Skillet.currentTrade
+            table.sort(sorted_recipes, function(a, b)
+                return recipe_sort_method(currentTrade, a, b)
             end)
         end
-
     end
 end
 
+---@param toggle boolean Whether to enable descending sort
+---@return nil
 local function set_sort_desc(toggle)
-    for _,entry in pairs(sorters) do
+    for _, entry in pairs(sorters) do
         if entry.sorter == recipe_sort_method then
             Skillet:SetTradeSkillOption(Skillet.currentTrade, "sortdesc-" .. entry.name, toggle)
         end
     end
 end
 
+---@return boolean descending Whether descending sort is enabled
 local function is_sort_desc()
-    for _,entry in pairs(sorters) do
+    for _, entry in pairs(sorters) do
         if entry.sorter == recipe_sort_method then
             return Skillet:GetTradeSkillOption(Skillet.currentTrade, "sortdesc-" .. entry.name)
         end
@@ -224,6 +268,7 @@ local function is_sort_desc()
     return true
 end
 
+---@return nil
 local function show_sort_toggle()
     SkilletSortDescButton:Hide()
     SkilletSortAscButton:Hide()
@@ -239,23 +284,27 @@ end
 --
 -- Adds the sorting routine to the list of sorting routines.
 --
+---@param text string Display name for the sorter
+---@param sorter fun(tradeskill: number, a: number, b: number): boolean Sorting function
+---@return nil
 function Skillet:internal_AddRecipeSorter(text, sorter)
     assert(text and tostring(text),
-           "Usage Skillet:AddRecipeSorter(text, sorter), text must be a string")
+        "Usage Skillet:AddRecipeSorter(text, sorter), text must be a string")
     assert(sorter and type(sorter) == "function",
-           "Usage Skillet:AddRecipeSorter(text, sorter), sorter must be a function")
-    table.insert(sorters, {["name"]=text, ["sorter"]=sorter})
+        "Usage Skillet:AddRecipeSorter(text, sorter), sorter must be a function")
+    table.insert(sorters, { ["name"] = text, ["sorter"] = sorter })
 end
 
+---@return nil
 function Skillet:InitializeSorting()
     -- Default sorting methods
     -- We don't go through the public API for this as we want our methods
     -- to appear first in the list, no matter what.
-    table.insert(sorters, 1, {["name"]=L["None"], ["sorter"]=NOSORT})
-    table.insert(sorters, 2, {["name"]=L["By Name"], ["sorter"]=sort_recipe_by_name})
-    table.insert(sorters, 3, {["name"]=L["By Difficulty"], ["sorter"]=sort_recipe_by_difficulty})
-    table.insert(sorters, 4, {["name"]=L["By Level"], ["sorter"]=sort_by_required_level})
-    table.insert(sorters, 5, {["name"]=L["By Quality"], ["sorter"]=sort_by_item_quality})
+    table.insert(sorters, 1, { ["name"] = L["None"], ["sorter"] = NOSORT })
+    table.insert(sorters, 2, { ["name"] = L["By Name"], ["sorter"] = sort_recipe_by_name })
+    table.insert(sorters, 3, { ["name"] = L["By Difficulty"], ["sorter"] = sort_recipe_by_difficulty })
+    table.insert(sorters, 4, { ["name"] = L["By Level"], ["sorter"] = sort_by_required_level })
+    table.insert(sorters, 5, { ["name"] = L["By Quality"], ["sorter"] = sort_by_item_quality })
 
     recipe_sort_method = NOSORT
 
@@ -290,19 +339,19 @@ function Skillet:InitializeSorting()
     SkilletSortDescButton:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
-
 end
 
 --
 -- True if the list of recipes is sorted and false if it is not.
 -- Synastria: Also returns true if slot filter is active (to hide headers)
 --
+---@return boolean sorted Whether the recipe list is currently sorted or filtered
 function Skillet:AreRecipesSorted()
     -- Check if sorting is active
     if recipe_sort_method and recipe_sort_method ~= NOSORT then
         return true
     end
-    
+
     -- Check if slot filter is active
     if self.currentTrade then
         ---@type string|nil
@@ -311,13 +360,15 @@ function Skillet:AreRecipesSorted()
             return true
         end
     end
-    
+
     return false
 end
 
 --
 -- Causes the list of recipes to be resorted
 --
+---@param force boolean|nil Whether to force a resort even if nothing changed
+---@return nil
 function Skillet:internal_ResortRecipes(force)
     if force then
         -- this will trigger a resort
@@ -331,6 +382,8 @@ end
 -- If the recipe list is sorted, maps from the provided index to
 -- the sorted index.
 --
+---@param index integer The display index
+---@return integer sortedIndex The sorted recipe index
 function Skillet:GetSortedRecipeIndex(index)
     if self:AreRecipesSorted() then
         if not is_sort_desc() then
@@ -346,36 +399,38 @@ end
 --
 -- Returns the list of sorted recipes for the current trade skill
 --
+---@return integer[] sortedRecipes The list of sorted recipe indices
 function Skillet:GetSortedRecipes()
     return sorted_recipes
 end
 
 -- called when the sort drop down is first loaded
+---@return nil
 function Skillet:SortDropdown_OnLoad()
     ---@diagnostic disable-next-line: param-type-mismatch
     UIDropDownMenu_Initialize(SkilletSortDropdown, Skillet.SortDropdown_Initialize)
     ---@diagnostic disable-next-line: inject-field
-    SkilletSortDropdown.displayMode = "MENU"  -- changes the pop-up borders to be rounded instead of square
+    SkilletSortDropdown.displayMode = "MENU" -- changes the pop-up borders to be rounded instead of square
 
     -- Find out which sort method is selected
-    for i=1, #sorters, 1 do
+    for i = 1, #sorters, 1 do
         if recipe_sort_method == sorters[i].sorter then
             ---@diagnostic disable-next-line: param-type-mismatch
             UIDropDownMenu_SetSelectedID(SkilletSortDropdown, i)
             break
         end
     end
-
 end
 
 -- Called when the sort drop down is displayed
+---@return nil
 function Skillet:SortDropdown_OnShow()
     ---@diagnostic disable-next-line: param-type-mismatch
     UIDropDownMenu_Initialize(SkilletSortDropdown, Skillet.SortDropdown_Initialize)
     ---@diagnostic disable-next-line: inject-field
-    SkilletSortDropdown.displayMode = "MENU"  -- changes the pop-up borders to be rounded instead of square
+    SkilletSortDropdown.displayMode = "MENU" -- changes the pop-up borders to be rounded instead of square
 
-    for i=1, #sorters, 1 do
+    for i = 1, #sorters, 1 do
         if recipe_sort_method == sorters[i].sorter then
             ---@diagnostic disable-next-line: param-type-mismatch
             UIDropDownMenu_SetSelectedID(SkilletSortDropdown, i)
@@ -387,13 +442,14 @@ function Skillet:SortDropdown_OnShow()
 end
 
 -- The method we use the initialize the sorting drop down.
+---@return nil
 function Skillet:SortDropdown_Initialize()
     recipe_sort_method = NOSORT
 
     ---@type table
     local info
     local i = 0
-    for i=1, #sorters, 1 do
+    for i = 1, #sorters, 1 do
         ---@type SorterEntry
         local entry = sorters[i]
         info = UIDropDownMenu_CreateInfo()
@@ -405,17 +461,18 @@ function Skillet:SortDropdown_Initialize()
 
         info.func = Skillet.SortDropdown_OnClick
         info.value = i
-        i = i + 1
-        info.owner = this:GetParent()
+        ---@type any
+        local owner = this:GetParent()
+        info.owner = owner
         UIDropDownMenu_AddButton(info)
     end
 
     -- can't calls show_sort_toggle() here as the sort
     -- buttons have not been created yet
-
 end
 
 -- Called when the user selects an item in the sorting drop down
+---@return nil
 function Skillet:SortDropdown_OnClick()
     ---@diagnostic disable-next-line: param-type-mismatch
     UIDropDownMenu_SetSelectedID(SkilletSortDropdown, this:GetID())
@@ -430,6 +487,4 @@ function Skillet:SortDropdown_OnClick()
 
     Skillet:ResortRecipes()
     Skillet:UpdateTradeSkillWindow()
-
-
 end

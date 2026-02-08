@@ -1,24 +1,54 @@
 -- Synastria: Attunability and Forge Level Filtering (Toggle Button Style)
 -- Modified from ScootsCraft to use 3x2 toggle grid instead of dropdowns
 
+---@type Frame|nil
+Skillet.toggleBackdrop = nil
+
+---@type CheckButton|nil
+Skillet.charToggle = nil
+
+---@type CheckButton|nil
+Skillet.forgeToggleUn = nil
+
+---@type CheckButton|nil
+Skillet.forgeToggleAtt = nil
+
+---@type CheckButton|nil
+Skillet.forgeToggleTf = nil
+
+---@type CheckButton|nil
+Skillet.forgeToggleWf = nil
+
+---@type CheckButton|nil
+Skillet.forgeToggleLf = nil
+
 -- Create the attunability and forge filter toggles (2x3 grid)
+---@param parent Frame The parent frame for this UI
+---@return nil
 function Skillet:CreateAttunabilityFilters(parent)
     -- Make sure slot filter exists first
     if not SkilletSlotFilterDropdown then
         self:Print("Warning: SkilletSlotFilterDropdown not found when creating attunability filters")
-        return
+        return nil
     end
 
-    local baseX = -15            -- X position relative to SlotFilter
-    local baseY = 0              -- Y position relative to SlotFilter
+    ---@type number
+    local baseX = -15 -- X position relative to SlotFilter
+    ---@type number
+    local baseY = 0   -- Y position relative to SlotFilter
+    ---@type number
     local buttonSize = 20
+    ---@type number
     local horizontalSpacing = 50 -- Space between columns
+    ---@type number
     local verticalSpacing = 4    -- Space between rows
+    ---@type number
     local labelOffset = -2
-    local padding = 4            -- Padding inside background frame
+    ---@type number
+    local padding = 4 -- Padding inside background frame
 
     -- Create background frame with border
-    self.toggleBackdrop = CreateFrame('Frame', 'SkilletToggleBackdrop', parent)
+    self.toggleBackdrop = CreateFrame('Frame', 'SkilletToggleBackdrop', parent) --[[@as Frame]]
     self.toggleBackdrop:SetPoint('TOPLEFT', SkilletSlotFilterDropdown, 'TOPRIGHT', 10, 0)
     self.toggleBackdrop:SetSize(170, 52) -- Width and height to contain all toggles with padding
 
@@ -35,7 +65,7 @@ function Skillet:CreateAttunabilityFilters(parent)
     self.toggleBackdrop:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
 
     -- Row 1, Column 1: Char toggle
-    self.charToggle = CreateFrame('CheckButton', 'SkilletCharToggle', self.toggleBackdrop, 'UICheckButtonTemplate')
+    self.charToggle = CreateFrame('CheckButton', 'SkilletCharToggle', self.toggleBackdrop, 'UICheckButtonTemplate') --[[@as CheckButton]]
     self.charToggle:SetSize(buttonSize, buttonSize)
     self.charToggle:SetPoint('TOPLEFT', self.toggleBackdrop, 'TOPLEFT', padding, -padding)
 
@@ -46,7 +76,7 @@ function Skillet:CreateAttunabilityFilters(parent)
     _G[self.charToggle:GetName() .. 'Text']:SetFont("Fonts\\FRIZQT__.TTF", 11)
 
     -- Row 1, Column 2: Un (Unattuned) toggle
-    self.forgeToggleUn = CreateFrame('CheckButton', 'SkilletForgeToggleUn', parent, 'UICheckButtonTemplate')
+    self.forgeToggleUn = CreateFrame('CheckButton', 'SkilletForgeToggleUn', parent, 'UICheckButtonTemplate') --[[@as CheckButton]]
     self.forgeToggleUn:SetSize(buttonSize, buttonSize)
     self.forgeToggleUn:SetPoint('LEFT', self.charToggle, 'LEFT', horizontalSpacing, 0)
 
@@ -57,7 +87,7 @@ function Skillet:CreateAttunabilityFilters(parent)
     _G[self.forgeToggleUn:GetName() .. 'Text']:SetFont("Fonts\\FRIZQT__.TTF", 11)
 
     -- Row 1, Column 3: Att (Baseline) toggle
-    self.forgeToggleAtt = CreateFrame('CheckButton', 'SkilletForgeToggleAtt', parent, 'UICheckButtonTemplate')
+    self.forgeToggleAtt = CreateFrame('CheckButton', 'SkilletForgeToggleAtt', parent, 'UICheckButtonTemplate') --[[@as CheckButton]]
     self.forgeToggleAtt:SetSize(buttonSize, buttonSize)
     self.forgeToggleAtt:SetPoint('LEFT', self.forgeToggleUn, 'LEFT', horizontalSpacing, 0)
 
@@ -68,7 +98,7 @@ function Skillet:CreateAttunabilityFilters(parent)
     _G[self.forgeToggleAtt:GetName() .. 'Text']:SetFont("Fonts\\FRIZQT__.TTF", 11)
 
     -- Row 2, Column 1: TF (Titanforged) toggle
-    self.forgeToggleTf = CreateFrame('CheckButton', 'SkilletForgeToggleTf', parent, 'UICheckButtonTemplate')
+    self.forgeToggleTf = CreateFrame('CheckButton', 'SkilletForgeToggleTf', parent, 'UICheckButtonTemplate') --[[@as CheckButton]]
     self.forgeToggleTf:SetSize(buttonSize, buttonSize)
     self.forgeToggleTf:SetPoint('TOP', self.charToggle, 'BOTTOM', 0, -verticalSpacing)
 
@@ -79,7 +109,7 @@ function Skillet:CreateAttunabilityFilters(parent)
     _G[self.forgeToggleTf:GetName() .. 'Text']:SetFont("Fonts\\FRIZQT__.TTF", 11)
 
     -- Row 2, Column 2: WF (Warforged) toggle
-    self.forgeToggleWf = CreateFrame('CheckButton', 'SkilletForgeToggleWf', parent, 'UICheckButtonTemplate')
+    self.forgeToggleWf = CreateFrame('CheckButton', 'SkilletForgeToggleWf', parent, 'UICheckButtonTemplate') --[[@as CheckButton]]
     self.forgeToggleWf:SetSize(buttonSize, buttonSize)
     self.forgeToggleWf:SetPoint('LEFT', self.forgeToggleTf, 'LEFT', horizontalSpacing, 0)
 
@@ -90,7 +120,7 @@ function Skillet:CreateAttunabilityFilters(parent)
     _G[self.forgeToggleWf:GetName() .. 'Text']:SetFont("Fonts\\FRIZQT__.TTF", 11)
 
     -- Row 2, Column 3: LF (Lightforged) toggle
-    self.forgeToggleLf = CreateFrame('CheckButton', 'SkilletForgeToggleLf', parent, 'UICheckButtonTemplate')
+    self.forgeToggleLf = CreateFrame('CheckButton', 'SkilletForgeToggleLf', parent, 'UICheckButtonTemplate') --[[@as CheckButton]]
     self.forgeToggleLf:SetSize(buttonSize, buttonSize)
     self.forgeToggleLf:SetPoint('LEFT', self.forgeToggleWf, 'LEFT', horizontalSpacing, 0)
 
@@ -105,16 +135,14 @@ function Skillet:CreateAttunabilityFilters(parent)
 end
 
 -- Setup click handlers for forge toggles
+---@return nil
 function Skillet:SetupForgeToggleHandlers()
-    if not self.currentTrade then return end
+    if not self.currentTrade then return nil end
 
     -- Char toggle handler
     self.charToggle:SetScript('OnClick', function()
-        if not Skillet.currentTrade then return end
+        if not Skillet.currentTrade then return nil end
         local isChecked = Skillet.charToggle:GetChecked()
-        if type(isChecked) == "number" then
-            isChecked = isChecked == 1
-        end
 
         -- Save character attunability preference
         Skillet:SetTradeSkillOption(Skillet.currentTrade, "attunabilitychar", isChecked)
@@ -123,7 +151,7 @@ function Skillet:SetupForgeToggleHandlers()
 
     -- Un (Unattuned) toggle handler
     self.forgeToggleUn:SetScript('OnClick', function()
-        if not Skillet.currentTrade then return end
+        if not Skillet.currentTrade then return nil end
         local isChecked = Skillet.forgeToggleUn:GetChecked()
 
         -- Uncheck all others
@@ -148,7 +176,7 @@ function Skillet:SetupForgeToggleHandlers()
 
     -- Att (Baseline) toggle handler
     self.forgeToggleAtt:SetScript('OnClick', function()
-        if not Skillet.currentTrade then return end
+        if not Skillet.currentTrade then return nil end
         local isChecked = Skillet.forgeToggleAtt:GetChecked()
 
         -- Uncheck all others
@@ -173,7 +201,7 @@ function Skillet:SetupForgeToggleHandlers()
 
     -- TF (Titanforged) toggle handler
     self.forgeToggleTf:SetScript('OnClick', function()
-        if not Skillet.currentTrade then return end
+        if not Skillet.currentTrade then return nil end
         local isChecked = Skillet.forgeToggleTf:GetChecked()
 
         -- Uncheck all others
@@ -198,7 +226,7 @@ function Skillet:SetupForgeToggleHandlers()
 
     -- WF (Warforged) toggle handler
     self.forgeToggleWf:SetScript('OnClick', function()
-        if not Skillet.currentTrade then return end
+        if not Skillet.currentTrade then return nil end
         local isChecked = Skillet.forgeToggleWf:GetChecked()
 
         -- Uncheck all others
@@ -223,7 +251,7 @@ function Skillet:SetupForgeToggleHandlers()
 
     -- LF (Lightforged) toggle handler
     self.forgeToggleLf:SetScript('OnClick', function()
-        if not Skillet.currentTrade then return end
+        if not Skillet.currentTrade then return nil end
         local isChecked = Skillet.forgeToggleLf:GetChecked()
 
         -- Uncheck all others
@@ -300,12 +328,14 @@ function Skillet:SetupForgeToggleHandlers()
 end
 
 -- Update toggle UI to show current filter values
+---@return nil
 function Skillet:UpdateAttunabilityFilterUI()
-    if not self.charToggle or not self.currentTrade then return end
+    if not self.charToggle or not self.currentTrade then return nil end
 
     local charPref = self:GetTradeSkillOption(self.currentTrade, "attunabilitychar")
     self.charToggle:SetChecked(charPref)
 
+    ---@type number|nil
     local forgeFilter = self:GetTradeSkillOption(self.currentTrade, "forgefilter")
 
     -- Uncheck all forge toggles first
@@ -330,15 +360,20 @@ function Skillet:UpdateAttunabilityFilterUI()
 end
 
 -- Legacy functions removed (dropdowns no longer exist)
+---@return nil
 function Skillet:UpdateForgeFilterUI()
     -- Redirect to new toggle UI updater
     self:UpdateAttunabilityFilterUI()
 end
 
 -- Check if item matches attunability filter
+---@param recipeIndex integer The recipe index in the tradeskill window
+---@return boolean matches True if the item matches the attunability filter
 function Skillet:MatchesAttunabilityFilter(recipeIndex)
     -- Check if we have any forge filter active
+    ---@type number|nil
     local forgeFilter = self:GetTradeSkillOption(self.currentTrade, "forgefilter")
+    ---@type any
     local charPref = self:GetTradeSkillOption(self.currentTrade, "attunabilitychar")
 
     -- If no forge filter is active, Char toggle acts as "All Equipment"
@@ -347,11 +382,13 @@ function Skillet:MatchesAttunabilityFilter(recipeIndex)
     end
 
     -- If we have a forge filter active, apply attunability based on Char toggle
+    ---@type string|nil
     local itemLink = self:GetTradeskillItemLink(recipeIndex)
     if not itemLink then
         return false -- Hide items with no link when filter is active
     end
 
+    ---@type number|nil
     local itemId = self:GetItemIDFromLink(itemLink)
     if not itemId then
         return false
@@ -364,7 +401,9 @@ function Skillet:MatchesAttunabilityFilter(recipeIndex)
     end
 
     -- Check attunability based on Char toggle
+    ---@type boolean
     local attuneChar = false
+    ---@type boolean
     local attuneAny = false
 
     -- First check if item has attuneable tags
@@ -398,7 +437,10 @@ function Skillet:MatchesAttunabilityFilter(recipeIndex)
 end
 
 -- Check if item matches forge level filter
+---@param recipeIndex integer The recipe index in the tradeskill window
+---@return boolean matches True if the item matches the forge level filter
 function Skillet:MatchesForgeFilter(recipeIndex)
+    ---@type number|nil
     local filterValue = self:GetTradeSkillOption(self.currentTrade, "forgefilter")
 
     if not filterValue then
@@ -406,17 +448,20 @@ function Skillet:MatchesForgeFilter(recipeIndex)
     end
 
     -- Get item link (the crafted item, not the recipe)
+    ---@type string|nil
     local itemLink = self:GetTradeskillItemLink(recipeIndex)
     if not itemLink then
         return true -- Non-items pass the filter
     end
 
+    ---@type number|nil
     local itemId = self:GetItemIDFromLink(itemLink)
     if not itemId then
         return true
     end
 
     -- Get forge level
+    ---@type number|nil
     local forgeLevel = nil
     if GetItemAttuneForge then
         forgeLevel = GetItemAttuneForge(itemId)

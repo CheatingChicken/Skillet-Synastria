@@ -6,7 +6,12 @@ if Skillet then
     Skillet.slotFilterLoaded = true
 end
 
+---@class SlotFilterChoice
+---@field [1] string|nil Slot type identifier (e.g., 'INVTYPE_HEAD' or 'WEAPONS_ALL')
+---@field [2] string Display name for the choice
+
 -- Equipment slot filter options
+---@type SlotFilterChoice[]
 local SLOT_FILTER_CHOICES = {
     { nil,                      'All Slots' },
     { 'WEAPONS_ALL',            'All Weapons' },
@@ -35,6 +40,7 @@ local SLOT_FILTER_CHOICES = {
 }
 
 -- Weapon slot types for "All Weapons" filter
+---@type table<string, boolean>
 local WEAPON_SLOTS = {
     INVTYPE_WEAPON = true,
     INVTYPE_2HWEAPON = true,
@@ -44,7 +50,10 @@ local WEAPON_SLOTS = {
     INVTYPE_THROWN = true,
 }
 
--- Initialize slot filter dropdown values
+---@param self any UIDropDown context (implicit parameter)
+---@param level number Menu level
+---@param menuList table Menu list structure
+---@return nil
 local function SetSlotFilterValues(self, level, menuList)
     local info = UIDropDownMenu_CreateInfo()
 
@@ -58,12 +67,13 @@ local function SetSlotFilterValues(self, level, menuList)
     end
 end
 
--- Create the slot filter dropdown (called from CreateTradeSkillWindow)
+---@param parent Frame The parent frame for this UI
+---@return nil
 function Skillet:CreateSlotFilter(parent)
     -- Make sure SkilletSortAscButton exists first
     if not SkilletSortAscButton then
         self:Print("Error: SkilletSortAscButton not found when creating slot filter")
-        return
+        return nil
     end
 
     -- Slot filter dropdown
@@ -74,18 +84,20 @@ function Skillet:CreateSlotFilter(parent)
     UIDropDownMenu_SetText(self.slotFilterDropdown, 'All Slots')
 end
 
--- Set the slot filter
+---@param filterValue string|nil The slot type to filter by (nil for all slots)
+---@return nil
 function Skillet:SetSlotFilter(filterValue)
-    if not self.currentTrade then return end
+    if not self.currentTrade then return nil end
 
     self:SetTradeSkillOption(self.currentTrade, "slotfilter", filterValue)
     self:UpdateTradeSkillWindow()
 end
 
--- Update slot filter dropdown to show current value
+---@return nil
 function Skillet:UpdateSlotFilterUI()
-    if not self.slotFilterDropdown or not self.currentTrade then return end
+    if not self.slotFilterDropdown or not self.currentTrade then return nil end
 
+    ---@type string|nil
     local filterValue = self:GetTradeSkillOption(self.currentTrade, "slotfilter")
 
     -- Find the display text for this filter value
@@ -100,8 +112,10 @@ function Skillet:UpdateSlotFilterUI()
     UIDropDownMenu_SetText(self.slotFilterDropdown, displayText)
 end
 
--- Check if an item matches the slot filter
+---@param recipeIndex integer The index of the recipe in the tradeskill window
+---@return boolean matches True if the recipe matches the current slot filter
 function Skillet:MatchesSlotFilter(recipeIndex)
+    ---@type string|nil
     local filterValue = self:GetTradeSkillOption(self.currentTrade, "slotfilter")
 
     if not filterValue then
@@ -109,11 +123,13 @@ function Skillet:MatchesSlotFilter(recipeIndex)
     end
 
     -- Get the crafted item link
+    ---@type string|nil
     local itemLink = self:GetTradeskillItemLink(recipeIndex)
     if not itemLink then
         return false -- Hide items with no link when filter is active
     end
 
+    ---@type number|nil
     local itemId = self:GetItemIDFromLink(itemLink)
     if not itemId then
         return false -- Hide if we can't get item ID

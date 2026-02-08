@@ -20,12 +20,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -- Handy utilities for Skillet UI methods.
 
+---@type AceLocale
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
+---@type Frame|nil
 local infoBox
--- Stolen from the AceAddon about frame code. Just too useful
--- not to use
-local function createInfoBox()
+
+---@type (fun(): nil)|nil
+local createInfoBox
+
+---@return nil
+createInfoBox = function()
     infoBox = CreateFrame("Frame", "SkilletInfoBoxFrame", UIParent, "DialogBoxFrame")
     infoBox:SetWidth(500)
     infoBox:SetHeight(400)
@@ -40,18 +45,27 @@ local function createInfoBox()
     })
     infoBox:SetBackdropColor(0, 0, 0, 1)
 
+    ---@type FontString
     local text = infoBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     infoBox.title = text
     text:SetPoint("TOP", 0, -5)
 
+    ---@param text string The title text
+    ---@return nil
     function infoBox:SetTitle(text)
         infoBox.title:SetText(text)
     end
 
+    ---@type string[]
     infoBox.lefts = {}
+    ---@type string[]
     infoBox.rights = {}
+    ---@type FontString[]
     infoBox.textLefts = {}
+    ---@type FontString[]
     infoBox.textRights = {}
+
+    ---@return nil
     function infoBox:Clear()
         self.title:SetText("")
         for i = 1, #self.lefts do
@@ -60,22 +74,33 @@ local function createInfoBox()
         end
     end
 
+    ---@param left string Left column content
+    ---@param right string Right column content
+    ---@return nil
     function infoBox:AddLine(left, right)
         infoBox.lefts[#infoBox.lefts + 1] = left
         infoBox.rights[#infoBox.rights + 1] = right
     end
 
+    ---@type fun(self: Frame)
     local infoBox_Show = infoBox.Show
+
+    ---@return nil
     function infoBox:Show()
+        ---@type number
         local maxLeftWidth = 0
+        ---@type number
         local maxRightWidth = 0
+        ---@type number
         local textHeight = 0
 
         -- Create all the font strings and find the longest text
         for i = 1, #self.lefts do
             if not self.textLefts[i] then
+                ---@type FontString
                 local left = infoBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
                 self.textLefts[i] = left
+                ---@type FontString
                 local right = infoBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                 self.textRights[i] = right
 
@@ -88,7 +113,9 @@ local function createInfoBox()
 
             self.textLefts[i]:SetText(self.lefts[i] .. ":")
             self.textRights[i]:SetText(self.rights[i])
+            ---@type number
             local leftWidth = self.textLefts[i]:GetWidth()
+            ---@type number
             local rightWidth = self.textRights[i]:GetWidth()
             textHeight = self.textLefts[i]:GetHeight()
             if maxLeftWidth < leftWidth then
@@ -117,8 +144,12 @@ local function createInfoBox()
     createInfoBox = nil
 end
 
--- Adds resizing to a window. Resizing is both width and height from the
--- lower right corner only
+-- Adds resizing to a window. Resizing is both width and height from the lower right corner only
+---@param frame Frame The frame to enable resizing for
+---@param min_width number The minimum width of the frame
+---@param min_height number The minimum height of the frame
+---@param refresh_method fun(self: any): nil Callback function to refresh UI when resized
+---@return nil
 function Skillet:EnableResize(frame, min_width, min_height, refresh_method)
     -- lets play the resize me game!
     frame:SetMinResize(min_width, min_height) -- magic numbers
@@ -175,23 +206,31 @@ function Skillet:ShowInventoryInfoPopup()
         createInfoBox()
     end
 
-    infoBox:Clear()
-    infoBox:SetTitle(L["INVENTORYDESC"])
+    if infoBox then
+        infoBox:Clear()
+        infoBox:SetTitle(L["INVENTORYDESC"])
 
-    if self.inventoryCheck then
-        infoBox:AddLine(L["Library"], self.inventoryCheck:GetVersion())
+        if self.inventoryCheck then
+            ---@type string
+            local version = self.inventoryCheck:GetVersion()
+            infoBox:AddLine(L["Library"], version)
 
-        local list = self.inventoryCheck:GetSupportedAddons()
-        local text = list[1]
-        for i = 2, #list, 1 do
-            text = text .. ", " .. list[i]
+            ---@type string[]
+            local list = self.inventoryCheck:GetSupportedAddons()
+            ---@type string
+            local text = list[1]
+            for i = 2, #list, 1 do
+                text = text .. ", " .. list[i]
+            end
+            infoBox:AddLine(L["Supported Addons"], text)
+
+            ---@type string
+            local selectedAddon = self.inventoryCheck:GetSelectedAddon()
+            infoBox:AddLine(L["Selected Addon"], selectedAddon)
+        else
+            infoBox:AddLine(L["Supported Addons"], "<none>")
         end
-        infoBox:AddLine(L["Supported Addons"], text)
 
-        infoBox:AddLine(L["Selected Addon"], self.inventoryCheck:GetSelectedAddon())
-    else
-        infoBox:AddLine(L["Supported Addons"], "<none>")
+        infoBox:Show()
     end
-
-    infoBox:Show()
 end
