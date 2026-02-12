@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: ArkInventory Rules - Upgradeable
+## Version: 1.0.0
+## Author: Synastria Dev Team
+## Description: ArkInventory filter rules for upgradeable items with attunable upgrade chain detection
+## Dependencies: ArkInventoryRules
+
+ArkInventoryRules_Upgradeable.lua
