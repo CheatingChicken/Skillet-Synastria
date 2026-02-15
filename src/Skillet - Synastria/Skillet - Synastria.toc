@@ -4,7 +4,7 @@
 ## Notes-esES: Una sustitucion de la ventana de Habilidades de Comercio con soporte para Resource Bank
 ## Notes-ruRU: Заменяет окно профессий на более функциональное с поддержкой Resource Bank.
 ## Author: nogudnik (Synastria modifications by Priest)
-## Version 1.13-Synastria
+## Version: 1.14-beta1
 ## X-Category: Tradeskill
 ## X-eMail: nogudnik@gmail.com
 ## X-License GPL v3 or later
@@ -27,6 +27,9 @@
 #### List of embedded Ace2 libraries
 embeds.xml
 
+#### Logging system (must load first)
+SkilletLog.lua
+
 #### Localization files
 Locale\Locale-enUS.lua
 Locale\Locale-ruRU.lua
@@ -48,6 +51,11 @@ SkilletExtraction.lua
 ThirdPartyHooks.lua
 Upgrades.lua
 
+#### Database files (load after Skillet.lua initializes the addon object)
+Databases\ProspectingData.lua
+Databases\MillingData.lua
+Databases\ConversionData.lua
+
 #### UI files
 UI\Utils.lua
 UI\Sorting.lua
@@ -64,6 +72,8 @@ UI\ShoppingList.lua
 UI\ShoppingList.xml
 UI\ExtractionFrame.lua
 UI\ExtractionFrame.xml
+UI\LogViewer.lua
+UI\LogViewer.xml
 UI\SkilletTestingUI.lua
 
 #### Integration files

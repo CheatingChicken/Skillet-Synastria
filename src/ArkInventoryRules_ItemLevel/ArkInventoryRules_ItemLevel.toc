@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Ark Inventory Rules [ItemLevel]
+## Notes: Adds the belowavgilvl() rule to ArkInventory for filtering items below your equipped average
+## Author: Tech Priest of the Adeptus Mechanicus
+## Version: 1.0
+## RequiredDeps: ArkInventoryRules
+
+ArkInventoryRules_ItemLevel.lua

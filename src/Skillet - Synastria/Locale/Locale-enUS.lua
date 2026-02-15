@@ -31,6 +31,12 @@ L:RegisterTranslations("enUS", function()
         ["Queue"]                                                   = true,
         ["Enchant"]                                                 = true,
         ["Rescan"]                                                  = true,
+        ["Scan All"]                                                = true, -- Scan all professions
+        ["Group"]                                                   = true, -- Group queue by profession (deprecated)
+        ["Optimize"]                                                = true, -- Optimize queue order (dependency sort)
+        ["Extraction"]                                              = true, -- Extraction frame button
+        ["Requires:"]                                               = true, -- Requirement label
+        ["Reagents:"]                                               = true, -- Reagents label
         ["Number of items to queue/create"]                         = true,
         ["buyable"]                                                 = true,
         ["reagents in inventory"]                                   = true,

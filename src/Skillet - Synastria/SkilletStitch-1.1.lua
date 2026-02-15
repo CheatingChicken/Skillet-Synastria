@@ -47,7 +47,19 @@ end
 ---@field spellId number The spell ID for the recipe
 ---@field numcasts number Number of times to craft this recipe
 ---@field profession string The profession name
----@field recipe Recipe|nil Optional recipe object
+---@field name string The recipe display name (persists to SavedVariables)
+---@field link string|nil The item link created by this recipe (optional, for cross-references)
+---@field recipe Recipe|nil Optional recipe object (runtime only, does not serialize)
+---@field isPrimary boolean|nil True if user-queued, false/nil if auto-generated subcraft (Synastria)
+---@field conversionType string|nil Conversion type: "combine" or "split" (for Conversion profession)
+---@field sourceId number|nil Source item ID (for conversions)
+---@field outputId number|nil Output item ID (for conversions)
+---@field sourceNeeded number|nil How many source items needed (for conversions)
+---@field outputAmount number|nil How many output items created (for conversions)
+---@field crystallizedId number|nil Crystallized item ID (backward compat)
+---@field eternalId number|nil Eternal item ID (backward compat)
+---@field crystallizedNeeded number|nil Crystallized count needed (backward compat)
+---@field eternalsToMake number|nil Eternals to make (backward compat)
 
 ---@class CacheStats
 ---@field hits number Number of cache hits
@@ -68,6 +80,7 @@ end
 ---@field crystallizedNeeded number|nil For conversions, number of crystallized needed
 ---@field sourceId number|nil For conversions, source item ID
 ---@field outputId number|nil For conversions, output item ID
+---@field toolItemId number|nil For conversions, the item ID to use (tool or source)
 ---@field encoded string|nil Encoded recipe data (old format)
 ---@field difficulty string|nil Difficulty level (computed via metamethod)
 ---@field nummade number|nil Number of items crafted per cast (computed via metamethod)
@@ -311,8 +324,11 @@ local function get_item_count_with_conversions(itemId, includeBank)
     end
 
     -- Get base count for the requested item
+    ---@type number
     local baseCount = GetItemCount(itemId, includeBank) or 0
+    ---@type number
     local rbankCount = (GetCustomGameData and GetCustomGameData(13, itemId)) or 0
+    ---@type number
     local totalCount = baseCount + rbankCount
 
     -- Synastria: Check queued conversions that will produce this item
@@ -349,8 +365,11 @@ local function get_item_count_with_conversions(itemId, includeBank)
 
     -- If we can convert, add the converted amount
     if convertFromId then
+        ---@type number
         local convertibleBase = GetItemCount(convertFromId, includeBank) or 0
+        ---@type number
         local convertibleRbank = (GetCustomGameData and GetCustomGameData(13, convertFromId)) or 0
+        ---@type number
         local convertibleTotal = convertibleBase + convertibleRbank
 
         -- Synastria: Subtract any Crystallized that are queued to be converted
@@ -361,7 +380,8 @@ local function get_item_count_with_conversions(itemId, includeBank)
                 if entry.recipe and entry.recipe.isVirtualConversion then
                     if entry.recipe.crystallizedId == convertFromId then
                         -- This queued conversion will use up some of the Crystallized
-                        convertibleTotal = convertibleTotal - entry.recipe.crystallizedNeeded
+                        ---@type number
+                        convertibleTotal = convertibleTotal - (entry.recipe.crystallizedNeeded or 0)
                     end
                 end
             end
@@ -370,7 +390,9 @@ local function get_item_count_with_conversions(itemId, includeBank)
         -- Add the converted amount to our total
         -- If ratio is 10, we divide by 10 (10 crystallized = 1 eternal)
         -- If ratio is 0.1, we multiply by 10 (1 eternal = 10 crystallized)
+        ---@type number
         local convertedAmount = math.floor(convertibleTotal / conversionRatio)
+        ---@type number
         totalCount = totalCount + convertedAmount
     end
 
@@ -441,9 +463,12 @@ local function invalidateCacheForItems(itemIds)
     local cacheEntryCount = 0
 
     -- Count cache entries
+    ---@type number
+    local cacheCount = 0
     for _ in pairs(craftabilityCache) do
-        cacheEntryCount = cacheEntryCount + 1
+        cacheCount = cacheCount + 1
     end
+    cacheEntryCount = cacheCount
     -- craftabilityCache has entries (debug output removed)
 
     -- Iterate through all cached entries
@@ -467,7 +492,9 @@ local function invalidateCacheForItems(itemIds)
                     ---@type number
                     local reagentCount = 0
                     for _, reagent in ipairs(recipe.reagents) do
-                        reagentCount = reagentCount + 1
+                        ---@type number
+                        local rcount = reagentCount + 1
+                        reagentCount = rcount
                         ---@type number|nil
                         local reagentId = tonumber((reagent.link or ""):match("item:(%d+)"))
                         if reagentId and itemLookup[reagentId] then
@@ -479,7 +506,9 @@ local function invalidateCacheForItems(itemIds)
 
                     if usesAffectedItem then
                         craftabilityCache[cacheKey] = nil
-                        invalidatedCount = invalidatedCount + 1
+                        ---@type number
+                        local icount = invalidatedCount + 1
+                        invalidatedCount = icount
                     elseif reagentCount == 0 then
                         -- Recipe has no reagents in cache (debug output removed)
                     end
@@ -656,6 +685,27 @@ local reagentmeta = {
                 -- Fallback to old method if we can't extract item ID
                 count = GetItemCount(self.link, true) + get_resource_bank_count(self.link)
             end
+        elseif key == "numraw" then
+            -- Synastria: RAW inventory (bags + resbank) WITHOUT queue reservation subtraction
+            -- Used by calculation code to apply NET reservations (consumption - production)
+            local itemId = get_item_id_from_link(self.link)
+            if itemId then
+                count = get_item_count_with_conversions(itemId, false)
+            else
+                -- Fallback to old method if we can't extract item ID
+                count = GetItemCount(self.link) + get_resource_bank_count(self.link)
+            end
+            return count -- Return raw count WITHOUT subtracting reserved
+        elseif key == "numwbankraw" then
+            -- Synastria: RAW inventory (bags + bank + resbank) WITHOUT queue reservation subtraction
+            local itemId = get_item_id_from_link(self.link)
+            if itemId then
+                count = get_item_count_with_conversions(itemId, true)
+            else
+                -- Fallback to old method if we can't extract item ID
+                count = GetItemCount(self.link, true) + get_resource_bank_count(self.link)
+            end
+            return count -- Return raw count WITHOUT subtracting reserved
         elseif key == "numwalts" and alt_lookup_function ~= nil then
             count = alt_lookup_function(self.link) or 0
         end
@@ -848,10 +898,14 @@ function SkilletStitch:DecodeRecipe(datastring)
         ---@type integer|nil
         local index = datastring.index or nil
 
+        -- Synastria: Prefer directly stored nummade (more reliable than parsing encoded string)
+        ---@type number
+        local nummadeValue = datastring.nummade or tonumber(numcrafted) or 1
+
         local s = setmetatable({
             name = nameoverride,
             difficulty = difficultyt[difficultychar],
-            nummade = tonumber(numcrafted),
+            nummade = nummadeValue,
             link = link,
             spellId = spellId, -- Synastria: Store spell ID for Custom API
             tools = tools,
@@ -932,10 +986,14 @@ function SkilletStitch:DecodeRecipe(datastring)
         ---@type integer|nil
         local index = datastring.index or nil
 
+        -- Synastria: Prefer directly stored nummade (more reliable than parsing encoded string)
+        ---@type number
+        local nummadeValue = datastring.nummade or tonumber(numcrafted) or 1
+
         local s = setmetatable({
             name = nameoverride,
             difficulty = difficultyt[difficultychar],
-            nummade = tonumber(numcrafted),
+            nummade = nummadeValue,
             link = link,
             spellId = spellId,
             tools = tools,
@@ -1022,8 +1080,11 @@ end
 function SkilletStitch:EnableDataGathering(addon)
     assert(tostring(addon), "Usage: EnableDataGathering('addon')")
     self.datagatheraddons[addon] = true
-    self:RegisterEvent("TRADE_SKILL_SHOW")
-    self:RegisterEvent("CHAT_MSG_SKILL")
+    -- Only register events if AceEvent methods are available
+    if self.RegisterEvent then
+        self:RegisterEvent("TRADE_SKILL_SHOW")
+        self:RegisterEvent("CHAT_MSG_SKILL")
+    end
     if not self.data then
         self.data = {}
     end
@@ -1041,8 +1102,11 @@ function SkilletStitch:DisableDataGathering(addon)
     if next(self.datagatheraddons) then
         return
     end
-    self:UnregisterEvent("TRADE_SKILL_SHOW")
-    self:UnregisterEvent("CHAT_MSG_SKILL")
+    -- Only unregister events if AceEvent methods are available
+    if self.UnregisterEvent then
+        self:UnregisterEvent("TRADE_SKILL_SHOW")
+        self:UnregisterEvent("CHAT_MSG_SKILL")
+    end
     self.data = nil
 end
 
@@ -1050,8 +1114,11 @@ end
 function SkilletStitch:EnableQueue(addon)
     assert(tostring(addon), "Usage: EnableQueue('addon')")
     self.queueaddons[addon] = true
-    -- Synastria: Use BAG_UPDATE for reliable craft detection
-    self:RegisterEvent("BAG_UPDATE", "OnBagUpdate")
+    -- NOTE: Events are registered by Skillet addon (which has AceEvent-2.0)
+    -- not by this library. Skillet's event handlers call our methods.
+    if Skillet and Skillet:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[EVENTS] Queue enabled - events routed through Skillet addon|r")
+    end
     -- Synastria: Don't create new queue table - LoadQueue will set it from database
     -- if not self.queue then
     --     self.queue = {}
@@ -1072,7 +1139,11 @@ function SkilletStitch:DisableQueue(addon)
     if next(self.queueaddons) then
         return
     end
-    self:UnregisterEvent("BAG_UPDATE")
+    -- Only unregister events if AceEvent methods are available
+    if self.UnregisterEvent then
+        self:UnregisterEvent("BAG_UPDATE")
+        self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    end
     self.queueenabled = false
     self.queue = nil
 end
@@ -1327,7 +1398,9 @@ function SkilletStitch:ClearQueue()
 end
 
 function SkilletStitch:ProcessQueue()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[DEBUG] ProcessQueue called|r")
+    if Skillet and Skillet:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[DEBUG] ProcessQueue called|r")
+    end
 
     -- Synastria: Pause craftability calculations while processing queue
     if Skillet and Skillet.CraftCalc then
@@ -1335,7 +1408,9 @@ function SkilletStitch:ProcessQueue()
     end
 
     if not self.queue[1] or type(self.queue[1]) ~= "table" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[DEBUG] Queue empty or invalid|r")
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[DEBUG] Queue empty or invalid|r")
+        end
         -- Synastria: Clear the table contents while keeping the same reference
         if self.queue then
             ---@type integer
@@ -1348,14 +1423,38 @@ function SkilletStitch:ProcessQueue()
         return
     end
 
+    -- Synastria: Check if this is a conversion recipe (handled by Start button)
+    local queueItem = self.queue[1]
+    if queueItem.profession == "Conversion" or (queueItem.recipe and queueItem.recipe.isVirtualConversion) then
+        -- Synastria: Conversion ready - Start button will handle withdraw/use/deposit
+        if queueItem.recipe and queueItem.recipe.sourceId and queueItem.recipe.outputId then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Skillet] Conversion ready - click Start to process|r")
+            AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
+        else
+            -- Missing conversion data - remove from queue
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet] Invalid conversion data - removing from queue|r")
+            self:RemoveFromQueue(1)
+            if #self.queue > 0 then
+                self:ProcessQueue()
+            else
+                AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
+            end
+        end
+        return
+    end
+
     -- Synastria: Get spell ID from queue item
     ---@type number
     local spellId = self.queue[1]["spellId"]
-    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[DEBUG] Queue item: spellId=" .. tostring(spellId) .. "|r")
+    if Skillet and Skillet:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[DEBUG] Queue item: spellId=" .. tostring(spellId) .. "|r")
+    end
 
-    -- Synastria: Validate spell ID
+    -- Synastria: Validate spell ID (non-conversion recipes must have one)
     if not spellId or type(spellId) ~= "number" then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[DEBUG] Invalid spell ID in queue item - removing|r")
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[DEBUG] Invalid spell ID in queue item - removing|r")
+        end
         self:RemoveFromQueue(1)
         if #self.queue > 0 then
             self:ProcessQueue()
@@ -1405,20 +1504,56 @@ function SkilletStitch:ProcessQueue()
     ---@type number
     local numcasts = self.queue[1]["numcasts"]
 
+    ---@type number|nil
+    self.craftedItemId = nil -- Store item ID for proactive polling
+
+    -- Synastria: Extract itemId from queue link as primary source (most reliable)
+    local queueItemLink = self.queue[1]["link"]
+    if queueItemLink then
+        local extractedItemId = tonumber(queueItemLink:match("item:(%d+)"))
+        if extractedItemId then
+            self.craftedItemId = extractedItemId
+        end
+    end
+
     if spellId and Custom_GetProfessionRecipeInfo then
         local skillId, name, itemId, craftCount = Custom_GetProfessionRecipeInfo(spellId)
 
-        if itemId then
-            local bagCount = GetItemCount(itemId, true) or 0
+        -- Use extracted itemId if available, otherwise fall back to API
+        if not self.craftedItemId and itemId then
+            self.craftedItemId = itemId
+        end
+
+        if self.craftedItemId then
+            local bagCount = GetItemCount(self.craftedItemId, true) or 0
             local bankCount = 0
 
             -- Synastria: Add resource bank count if available
             if GetCustomGameData then
-                bankCount = GetCustomGameData(13, itemId) or 0
+                bankCount = GetCustomGameData(13, self.craftedItemId) or 0
             end
 
             self.preCraftItemCount = bagCount + bankCount
             self.expectedCraftCount = numcasts
+
+            if Skillet and Skillet:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[CRAFT] Pre-craft tracking: itemId=" ..
+                    self.craftedItemId .. ", count=" .. self.preCraftItemCount .. "|r")
+            end
+        else
+            -- Synastria: Some recipes have no item output (enchanting, inscription research)
+            -- This is expected - we'll rely on UNIT_SPELLCAST_SUCCEEDED for completion
+            if Skillet and Skillet:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage(
+                    "|cFFFFAA00[CRAFT] No item output for spell " ..
+                    spellId .. " - will use spell cast success for detection|r")
+            end
+        end
+    else
+        if not spellId then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[CRAFT] ERROR: No spell ID in queue item!|r")
+        elseif not Custom_GetProfessionRecipeInfo then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[CRAFT] ERROR: Custom_GetProfessionRecipeInfo not available!|r")
         end
     end
 
@@ -1444,10 +1579,92 @@ function SkilletStitch:ProcessQueue()
                 Skillet.customApiFailureReported = true
             end
         else
+            if Skillet and Skillet:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[CRAFT] Calling Custom_DoProfessionRecipe(spellId=" ..
+                    spellId .. ", numcasts=" .. numcasts .. ")|r")
+            end
             local success = Custom_DoProfessionRecipe(spellId, numcasts)
             if success then
-                -- Windowless crafting succeeded - no need to call DoTradeSkill!
+                if Skillet and Skillet:IsDevMode() then
+                    DEFAULT_CHAT_FRAME:AddMessage(
+                        "|cFF00FF00[CRAFT] Custom_DoProfessionRecipe succeeded - using windowless mode|r")
+                end
+                -- Windowless crafting succeeded - no cast bar exists!
+                -- Set flag to skip cast bar checks in monitoring
+                self.windowlessCrafting = true
+                self.expectedSpellId = spellId -- Store spell ID for event matching
+
+                -- NOTE: UNIT_SPELLCAST_SUCCEEDED is already registered on Skillet addon
+                -- and routed to OnSpellcastSucceeded - no need to register here
+                if Skillet and Skillet:IsDevMode() then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[EVENTS] Windowless mode enabled - spell ID " ..
+                    spellId .. "|r")
+                end
+
+                -- Synastria: Schedule PROACTIVE inventory checks for instant crafts (e.g., First Aid)
+                -- Some crafts complete so fast that events don't fire reliably
+                -- Extended polling: Check at 100ms, 300ms, 600ms, 1000ms, 1500ms, 2000ms
+                if self.craftedItemId then
+                    if Skillet and Skillet:IsDevMode() then
+                        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[CRAFT] Scheduling proactive inventory checks (itemId=" ..
+                            self.craftedItemId .. ")|r")
+                    end
+
+                    local function checkInventory(checkNumber)
+                        if not self.queuecasting or not self.windowlessCrafting then
+                            if Skillet and Skillet:IsDevMode() then
+                                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[POLL #" ..
+                                    checkNumber .. "] Craft already completed or canceled|r")
+                            end
+                            return
+                        end
+
+                        local currentCount = GetItemCount(self.craftedItemId, true) or 0
+                        if GetCustomGameData then
+                            currentCount = currentCount + (GetCustomGameData(13, self.craftedItemId) or 0)
+                        end
+
+                        if Skillet and Skillet:IsDevMode() then
+                            -- DEBUG: Also try GetItemCount without includeBank flag
+                            local bagsOnly = GetItemCount(self.craftedItemId, false) or 0
+                            local bagsAndBank = GetItemCount(self.craftedItemId, true) or 0
+
+                            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[POLL #" ..
+                                checkNumber ..
+                                "] Inventory check: pre=" ..
+                                tostring(self.preCraftItemCount) ..
+                                ", now=" ..
+                                currentCount .. " (bags=" .. bagsOnly .. ", bags+bank=" .. bagsAndBank .. ")|r")
+                        end
+
+                        if currentCount > (self.preCraftItemCount or 0) then
+                            if Skillet and Skillet:IsDevMode() then
+                                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[POLL #" ..
+                                    checkNumber .. "] Inventory increased! Triggering completion.|r")
+                            end
+                            self:ProcessCraftCompletion()
+                        end
+                    end
+
+                    -- Schedule 6 checks: 100ms, 300ms, 600ms, 1000ms, 1500ms, 2000ms
+                    AceEvent:ScheduleEvent("SkilletStitch_Poll1", function() checkInventory(1) end, 0.1, self)
+                    AceEvent:ScheduleEvent("SkilletStitch_Poll2", function() checkInventory(2) end, 0.3, self)
+                    AceEvent:ScheduleEvent("SkilletStitch_Poll3", function() checkInventory(3) end, 0.6, self)
+                    AceEvent:ScheduleEvent("SkilletStitch_Poll4", function() checkInventory(4) end, 1.0, self)
+                    AceEvent:ScheduleEvent("SkilletStitch_Poll5", function() checkInventory(5) end, 1.5, self)
+                    AceEvent:ScheduleEvent("SkilletStitch_Poll6", function() checkInventory(6) end, 2.0, self)
+                else
+                    -- Synastria: No item output (enchanting, inscription research) - rely on UNIT_SPELLCAST_SUCCEEDED
+                    if Skillet and Skillet:IsDevMode() then
+                        DEFAULT_CHAT_FRAME:AddMessage(
+                        "|cFFFFAA00[CRAFT] No craftedItemId - relying on spell cast success|r")
+                    end
+                end
+
                 return
+            else
+                DEFAULT_CHAT_FRAME:AddMessage(
+                    "|cFFFF0000[CRAFT] Custom_DoProfessionRecipe failed - falling back to traditional|r")
             end
             -- If Custom_DoProfessionRecipe failed, fall back to traditional DoTradeSkill
         end
@@ -1570,7 +1787,74 @@ function SkilletStitch:CheckCraftStatus()
 
     local elapsed = GetTime() - self.craftAttemptTime
 
-    -- After 2.0 seconds, check if we're actually casting (catastrophic failure fallback)
+    -- Synastria: For windowless crafting, skip cast bar check (no cast bar exists!)
+    -- Rely purely on BAG_UPDATE / inventory tracking for completion
+    if self.windowlessCrafting then
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[CRAFT MONITOR] Windowless craft in progress - elapsed " ..
+                string.format("%.1f", elapsed) .. "s|r")
+        end
+
+        -- After 5 seconds with no completion, something went wrong
+        if elapsed > 5.0 then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cFFFF0000[CRAFT MONITOR] Windowless craft timeout (5s) - assuming completion failed|r")
+
+            -- Cancel the monitoring timer
+            if AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_CraftMonitor")
+            end
+
+            -- Cancel proactive inventory poll timers
+            if AceEvent:IsEventScheduled("SkilletStitch_Poll1") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_Poll1")
+            end
+            if AceEvent:IsEventScheduled("SkilletStitch_Poll2") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_Poll2")
+            end
+            if AceEvent:IsEventScheduled("SkilletStitch_Poll3") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_Poll3")
+            end
+            if AceEvent:IsEventScheduled("SkilletStitch_Poll4") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_Poll4")
+            end
+            if AceEvent:IsEventScheduled("SkilletStitch_Poll5") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_Poll5")
+            end
+            if AceEvent:IsEventScheduled("SkilletStitch_Poll6") then
+                AceEvent:CancelScheduledEvent("SkilletStitch_Poll6")
+            end
+
+            -- Reset crafting state
+            self.queuecasting = false
+            self.craftAttemptTime = nil
+            self.preCraftItemCount = nil
+            self.expectedCraftCount = nil
+            self.windowlessCrafting = false
+
+            -- Synastria: Move failed item to end of queue
+            if self.queue[1] then
+                local failedItem = tremove(self.queue, 1)
+                tinsert(self.queue, failedItem)
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800Windowless timeout - moved to end of queue|r")
+            end
+
+            -- Trigger error event
+            AceEvent:TriggerEvent("SkilletStitch_Craft_Failed", "Windowless craft timeout")
+
+            -- Continue processing next item in queue
+            if #self.queue > 0 then
+                AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
+                -- Show prompt for next item
+                Skillet:ShowStartCraftingPrompt()
+            else
+                AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
+            end
+        end
+        return
+    end
+
+    -- Traditional crafting: After 2.0 seconds, check if we're actually casting (catastrophic failure fallback)
     if elapsed > 2.0 then
         local casting = UnitCastingInfo("player") or UnitChannelInfo("player")
         if not casting then
@@ -1715,6 +1999,62 @@ function SkilletStitch:OnSpellcastFailed(event, unit, spell, rank)
     end
 end
 
+-- Synastria: Spell cast success handler for windowless crafting (UNIT_SPELLCAST_SUCCEEDED)
+---@param event string The event name
+---@param unit string The unit that cast the spell
+---@param spell string|nil The spell name
+---@param rank string|nil The spell rank
+---@param lineId number|nil The spell lineId
+---@param spellId number|nil The spell ID
+function SkilletStitch:OnSpellcastSucceeded(event, unit, spell, rank, lineId, spellId)
+    -- Only care about player spells
+    if unit ~= "player" then
+        return
+    end
+
+    -- Only check if we're actively crafting from queue with windowless mode
+    if not self.queuecasting or not self.windowlessCrafting then
+        return
+    end
+
+    -- Synastria: WoW 3.3.5 doesn't provide spellId in this event (always nil)
+    -- We can't match by spellId, so just trust that if we're in windowless mode
+    -- and queuecasting, this is our craft completing
+
+    -- Use the craftedItemId we stored during ProcessQueue
+    local itemId = self.craftedItemId
+
+    -- Synastria: For recipes without item output (enchanting, inscription research, etc.)
+    -- craftedItemId will be 0 or nil. In these cases, trust the spell cast success
+    -- and trigger completion immediately without inventory checks.
+    if not itemId or itemId == 0 then
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[SPELLCAST] Recipe with no item output - completing immediately|r")
+        end
+        -- Delay 300ms to allow server processing
+        AceEvent:ScheduleEvent("SkilletStitch_SpellcastCompletion", function()
+            self:ProcessCraftCompletion()
+        end, 0.3, self)
+        return
+    end
+
+    -- For recipes with item output, verify inventory changed before completing
+    -- Trigger ProcessCraftCompletion with slight delay
+    -- 300ms allows server inventory update for multi-craft batches
+    AceEvent:ScheduleEvent("SkilletStitch_SpellcastCompletion", function()
+        local bagCount = GetItemCount(itemId, true) or 0
+        local bankCount = 0
+        if GetCustomGameData then
+            bankCount = GetCustomGameData(13, itemId) or 0
+        end
+        local currentCount = bagCount + bankCount
+
+        if currentCount > (self.preCraftItemCount or 0) then
+            self:ProcessCraftCompletion()
+        end
+    end, 0.3, self)
+end
+
 -- Synastria: BAG_UPDATE handler for reliable craft detection
 
 function SkilletStitch:OnBagUpdate()
@@ -1728,21 +2068,11 @@ function SkilletStitch:OnBagUpdate()
         return
     end
 
-    -- Get current inventory count
-    -- Synastria: Use spell ID to determine item ID
-    ---@type number|nil
-    local spellId = self.queue[1] and self.queue[1]["spellId"]
-    if not spellId then
-        return
-    end
-
-    local itemId = nil
-    if Custom_GetProfessionRecipeInfo then
-        local skillId, name, recipeItemId = Custom_GetProfessionRecipeInfo(spellId)
-        itemId = recipeItemId
-    end
+    -- Use the itemId we stored during ProcessQueue
+    local itemId = self.craftedItemId
 
     if not itemId then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[BAG_UPDATE] No craftedItemId available|r")
         return
     end
 
@@ -1750,12 +2080,12 @@ function SkilletStitch:OnBagUpdate()
 
     -- Add resource bank count if available
     if GetCustomGameData then
+        ---@type number
         currentCount = currentCount + (GetCustomGameData(13, itemId) or 0)
     end
 
     -- If inventory increased, craft completed
     if currentCount > self.preCraftItemCount then
-        -- Call completion processing directly
         self:ProcessCraftCompletion()
     end
 end
@@ -1764,12 +2094,40 @@ end
 
 function SkilletStitch:ProcessCraftCompletion()
     if not self.queuecasting then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[COMPLETION] Ignoring - not queuecasting|r")
         return
     end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] ProcessCraftCompletion called|r")
 
     -- Cancel the craft monitoring timer
     if AceEvent:IsEventScheduled("SkilletStitch_CraftMonitor") then
         AceEvent:CancelScheduledEvent("SkilletStitch_CraftMonitor")
+    end
+
+    -- Cancel proactive inventory poll timers (if any are still scheduled)
+    if AceEvent:IsEventScheduled("SkilletStitch_Poll1") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_Poll1")
+    end
+    if AceEvent:IsEventScheduled("SkilletStitch_Poll2") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_Poll2")
+    end
+    if AceEvent:IsEventScheduled("SkilletStitch_Poll3") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_Poll3")
+    end
+    if AceEvent:IsEventScheduled("SkilletStitch_Poll4") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_Poll4")
+    end
+    if AceEvent:IsEventScheduled("SkilletStitch_Poll5") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_Poll5")
+    end
+    if AceEvent:IsEventScheduled("SkilletStitch_Poll6") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_Poll6")
+    end
+
+    -- Cancel delayed SPELLCAST completion check (if BAG_UPDATE already processed)
+    if AceEvent:IsEventScheduled("SkilletStitch_SpellcastCompletion") then
+        AceEvent:CancelScheduledEvent("SkilletStitch_SpellcastCompletion")
     end
 
     -- Clear timeout timer and craft attempt tracking
@@ -1783,20 +2141,28 @@ function SkilletStitch:ProcessCraftCompletion()
                 self.queue[k] = nil
             end
         end
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COMPLETION] Queue empty - triggering complete|r")
         AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
         return
     end
 
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] Queue item present - numcasts=" ..
+        tostring(self.queue[1].numcasts) .. "|r")
+
     -- Synastria: Check for bulk completion by comparing inventory changes
     local actualCrafted = 1 -- Default to 1 if we can't detect
     if self.preCraftItemCount and self.expectedCraftCount then
-        -- Synastria: Get item ID from spell ID
+        -- Synastria: Get item ID and nummade from spell ID
         ---@type number
         local spellId = self.queue[1]["spellId"]
         local itemId = nil
+        local nummade = 1 -- Default: 1 item per craft
+
         if spellId and Custom_GetProfessionRecipeInfo then
-            local skillId, name, recipeItemId = Custom_GetProfessionRecipeInfo(spellId)
+            local skillId, name, recipeItemId, craftCount = Custom_GetProfessionRecipeInfo(spellId)
             itemId = recipeItemId
+            nummade = craftCount or 1 -- Items created per craft
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] Recipe creates " .. nummade .. " items per craft|r")
         end
 
         if itemId then
@@ -1809,11 +2175,17 @@ function SkilletStitch:ProcessCraftCompletion()
 
             local inventoryIncrease = postCraftItemCount - self.preCraftItemCount
 
-            -- If we got more than 1 item, Synastria bulk crafted
-            if inventoryIncrease > 1 then
-                actualCrafted = inventoryIncrease
-            elseif inventoryIncrease == 1 then
-                actualCrafted = 1
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] Inventory: " ..
+                self.preCraftItemCount .. " -> " .. postCraftItemCount .. " (+" .. inventoryIncrease .. " items)|r")
+
+            -- Synastria: Calculate actual crafts completed
+            -- Server multi-casts ALL numcasts at once in one spell
+            -- inventoryIncrease = number of ITEMS created
+            -- actualCrafted = number of CRAFTS completed = items / nummade
+            if inventoryIncrease > 0 then
+                actualCrafted = math.floor(inventoryIncrease / nummade)
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] actualCrafted = " ..
+                    inventoryIncrease .. " items / " .. nummade .. " per craft = " .. actualCrafted .. " crafts|r")
             end
         end
         -- Clear tracking variables
@@ -1821,8 +2193,15 @@ function SkilletStitch:ProcessCraftCompletion()
         self.expectedCraftCount = nil
     end
 
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] actualCrafted=" .. actualCrafted .. "|r")
+
     -- Deduct the actual number of items crafted
+    local beforeNumcasts = self.queue[1].numcasts
     self.queue[1].numcasts = self.queue[1].numcasts - actualCrafted
+    local afterNumcasts = self.queue[1].numcasts
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] numcasts: " ..
+        beforeNumcasts .. " -> " .. afterNumcasts .. " (after -" .. actualCrafted .. ")|r")
 
     -- Synastria: Update ResourceTracker after crafting
     -- Get recipe info from spell ID for ResourceTracker
@@ -1846,20 +2225,35 @@ function SkilletStitch:ProcessCraftCompletion()
     end
 
     if self.queue[1].numcasts < 1 then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COMPLETION] numcasts < 1 - removing from queue|r")
         self:RemoveFromQueue(1)
         if #self.queue > 0 then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[COMPLETION] " ..
+                #self.queue .. " items remaining - click 'Start Crafting' again to continue|r")
             AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
-            -- Synastria: Show crafting prompt for next item
-            Skillet:ShowStartCraftingPrompt()
+            -- Synastria: CANNOT auto-continue - Custom_DoProfessionRecipe requires hardware event!
+            -- Player must click 'Start Crafting' button again to trigger next craft
+            -- This is a WoW protected function limitation to prevent botting
         else
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[COMPLETION] Queue complete!|r")
             AceEvent:TriggerEvent("SkilletStitch_Queue_Complete")
         end
     else
+        -- Synastria: Server multi-casts ALL items at once, so numcasts should never be >= 1 after completion
+        -- If we somehow get here, it means server didn't complete all requested crafts
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[COMPLETION] numcasts >= 1 (" ..
+            self.queue[1].numcasts .. ") - click 'Start Crafting' again to continue|r")
         AceEvent:TriggerEvent("SkilletStitch_Queue_Continue", #self.queue)
-        -- Synastria: Show crafting prompt for remaining items
-        Skillet:ShowStartCraftingPrompt()
+        -- Same limitation: Cannot auto-continue, requires player action
     end
     self.queuecasting = false
+    self.windowlessCrafting = false -- Clear windowless flag after completion
+    self.expectedSpellId = nil      -- Clear expected spell ID
+
+    -- NOTE: UNIT_SPELLCAST_SUCCEEDED is always registered on Skillet addon
+    -- no need to unregister it here - it will filter by queuecasting flag
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[COMPLETION] queuecasting=false, windowlessCrafting cleared|r")
 end
 
 -- Synastria: StopCast removed - BAG_UPDATE handles craft completion reliably
@@ -1945,10 +2339,12 @@ end
 ---@param profession string|nil Profession name (optional)
 ---@param addToTop boolean|nil Whether to add to top of queue (default: false)
 ---@param itemLink string|nil Item link for cross-profession lookup (optional)
-function SkilletStitch:AddToQueue(spellId, times, profession, addToTop, itemLink)
+---@param isPrimary boolean|nil True if user-queued, false/nil if auto-generated subcraft
+function SkilletStitch:AddToQueue(spellId, times, profession, addToTop, itemLink, isPrimary)
     -- Synastria: Accept optional profession parameter for cross-profession queuing
     -- addToTop parameter to add items to the front of the queue
     -- itemLink parameter for cross-profession spell ID lookup
+    -- isPrimary parameter to distinguish user-queued vs auto-generated subcrafts
     local recenttrade = profession or GetTradeSkillLine()
 
     -- Synastria: REMOVED - This was clearing the queue when switching professions!
@@ -1978,47 +2374,103 @@ function SkilletStitch:AddToQueue(spellId, times, profession, addToTop, itemLink
         if s.spellId and s.spellId == spellId then
             found = true
             s.numcasts = s.numcasts + times
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AddToQueue] Increased existing queue entry to " ..
-                s.numcasts .. " casts|r")
+            -- Only show message when NOT in bulk operation mode
+            if not (Skillet and Skillet.suppressQueueUpdates) then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AddToQueue] Increased existing queue entry to " ..
+                    s.numcasts .. " casts|r")
+            end
             break
         end
     end
 
     if not found then
-        -- Synastria: Get profession/index from spellIdIndex
+        -- Synastria: Get profession/index from spellIdIndex AND fetch recipe object
         local lookup = spellIdIndex[spellId]
         local professionName = lookup and lookup.profession or "UNKNOWN"
         local index = lookup and lookup.index or nil
         local displayName = "Unknown Recipe"
+        local itemLink = nil
+
+        -- CRITICAL: Fetch the actual recipe object for queue entry (runtime data)
+        ---@type Recipe|nil
+        local recipeObject = nil
+        if professionName and professionName ~= "UNKNOWN" and index then
+            recipeObject = self:GetItemDataByIndex(professionName, index)
+            -- Get name from recipe if available (most reliable source)
+            if recipeObject and recipeObject.name then
+                displayName = recipeObject.name
+            end
+            -- Get link from recipe if available
+            if recipeObject and recipeObject.link then
+                itemLink = recipeObject.link
+            end
+        end
+
+        -- Try Custom API as fallback/override for name and profession tag
         if spellId and Custom_GetProfessionRecipeInfo then
-            local skillId, name = Custom_GetProfessionRecipeInfo(spellId)
+            local skillId, name, itemId = Custom_GetProfessionRecipeInfo(spellId)
+            if Skillet and Skillet:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[AddQueue DEBUG] Custom API returned: skillId=" ..
+                    tostring(skillId) .. ", name=" .. tostring(name) .. ", itemId=" .. tostring(itemId) .. "|r")
+            end
             if name then
-                displayName = name
+                displayName = name -- API name overrides scanned name
             end
             if skillId and type(skillId) == "number" then
                 professionName = GetProfessionTag(skillId)
             end
+            -- Generate link if we have itemId but no link yet
+            if itemId and itemId > 0 and not itemLink then
+                itemLink = "item:" .. itemId
+            end
         end
 
-        -- Store queue data with profession tag
+        -- Store queue data with SERIALIZABLE display fields + runtime recipe reference
+        ---@type QueueEntry
+        local queueEntry = {
+            ["spellId"] = spellId,
+            ["numcasts"] = times,
+            ["profession"] = professionName,
+            ["name"] = displayName or "Unknown Recipe",
+            ["link"] = itemLink or "",
+            ["recipe"] = recipeObject,
+            ["isPrimary"] = isPrimary or false -- Synastria: Track if user-queued vs auto-generated
+        }
+
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AddQueue DEBUG] Created entry: spellId=" ..
+                tostring(queueEntry.spellId) ..
+                ", name='" ..
+                tostring(queueEntry.name) ..
+                "', profession='" .. tostring(queueEntry.profession) .. "', link='" .. tostring(queueEntry.link) .. "'|r")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AddQueue DEBUG] Recipe object: " ..
+                (queueEntry.recipe and "EXISTS" or "NIL") .. "|r")
+        end
+
         if addToTop then
-            table.insert(self.queue, 1, {
-                ["spellId"] = spellId,
-                ["numcasts"] = times,
-                ["profession"] = professionName
-            })
+            table.insert(self.queue, 1, queueEntry)
         else
-            table.insert(self.queue, {
-                ["spellId"] = spellId,
-                ["numcasts"] = times,
-                ["profession"] = professionName
-            })
+            table.insert(self.queue, queueEntry)
         end
 
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUED] " ..
-            displayName .. " x" .. times .. " (Spell ID: " .. tostring(spellId) .. ")|r")
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AddQueue DEBUG] Queue size after insert: " .. #self.queue .. "|r")
+        end
+
+        -- Only show queued message when NOT in bulk operation mode
+        if not (Skillet and Skillet.suppressQueueUpdates) then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUED] " ..
+                displayName .. " x" .. times .. " (Spell ID: " .. tostring(spellId) .. ")|r")
+        end
+        if Skillet and Skillet:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE DEBUG] Queue size after add: " .. #self.queue .. "|r")
+        end
     end
 
+    if Skillet and Skillet:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE DEBUG] Triggering SkilletStitch_Queue_Add event, queue size=" ..
+            #self.queue .. "|r")
+    end
     AceEvent:TriggerEvent("SkilletStitch_Queue_Add")
 end
 
@@ -2038,11 +2490,13 @@ function SkilletStitch:GetNumQueuedItems(index)
         return 0
     end
 
+    ---@type number
     local count = 0
     if self.queue then
         ---@type integer, QueueEntry
         for k, v in pairs(self.queue) do
             if v["spellId"] == spellId then
+                ---@type number
                 count = count + tonumber(v["numcasts"])
             end
         end
@@ -2080,6 +2534,7 @@ function SkilletStitch:ScanTrade()
             local newstr = nil
             local link = GetTradeSkillItemLink(i)
             local reagents = {} -- Synastria: Initialize reagents table
+            local maxmade = 1   -- Synastria: Default to 1 item per craft
 
             if not link then
                 shred = true
@@ -2092,32 +2547,37 @@ function SkilletStitch:ScanTrade()
 
                 local v1, _, v2, _, v3, _, v4 = GetTradeSkillTools(i)
                 ---@type string
-                v1 = v1
-                ---@type string|nil
-                v2 = v2
-                ---@type string|nil
-                v3 = v3
-                ---@type string|nil
-                v4 = v4
-                if v4 then
-                    v1 = v1 .. ", " .. v2 .. ", " .. v3 .. ", " .. v4
-                elseif v3 then
-                    v1 = v1 .. ", " .. v2 .. ", " .. v3
-                elseif v2 then
-                    v1 = v1 .. ", " .. v2
-                elseif v1 then
-                    v1 = v1
+                local tool1 = v1 or ""
+                ---@type string
+                local tool2 = v2 or ""
+                ---@type string
+                local tool3 = v3 or ""
+                ---@type string
+                local tool4 = v4 or ""
+                if tool4 ~= "" then
+                    ---@type string
+                    tool1 = tool1 .. ", " .. tool2 .. ", " .. tool3 .. ", " .. tool4
+                elseif tool3 ~= "" then
+                    ---@type string
+                    tool1 = tool1 .. ", " .. tool2 .. ", " .. tool3
+                elseif tool2 ~= "" then
+                    ---@type string
+                    tool1 = tool1 .. ", " .. tool2
+                elseif tool1 then
+                    tool1 = tool1
                 end
                 local linkname = link:match("%|h%[([^%]]+)%]%|h")
                 local squishedlink = squishlink(link) -- Synastria: Keep original link, squish for encoding
 
-                local minmade, maxmade = GetTradeSkillNumMade(i)
+                local minmade
+                minmade, maxmade = GetTradeSkillNumMade(i)
 
                 if linkname == skillname then
-                    newstr = ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
+                    newstr = ";" ..
+                        squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (tool1 or "") .. ";"
                 else
                     newstr = skillname ..
-                        ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (v1 or "") .. ";"
+                        ";" .. squishedlink .. ";" .. difficultyr[skilltype] .. maxmade .. ";" .. (tool1 or "") .. ";"
                 end
 
                 -- Synastria: Build reagents table with vendor info for new format
@@ -2129,6 +2589,7 @@ function SkilletStitch:ScanTrade()
                     else
                         -- Add to encoded string for backward compatibility
                         local squished = squishlink(reagentLink)
+                        ---@type string
                         newstr = newstr .. rcount .. ";" .. squished .. ";"
 
                         -- Synastria: Get vendor status from PeriodicTable for new format
@@ -2156,9 +2617,10 @@ function SkilletStitch:ScanTrade()
             -- This happens regardless of whether link was nil or not (outside the if/else block)
             self.data[prof][i] = {
                 name = skillname,
-                link = link,        -- Synastria: Store original unsquished link (may be nil if shred=true)
-                encoded = newstr,   -- Keep encoded version for compatibility
-                reagents = reagents -- Synastria: Store reagents with vendor info (may be empty if shred=true)
+                link = link,         -- Synastria: Store original unsquished link (may be nil if shred=true)
+                encoded = newstr,    -- Keep encoded version for compatibility
+                reagents = reagents, -- Synastria: Store reagents with vendor info (may be empty if shred=true)
+                nummade = maxmade    -- Synastria: Store items created per craft (for nummade > 1 recipes)
             }
         else
             self.data[prof][i] = nil
@@ -2220,12 +2682,16 @@ local function purgeOldFormatData(data)
     end
 
     if foundOldFormat then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF9900[Skillet] Old recipe data format detected and purged. Professions will be rescanned.|r")
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cFFFF9900[Skillet] Old recipe data format detected and purged. Professions will be rescanned.|r")
     end
 
     return foundOldFormat
 end
 
+---@param self SkilletStitch
+---@param oldLib SkilletStitch|nil
+---@param oldDeactivate function|nil
 local function activate(self, oldLib, oldDeactivate)
     if oldLib then
         ---@type table<string, table<integer, RecipeData>>
@@ -2270,6 +2736,9 @@ local function activate(self, oldLib, oldDeactivate)
     end
 end
 
+---@param self SkilletStitch
+---@param major string
+---@param instance any
 local function external(self, major, instance)
     if major == "AceEvent-2.0" then
         AceEvent = instance

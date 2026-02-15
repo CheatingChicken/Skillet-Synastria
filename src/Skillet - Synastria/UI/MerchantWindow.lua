@@ -98,8 +98,8 @@ local function update_merchant_buy_button()
 		return
 	end
 
-	SkilletMerchantBuyFrameTopText:SetText(L["This merchant sells reagents you need!"]);
-	SkilletMerchantBuyFrameButton:SetText(L["Buy Reagents"]);
+	SkilletMerchantBuyFrameTopText:SetText(GetLocalizedString("This merchant sells reagents you need!"));
+	SkilletMerchantBuyFrameButton:SetText(GetLocalizedString("Buy Reagents"));
 
 	SkilletMerchantBuyFrame:SetPoint("TOPLEFT", "MerchantFrame", "TOPLEFT", 60, -28);
 	SkilletMerchantBuyFrame:SetFrameStrata("HIGH");
@@ -172,9 +172,11 @@ function Skillet:BuyRequiredReagents()
 	end
 
 	---@cast list ShoppingListItem[]
+	---@type number
 	local totalspent = 0;
 	local abacus = AceLibrary("Abacus-2.0") ---@type Abacus
 
+	---@type number
 	local items_purchased = 0;
 
 	-- for each item they sell, see if we need it
@@ -233,11 +235,11 @@ function Skillet:BuyRequiredReagents()
 					local itemspent = price * itemstobuy -- spent on this type of item
 					totalspent = totalspent + itemspent -- spent on all items from this merchant
 					---@type string
-					local message = L["Purchased"]
+					local message = GetLocalizedString("Purchased")
 					---@type string
 					local cash = abacus:FormatMoneyFull(itemspent, true)
 					message = message ..
-					": " .. (itemstobuy * quantity) .. " x " .. GetMerchantItemLink(i) .. " (" .. cash .. ")"
+						": " .. (itemstobuy * quantity) .. " x " .. GetMerchantItemLink(i) .. " (" .. cash .. ")"
 					self:Print(message)
 				end
 			end
@@ -246,7 +248,7 @@ function Skillet:BuyRequiredReagents()
 
 	if totalspent > 0 and items_purchased > 1 then
 		---@type string
-		local message = L["Total spent"]
+		local message = GetLocalizedString("Total spent")
 		local cash = abacus:FormatMoneyFull(totalspent, true)
 		message = message .. ": " .. cash
 		self:Print(message)

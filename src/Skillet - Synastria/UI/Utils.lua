@@ -23,6 +23,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ---@type AceLocale
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
+---@param key string The localization key
+---@return string The localized string or the key itself as fallback
+local function getLocalizedString(key)
+    return L[key] or key
+end
+
 ---@type Frame|nil
 local infoBox
 
@@ -208,12 +214,12 @@ function Skillet:ShowInventoryInfoPopup()
 
     if infoBox then
         infoBox:Clear()
-        infoBox:SetTitle(L["INVENTORYDESC"])
+        infoBox:SetTitle(GetLocalizedString("INVENTORYDESC"))
 
         if self.inventoryCheck then
             ---@type string
             local version = self.inventoryCheck:GetVersion()
-            infoBox:AddLine(L["Library"], version)
+            infoBox:AddLine(GetLocalizedString("Library"), version)
 
             ---@type string[]
             local list = self.inventoryCheck:GetSupportedAddons()
@@ -222,13 +228,13 @@ function Skillet:ShowInventoryInfoPopup()
             for i = 2, #list, 1 do
                 text = text .. ", " .. list[i]
             end
-            infoBox:AddLine(L["Supported Addons"], text)
+            infoBox:AddLine(GetLocalizedString("Supported Addons"), text)
 
             ---@type string
             local selectedAddon = self.inventoryCheck:GetSelectedAddon()
-            infoBox:AddLine(L["Selected Addon"], selectedAddon)
+            infoBox:AddLine(GetLocalizedString("Selected Addon"), selectedAddon)
         else
-            infoBox:AddLine(L["Supported Addons"], "<none>")
+            infoBox:AddLine(GetLocalizedString("Supported Addons"), "<none>")
         end
 
         infoBox:Show()

@@ -58,6 +58,7 @@ Skillet:RegisterDefaults('profile', {
     display_shopping_list_at_auction = false,
     transparency                     = 1.0,
     scale                            = 1.0,
+    dev_mode                         = false, -- Synastria: Debug logging disabled by default
 })
 
 -- Options specific to a single character
@@ -88,8 +89,25 @@ local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 -- Events
 local AceEvent = AceLibrary("AceEvent-2.0")
 
--- Type definitions for EmmyLua
----@class QueueEntry
+-- Helper function to safely get player name, always returns a string
+---@return string playerName The player's name, or "Unknown" if not available
+function GetSafePlayerName()
+    local nameFromAPI = UnitName("player")
+    if nameFromAPI then
+        return nameFromAPI
+    else
+        return "Unknown"
+    end
+end
+
+-- Helper function to safely get localized strings with fallback
+---@param key string The localization key
+---@return string The localized string, or the key itself as fallback
+function GetLocalizedString(key)
+    return L[key] or key
+end
+
+-- Type definitions for EmmyLua (QueueEntry defined in SkilletStitch-1.1.lua)
 ---@class Recipe
 ---@class Reagent
 ---@class DialogFrame
@@ -466,6 +484,35 @@ function Skillet:OnInitialize()
     ---@type SkilletStitch
     self.stitch = AceLibrary("SkilletStitch-1.1")
 
+    -- Log initialization
+    SkilletLog:Add("Skillet:OnInitialize() called", "INFO")
+    SkilletLog:Add("Checking database tables...", "INFO")
+
+    -- Verify databases loaded
+    if self.MILLING_DATA then
+        SkilletLog:Add("MILLING_DATA exists - database loaded successfully", "SUCCESS")
+    else
+        SkilletLog:Add("MILLING_DATA is NIL - database failed to load!", "ERROR")
+    end
+
+    if self.PROSPECTING_DATA then
+        SkilletLog:Add("PROSPECTING_DATA exists - database loaded successfully", "SUCCESS")
+    else
+        SkilletLog:Add("PROSPECTING_DATA is NIL - database failed to load!", "ERROR")
+    end
+
+    if self.CONVERSION_GROUPS then
+        SkilletLog:Add("CONVERSION_GROUPS exists - database loaded successfully", "SUCCESS")
+    else
+        SkilletLog:Add("CONVERSION_GROUPS is NIL - database failed to load!", "ERROR")
+    end
+
+    if self.CONVERSION_DEFINITIONS then
+        SkilletLog:Add("CONVERSION_DEFINITIONS exists - database loaded successfully", "SUCCESS")
+    else
+        SkilletLog:Add("CONVERSION_DEFINITIONS is NIL - database failed to load!", "ERROR")
+    end
+
     -- Make sure this is done in initialize, not enable as we want the chat
     -- commands to be available even when the mod is disabled. Otherwise,
     -- how would the mod be enabled again?
@@ -488,6 +535,22 @@ function Skillet:OnInitialize()
             else
                 DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet] Testing UI not loaded|r")
             end
+        elseif msg == "log" or msg == "logs" then
+            -- Dump all logs to chat
+            SkilletLog:Dump()
+        elseif msg == "log show" or msg == "logui" or msg == "showlog" then
+            -- Show the log viewer UI
+            Skillet:ShowLogViewer()
+        elseif msg == "log clear" or msg == "clearlogs" then
+            -- Clear all logs
+            SkilletLog:Clear()
+        elseif msg == "help" then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Skillet] Available commands:|r")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF/skillet dev|r - Toggle developer mode")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF/skillet test|r - Open testing UI")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF/skillet log|r - Dump diagnostic logs to chat")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF/skillet log show|r - Show log viewer UI")
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF/skillet log clear|r - Clear all logs")
         end
     end
 end
@@ -507,6 +570,20 @@ end
 -- Synastria: Debug logging function that respects dev mode
 function Skillet:DebugLog(message, color)
     if self:IsDevMode() then
+        -- Map color codes to log levels
+        local level = "INFO"
+        if color and string.find(color, "FF0000") then
+            level = "ERROR"
+        elseif color and string.find(color, "FFAA00") then
+            level = "WARN"
+        elseif color and string.find(color, "00FF00") then
+            level = "SUCCESS"
+        end
+
+        -- Log to Debug group
+        SkilletLog:Add(message, level, "Debug")
+
+        -- Also print to chat for immediate visibility
         color = color or "|cFF888888"
         DEFAULT_CHAT_FRAME:AddMessage(color .. message .. "|r")
     end
@@ -665,7 +742,7 @@ function Skillet:ScanCompleted()
             -- only print this if we are not not doing a bag rescan,
             -- i.e. a first time or forced rescan.
             local name = self:GetTradeSkillLine()
-            self:Print(L["Scan completed"] .. ": " .. name);
+            self:Print(GetLocalizedString("Scan completed") .. ": " .. name);
         end
 
         -- Synastria: Clear craftability cache after scan to force recalculation
@@ -873,6 +950,11 @@ end
 
 -- So we can track when the players inventory changes and update craftable counts
 function Skillet:BAG_UPDATE()
+    -- Synastria: First, notify SkilletStitch for queue processing
+    if self.stitch and self.stitch.OnBagUpdate then
+        self.stitch:OnBagUpdate()
+    end
+
     -- Synastria: Clear craftability cache when inventory changes
     ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
@@ -938,6 +1020,11 @@ function Skillet:UNIT_SPELLCAST_START(unit, spellName, rank, lineID, spellID)
 end
 
 function Skillet:UNIT_SPELLCAST_SUCCEEDED(unit, spellName, rank, lineID, spellID)
+    -- Synastria: First, notify Skillet Stitch for windowless craft detection
+    if self.stitch and self.stitch.OnSpellcastSucceeded then
+        self.stitch:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", unit, spellName, rank, lineID, spellID)
+    end
+
     if unit ~= "player" or not spellID then
         return
     end
@@ -1113,6 +1200,7 @@ function Skillet:DebugSelectedRecipe()
         DEFAULT_CHAT_FRAME:AddMessage(" ")
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00Detailed Calculation Log:|r")
         -- Test bags+resbank - FORCE RECALCULATION with verbose output
+        -- Note: Queue net reservation cache is built automatically in CalculateRecipeCraftabilityCustomAPI
         local numCraftable = self.CraftCalc:CalculateRecipeCraftability(recipe, lib, false, true, 0, true)
 
         DEFAULT_CHAT_FRAME:AddMessage(" ")
@@ -1152,6 +1240,14 @@ function Skillet:DebugRecipeTree(recipe, lib, includeBank, depth)
             -- Check if reagent is craftable
             local reagentRecipe = lib:GetItemDataByName(reagent.name)
 
+            -- Synastria: Check if reagent has nummade > 1 to show craft equivalence
+            local craftsInfo = ""
+            if reagentRecipe and reagentRecipe.nummade and reagentRecipe.nummade > 1 then
+                local craftsWorth = math.floor(available / reagentRecipe.nummade)
+                local craftsNeeded = math.ceil(needed / reagentRecipe.nummade)
+                craftsInfo = string.format(" (%d/%d crafts)", craftsWorth, craftsNeeded)
+            end
+
             -- Check if reagent has conversions (e.g., Eternal Fire from other Eternals)
             local conversionText = ""
             if reagent.name and reagent.name:match("^Eternal ") then
@@ -1182,8 +1278,9 @@ function Skillet:DebugRecipeTree(recipe, lib, includeBank, depth)
                 color = "|cFFFF0000"   -- Red if shortage
             end
 
-            DEFAULT_CHAT_FRAME:AddMessage(string.format("%s  %s%s: %d/%d -> max %d%s%s%s|r",
-                indent, color, reagent.name, available, needed, maxFromReagent, vendor, craftableText, conversionText))
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("%s  %s%s: %d/%d%s -> max %d%s%s%s|r",
+                indent, color, reagent.name, available, needed, craftsInfo, maxFromReagent, vendor, craftableText,
+                conversionText))
 
             -- Recurse if craftable and we have a shortage
             if reagentRecipe and available < needed and depth < 5 then
@@ -1232,139 +1329,33 @@ end
 -- ========================================
 -- Synastria: Centralized Conversion System
 -- ========================================
--- Define conversions in a single table for easy expansion
--- Format: [sourceItemId] = {targetItemId, conversionRatio, conversionType, name}
---   ratio: how many source items = 1 target (e.g., 10 Crystallized = 1 Eternal)
---   type: "combine" (use source item) or "split" (use target item to get source)
---
--- To add new conversions:
--- 1. Add entries to CONVERSION_DEFINITIONS
--- 2. System automatically builds lookup maps
--- 3. Shopping list and queue processor use the same data
+-- NOTE: Conversion data has been moved to Databases/ConversionData.lua
+--   - Skillet.CONVERSION_DEFINITIONS: Main conversion table
+--   - Skillet.CONVERSION_GROUPS: UI grouping for extraction interface
+--   - CRYSTALLIZED_TO_ETERNAL_MAP: Auto-generated lookup map
+--   - ETERNAL_TO_CRYSTALLIZED_MAP: Auto-generated lookup map
 -- ========================================
 
--- NEW: Hardcoded conversion groups for extraction interface with labels
-Skillet.CONVERSION_GROUPS = {
-    {
-        label = "Eternal Elements",
-        resultItems = { 35623, 35624, 36860, 35625, 35627, 35622 }, -- Water, Earth, Fire, Life, Shadow, Air (Eternals)
-        sourceItems = { 37705, 37701, 37702, 37704, 37703, 37700 }, -- Crystallized versions
-        bidirectional = true,                                       -- Can convert both ways
-        ratio = 10                                                  -- 10 crystallized = 1 eternal
-    },
-    {
-        label = "Elemental Primals",
-        resultItems = { 21884, 22452, 22451, 21886 }, -- Life, Earth, Air, Fire (Primals)
-        sourceItems = { 22575, 22573, 22572, 22574 }, -- Corresponding Motes
-        bidirectional = false,                        -- One-way conversion only
-        ratio = 10                                    -- 10 motes = 1 primal
-    },
-    {
-        label = "Abstract Primals",
-        resultItems = { 21884, 22457, 22456 }, -- Life, Mana, Shadow (Primals)
-        sourceItems = { 22575, 22576, 22577 }, -- Corresponding Motes
-        bidirectional = false,                 -- One-way conversion only
-        ratio = 10                             -- 10 motes = 1 primal
-    },
-    {
-        label = "Enchanting Essences",
-        -- Row 1 (Greater): Cosmic, Planar, Eternal, Nether
-        -- Row 2 (Lesser): Cosmic, Planar, Eternal, Nether
-        -- Row 3 (Greater): Mystic, Astral, Magic
-        -- Row 4 (Lesser): Mystic, Astral, Magic
-        resultItems = { 34055, 22446, 16203, 11175, 11135, 11082, 10939 }, -- Greater Essences (high->low level)
-        sourceItems = { 34056, 22447, 16202, 11174, 11134, 10998, 10938 }, -- Lesser Essences (high->low level)
-        bidirectional = true,                                              -- Can convert both ways
-        ratio = 3,                                                         -- 3 lesser = 1 greater
-        extended = true                                                    -- Use large layout (4 rows needed)
-    }
-}
-
-Skillet.CONVERSION_DEFINITIONS = {
-    -- ===== WRATH: Crystallized -> Eternal (combine 10 into 1) =====
-    { source = 37700, target = 35622, ratio = 10, type = "combine", name = "Crystallized Air -> Eternal Air" },
-    { source = 37701, target = 35624, ratio = 10, type = "combine", name = "Crystallized Earth -> Eternal Earth" },
-    { source = 37702, target = 36860, ratio = 10, type = "combine", name = "Crystallized Fire -> Eternal Fire" },
-    { source = 37704, target = 35625, ratio = 10, type = "combine", name = "Crystallized Life -> Eternal Life" },
-    { source = 37703, target = 35627, ratio = 10, type = "combine", name = "Crystallized Shadow -> Eternal Shadow" },
-    { source = 37705, target = 35623, ratio = 10, type = "combine", name = "Crystallized Water -> Eternal Water" },
-
-    -- ===== WRATH: Eternal -> Crystallized (split 1 into 10) =====
-    { source = 35622, target = 37700, ratio = 0.1, type = "split", name = "Eternal Air -> Crystallized Air" },
-    { source = 35624, target = 37701, ratio = 0.1, type = "split", name = "Eternal Earth -> Crystallized Earth" },
-    { source = 36860, target = 37702, ratio = 0.1, type = "split", name = "Eternal Fire -> Crystallized Fire" },
-    { source = 35625, target = 37704, ratio = 0.1, type = "split", name = "Eternal Life -> Crystallized Life" },
-    { source = 35627, target = 37703, ratio = 0.1, type = "split", name = "Eternal Shadow -> Crystallized Shadow" },
-    { source = 35623, target = 37705, ratio = 0.1, type = "split", name = "Eternal Water -> Crystallized Water" },
-
-    -- ===== TBC: Mote -> Primal (combine 10 into 1) =====
-    { source = 22572, target = 22451, ratio = 10, type = "combine", name = "Mote of Air -> Primal Air" },
-    { source = 22573, target = 22452, ratio = 10, type = "combine", name = "Mote of Earth -> Primal Earth" },
-    { source = 22574, target = 21886, ratio = 10, type = "combine", name = "Mote of Fire -> Primal Fire" },
-    { source = 22575, target = 21884, ratio = 10, type = "combine", name = "Mote of Life -> Primal Life" },
-    { source = 22576, target = 22457, ratio = 10, type = "combine", name = "Mote of Mana → Primal Mana" },
-    { source = 22577, target = 22456, ratio = 10, type = "combine", name = "Mote of Shadow → Primal Shadow" },
-    { source = 22578, target = 21885, ratio = 10, type = "combine", name = "Mote of Water → Primal Water" },
-
-    -- Note: Primal Fire/Earth → Mote conversions are real Mining recipes, not virtual conversions
-
-    -- ===== VANILLA: Enchanting Essence Conversions (3:1 ratio) =====
-    -- Lesser → Greater (combine 3 into 1)
-    { source = 10938, target = 10939, ratio = 3, type = "combine", name = "Lesser Magic Essence → Greater Magic Essence" },
-    { source = 10998, target = 11082, ratio = 3, type = "combine", name = "Lesser Mystic Essence → Greater Mystic Essence" },
-    { source = 11134, target = 11135, ratio = 3, type = "combine", name = "Lesser Nether Essence → Greater Nether Essence" },
-    { source = 11174, target = 11175, ratio = 3, type = "combine", name = "Lesser Eternal Essence → Greater Eternal Essence" },
-    { source = 10940, target = 10978, ratio = 3, type = "combine", name = "Lesser Astral Essence → Greater Astral Essence" },
-
-    -- Greater → Lesser (split 1 into 3)
-    { source = 10939, target = 10938, ratio = 0.333, type = "split", name = "Greater Magic Essence → Lesser Magic Essence" },
-    { source = 11082, target = 10998, ratio = 0.333, type = "split", name = "Greater Mystic Essence → Lesser Mystic Essence" },
-    { source = 11135, target = 11134, ratio = 0.333, type = "split", name = "Greater Nether Essence → Lesser Nether Essence" },
-    { source = 11175, target = 11174, ratio = 0.333, type = "split", name = "Greater Eternal Essence → Lesser Eternal Essence" },
-    { source = 10978, target = 10940, ratio = 0.333, type = "split", name = "Greater Astral Essence → Lesser Astral Essence" },
-
-    -- ===== TBC: Planar Essence Conversions (3:1 ratio) =====
-    { source = 22447, target = 22446, ratio = 3, type = "combine", name = "Lesser Planar Essence → Greater Planar Essence" },
-    { source = 22446, target = 22447, ratio = 0.333, type = "split", name = "Greater Planar Essence → Lesser Planar Essence" },
-
-    -- ===== WRATH: Cosmic Essence Conversions (3:1 ratio) =====
-    { source = 34056, target = 34055, ratio = 3, type = "combine", name = "Lesser Cosmic Essence → Greater Cosmic Essence" },
-    { source = 34055, target = 34056, ratio = 0.333, type = "split", name = "Greater Cosmic Essence → Lesser Cosmic Essence" },
-
-    -- ===== VANILLA: Enchanting Shard Conversions (3:1 ratio, one-way only) =====
-    { source = 11084, target = 11139, ratio = 3, type = "combine", name = "Small Glimmering Shard → Large Glimmering Shard" },
-    { source = 11138, target = 11177, ratio = 3, type = "combine", name = "Small Glowing Shard → Large Glowing Shard" },
-    { source = 11176, target = 11178, ratio = 3, type = "combine", name = "Small Radiant Shard → Large Radiant Shard" },
-    { source = 14343, target = 14344, ratio = 3, type = "combine", name = "Small Brilliant Shard → Large Brilliant Shard" },
-}
-
--- Build lookup maps from definitions (backwards compatibility)
-local CRYSTALLIZED_TO_ETERNAL_MAP = {}
-local ETERNAL_TO_CRYSTALLIZED_MAP = {}
-
-for _, conversion in ipairs(Skillet.CONVERSION_DEFINITIONS) do
-    if conversion.type == "combine" then
-        -- Crystallized -> Eternal
-        CRYSTALLIZED_TO_ETERNAL_MAP[conversion.source] = conversion.target
-    elseif conversion.type == "split" then
-        -- Eternal -> Crystallized
-        ETERNAL_TO_CRYSTALLIZED_MAP[conversion.source] = conversion.target
-    end
-end
-
 -- Helper function: Get conversion info for an item
--- Returns: targetId, ratio, type or nil if no conversion exists
+-- Returns: targetId, inputAmount, outputAmount, type or nil if no conversion exists
 ---@param itemId number The item ID to check for conversions
 ---@return number|nil targetId The target item ID to convert to/from
----@return number|nil ratio The conversion ratio
+---@return number|nil inputAmount How many source items needed for conversion
+---@return number|nil outputAmount How many target items produced by conversion
 ---@return string|nil convType The conversion type ('combine' or 'split')
 function Skillet:GetConversionInfo(itemId)
+    -- Guard: Ensure CONVERSION_DEFINITIONS is loaded
+    if not self.CONVERSION_DEFINITIONS then
+        return nil
+    end
+
     -- Check if this item is a TARGET (can be created FROM something else)
     -- We check TARGET first because when we need an item, we want to make it (not use it up)
     for _, conversion in ipairs(self.CONVERSION_DEFINITIONS) do
         if conversion.target == itemId then
-            -- Return the source, ratio, and type
-            return conversion.source, conversion.ratio, conversion.type
+            -- Return the source, input amount, output amount, type, and tool item ID
+            return conversion.source, conversion.inputAmount, conversion.outputAmount, conversion.type,
+                conversion.toolItemId
         end
     end
 
@@ -1372,68 +1363,198 @@ function Skillet:GetConversionInfo(itemId)
     -- This handles the case where we have excess and want to convert it
     for _, conversion in ipairs(self.CONVERSION_DEFINITIONS) do
         if conversion.source == itemId then
-            return conversion.target, conversion.ratio, conversion.type
+            return conversion.target, conversion.inputAmount, conversion.outputAmount, conversion.type,
+                conversion.toolItemId
         end
     end
 
-    return nil, nil, nil
+    return nil, nil, nil, nil, nil
+end
+
+-- Synastry: Get prebuilt queue consumption cache (built during craftability calculation)
+-- If cache doesn't exist, returns nil (caller should handle fallback)
+---@return table<number, number>|nil netReservationMap Maps itemId -> net reserved amount (consumption - production)
+function Skillet:GetQueueNetReservationCache()
+    -- Access the cache from CraftCalc module
+    if self.CraftCalc and self.CraftCalc.GetQueueNetReservationCache then
+        return self.CraftCalc:GetQueueNetReservationCache()
+    end
+    return nil
+end
+
+-- If cache doesn't exist, returns nil (caller should handle fallback)
+---@return table<number, number>|nil consumptionMap Maps itemId -> total quantity reserved
+function Skillet:GetQueueConsumptionCache()
+    -- Legacy function - now deprecated for craftability calculations
+    -- Craftability now uses net reservations (consumption - production)
+    -- This function kept for backward compatibility if needed
+    return nil
 end
 
 -- Synastria: Calculate how many of an item will be consumed by queued recipes
+-- OPTIMIZED: Uses prebuilt cache if available (during craftability calc)
 ---@param itemId number|nil The item ID to check
 ---@return number The total quantity needed from the queue
 function Skillet:GetQueuedReagentConsumption(itemId)
+    if not itemId then return 0 end
+
+    -- Try to use prebuilt cache first (MUCH faster during bulk calculations)
+    local cache = self:GetQueueConsumptionCache()
+    if cache then
+        local cached = cache[itemId] or 0
+        if cached > 0 then
+            local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
+            self:DebugLog(string.format("[QueueConsump] %s: %d (from cache)", itemName, cached), "|cFF00FF00")
+        end
+        return cached
+    end
+
+    -- No cache available - build on-demand (slower, but necessary for non-calc contexts)
+    ---@type SkilletStitch
+    local lib = AceLibrary("SkilletStitch-1.1")
+    if not lib or not lib.queue then return 0 end
+
+    local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
+    self:DebugLog(string.format("[QueueConsump] %s: calculating on-demand (no cache)", itemName), "|cFFFFAA00")
+
+    -- DETAILED LOGGING: Track each contributing recipe
+    if self:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+            "|cFFFF8800[CONSUMPTION CALC] Calculating consumption for %s (ID %d)|r", itemName, itemId))
+    end
+
+    local totalNeeded = 0
+
+    -- Synastria: Use Custom API for optimized reagent lookup
+    if Custom_GetProfessionRecipeReagents then
+        for i = 1, #lib.queue do
+            local entry = lib.queue[i]
+            if entry.spellId then
+                local reagents = Custom_GetProfessionRecipeReagents(entry.spellId)
+                if reagents and reagents[itemId] then
+                    local neededPerCraft = reagents[itemId]
+                    local numCasts = entry.numcasts or 1
+                    local contribution = neededPerCraft * numCasts
+                    totalNeeded = totalNeeded + contribution
+
+                    if self:IsDevMode() then
+                        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                            "|cFFFF8800  - %s x%d -> consumes %d (total now: %d)|r",
+                            entry.name or "Unknown", numCasts, contribution, totalNeeded))
+                    end
+                end
+            end
+        end
+    else
+        -- Fallback: Traditional method
+        for i = 1, #lib.queue do
+            local entry = lib.queue[i]
+            if entry.recipe and entry.recipe.reagents then
+                for _, reagent in ipairs(entry.recipe.reagents) do
+                    local reagentId = self:GetItemIDFromLink(reagent.link)
+                    if reagentId == itemId then
+                        local neededPerCraft = reagent.needed or 1
+                        local numCasts = entry.numcasts or 1
+                        local contribution = neededPerCraft * numCasts
+                        totalNeeded = totalNeeded + contribution
+
+                        if self:IsDevMode() then
+                            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                                "|cFFFF8800  - %s x%d -> consumes %d (total now: %d)|r",
+                                entry.name or "Unknown", numCasts, contribution, totalNeeded))
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if self:IsDevMode() and totalNeeded > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFFFF8800[CONSUMPTION CALC] TOTAL CONSUMPTION: %d|r", totalNeeded))
+    end
+
+    return totalNeeded
+end
+
+-- Synastria: Calculate how many of an item will be produced by queued recipes
+---@param itemId number|nil The item ID to check
+---@return number The total quantity that will be produced
+function Skillet:GetQueuedItemProduction(itemId)
     if not itemId then return 0 end
 
     ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
     if not lib or not lib.queue then return 0 end
 
-    -- Debug: Show queue size and item being checked
+    local totalProduced = 0
+
+    -- DETAILED LOGGING: Track each contributing recipe
     local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
-    self:Print(string.format("|cFF888888[QueueConsump] Checking %s (id=%s), queue size=%d|r",
-        itemName, tostring(itemId), #lib.queue))
+    if self:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+            "|cFF00FFFF[PRODUCTION CALC] Calculating production for %s (ID %d)|r", itemName, itemId))
+    end
 
-    local totalNeeded = 0
-
-    -- Iterate through queue and count reagents needed
-    for i = 1, #lib.queue do
-        local entry = lib.queue[i] --as QueueEntry
-        local recipeName = entry.recipe and entry.recipe.name or "Unknown"
-        self:Print(string.format("|cFF888888  [%d] Recipe: %s|r", i, recipeName))
-
-        if entry.recipe and entry.recipe.reagents then
-            self:Print(string.format("|cFF888888    Has .reagents table with %d items|r", #entry.recipe.reagents))
-            for j, reagent in ipairs(entry.recipe.reagents) do
-                local reagentId = self:GetItemIDFromLink(reagent.link)
-                local reagentName = GetItemInfo(reagentId) or "Unknown"
-                self:Print(string.format("|cFF888888      [%d] %s (id=%s vs %s) match=%s|r",
-                    j, reagentName, tostring(reagentId), tostring(itemId), tostring(reagentId == itemId)))
-
-                if reagentId == itemId then
-                    local neededPerCraft = reagent.needed or 1
+    -- Synastria: Use Custom API to get crafted item info
+    if Custom_GetProfessionRecipeInfo then
+        for i = 1, #lib.queue do
+            local entry = lib.queue[i]
+            if entry.spellId then
+                local skillId, name, craftedItemId, craftedItemCount = Custom_GetProfessionRecipeInfo(entry.spellId)
+                if craftedItemId == itemId then
+                    local producedPerCraft = craftedItemCount or 1
                     local numCasts = entry.numcasts or 1
-                    local amount = neededPerCraft * numCasts
-                    totalNeeded = totalNeeded + amount
-                    self:Print(string.format("|cFFFFAA00      MATCH! Adding %d (need %d x %d casts)|r",
-                        amount, neededPerCraft, numCasts))
+                    local contribution = producedPerCraft * numCasts
+                    totalProduced = totalProduced + contribution
+
+                    if self:IsDevMode() then
+                        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                            "|cFF00FFFF  + %s x%d -> produces %d (total now: %d)|r",
+                            name or "Unknown", numCasts, contribution, totalProduced))
+                    end
                 end
             end
-        else
-            self:Print("|cFF888888    WARNING: Recipe missing reagents data!|r")
+        end
+    else
+        -- Fallback: Use recipe.link to extract crafted item ID
+        for i = 1, #lib.queue do
+            local entry = lib.queue[i]
+            if entry.recipe and entry.recipe.link then
+                local craftedItemId = tonumber(entry.recipe.link:match("item:(%d+)"))
+                if craftedItemId == itemId then
+                    local producedPerCraft = entry.recipe.nummade or 1
+                    local numCasts = entry.numcasts or 1
+                    local contribution = producedPerCraft * numCasts
+                    totalProduced = totalProduced + contribution
+
+                    if self:IsDevMode() then
+                        DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                            "|cFF00FFFF  + %s x%d -> produces %d (total now: %d)|r",
+                            entry.name or "Unknown", numCasts, contribution, totalProduced))
+                    end
+                end
+            end
         end
     end
 
-    self:Print(string.format("|cFFFFAA00[QueueConsump] Total for %s: %d|r", itemName, totalNeeded))
-    return totalNeeded
+    if totalProduced > 0 then
+        self:DebugLog(string.format("[QueueProduce] %s: %d will be produced", itemName, totalProduced), "|cFF00FFFF")
+        if self:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF00FFFF[PRODUCTION CALC] TOTAL PRODUCTION: %d|r",
+                totalProduced))
+        end
+    end
+
+    return totalProduced
 end
 
 -- Synastria: Queue conversions when needed (bidirectional support)
--- Handles both Crystallized→Eternal (combine) and Eternal→Crystallized (split)
+-- Handles both Crystallized->Eternal (combine) and Eternal->Crystallized (split)
 ---@param reagent Reagent The reagent object from a recipe
 ---@param needed number How many of this reagent we need total
+---@param skipQueuedConsumption? boolean If true, don't subtract queued consumption (used during regeneration)
 ---@return boolean queued True if conversion was queued, false otherwise
-function Skillet:QueueConversionsIfNeeded(reagent, needed)
+function Skillet:QueueConversionsIfNeeded(reagent, needed, skipQueuedConsumption)
     if not reagent or not needed or needed <= 0 then
         return false
     end
@@ -1444,9 +1565,9 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
         return false
     end
 
-    -- Get conversion info for this item
-    local targetId, ratio, conversionType = self:GetConversionInfo(itemId)
-    if not targetId then
+    -- Get conversion info for this item (now includes toolItemId)
+    local targetId, inputAmount, outputAmount, conversionType, toolItemId = self:GetConversionInfo(itemId)
+    if not targetId or not inputAmount or not outputAmount or not toolItemId then
         return false -- No conversion available for this item
     end
 
@@ -1456,16 +1577,20 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
         available = available + (GetCustomGameData(13, itemId) or 0)
     end
 
-    -- Subtract items already allocated to queued recipes
-    -- IMPORTANT: Calculate this BEFORE calling this function recursively to avoid double-counting
-    local queuedConsumption = self:GetQueuedReagentConsumption(itemId)
+    -- Subtract items already allocated to queued recipes UNLESS we're regenerating
+    -- During regeneration, recipes are already in queue, so subtracting would double-count
+    local queuedConsumption = 0
+    if not skipQueuedConsumption then
+        queuedConsumption = self:GetQueuedReagentConsumption(itemId)
+    end
     local availableBeforeQueue = available
     available = available - queuedConsumption
 
     -- Debug output
     local itemName = GetItemInfo(itemId) or ("Item#" .. itemId)
-    self:DebugLog(string.format("[Conv Check] %s: have %d, queued %d, avail %d, need %d",
-        itemName, availableBeforeQueue, queuedConsumption, available, needed))
+    self:DebugLog(string.format("[Conv Check] %s: have %d, queued %d, avail %d, need %d%s",
+        itemName, availableBeforeQueue, queuedConsumption, available, needed,
+        skipQueuedConsumption and " (skip queued)" or ""))
 
     if available >= needed then
         self:DebugLog(string.format("[Conv Check] %s: Already have enough (avail %d >= need %d)",
@@ -1481,16 +1606,15 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
     local amountToConvert = 0
 
     if conversionType == "combine" then
-        -- Crystallized → Eternal (10:1 ratio)
-        -- Need X Eternals, queue conversion for ALL of them
-        conversionsNeeded = shortage
-        amountToConvert = conversionsNeeded * math.floor(1 / ratio) -- e.g., 10 Crystallized per Eternal
+        -- Crystallized -> Eternal (e.g., inputAmount=10, outputAmount=1)
+        -- Need X Eternals, calculate how many Crystallized we need
+        conversionsNeeded = shortage                      -- How many Eternals we need to make
+        amountToConvert = conversionsNeeded * inputAmount -- How many Crystallized we need (e.g., X * 10)
     elseif conversionType == "split" then
-        -- Eternal → Crystallized (1:10 ratio)
+        -- Eternal -> Crystallized (e.g., inputAmount=1, outputAmount=10)
         -- Need X Crystallized, calculate how many Eternals we need to split
-        local eternalsNeeded = math.ceil(shortage * ratio) -- e.g., divide by 10 and round up
-        conversionsNeeded = eternalsNeeded
-        amountToConvert = conversionsNeeded                -- Eternals to split
+        conversionsNeeded = math.ceil(shortage * inputAmount / outputAmount) -- e.g., ceil(X * 1 / 10)
+        amountToConvert = conversionsNeeded                                  -- Eternals to split
     else
         return false
     end
@@ -1511,17 +1635,17 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
     ---@type number
     local outputId = 0
     ---@type number
-    local outputAmount = 0
+    local queueOutputAmount = 0
     if conversionType == "combine" then
-        sourceId = targetId -- Crystallized (what we use)
+        sourceId = targetId                                  -- Crystallized (what we use)
         sourceNeeded = amountToConvert
-        outputId = itemId   -- Eternal (what we make)
-        outputAmount = conversionsNeeded
-    else                    -- split
-        sourceId = targetId -- Eternal (what we use)
+        outputId = itemId                                    -- Eternal (what we make)
+        queueOutputAmount = conversionsNeeded
+    else                                                     -- split
+        sourceId = targetId                                  -- Eternal (what we use)
         sourceNeeded = amountToConvert
-        outputId = itemId   -- Crystallized (what we make)
-        outputAmount = conversionsNeeded * 10
+        outputId = itemId                                    -- Crystallized (what we make)
+        queueOutputAmount = conversionsNeeded * outputAmount -- e.g., 5 Eternals * 10 = 50 Crystallized
     end
 
     -- Add the virtual conversion recipe to the queue
@@ -1555,18 +1679,36 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
                 self:DebugLog(string.format("[Conv] Need %d more, updating conversion", additionalNeeded))
 
                 if conversionType == "combine" then
+                    -- Combine: e.g., 10 Crystallized -> 1 Eternal (inputAmount=10, outputAmount=1)
+                    -- additionalNeeded is in Eternals, sourceNeeded should be in Crystallized
                     entry.recipe.outputAmount = currentOutput + additionalNeeded
-                    entry.recipe.sourceNeeded = entry.recipe.outputAmount * 10
-                else -- split
-                    entry.recipe.outputAmount = currentOutput + (additionalNeeded * 10)
-                    entry.recipe.sourceNeeded = math.ceil(entry.recipe.outputAmount / 10)
+                    entry.recipe.sourceNeeded = entry.recipe.outputAmount *
+                        inputAmount -- e.g., X Eternals * 10 = X*10 Crystallized
+                else                -- split
+                    -- Split: e.g., 1 Eternal -> 10 Crystallized (inputAmount=1, outputAmount=10)
+                    -- additionalNeeded is in Crystallized, sourceNeeded should be in Eternals
+                    entry.recipe.outputAmount = currentOutput +
+                        (additionalNeeded * outputAmount)                                                         -- Total Crystallized output
+                    entry.recipe.sourceNeeded = math.ceil(entry.recipe.outputAmount * inputAmount / outputAmount) -- Convert back to Eternals
                 end
 
                 local outputName = GetItemInfo(outputId) or "Item"
-                entry.recipe.name = string.format("%s (x%d)", outputName, entry.recipe.outputAmount)
+                local updatedName = string.format("%s (x%d)", outputName, entry.recipe.outputAmount)
+                entry.recipe.name = updatedName
+
+                -- Update all serializable fields
+                entry.name = updatedName
+                entry.link = reagent.link
+                entry.sourceNeeded = entry.recipe.sourceNeeded
+                entry.outputAmount = entry.recipe.outputAmount
+                entry.crystallizedNeeded = entry.recipe.crystallizedNeeded
+                entry.eternalsToMake = entry.recipe.eternalsToMake
 
                 self:Print(string.format("|cFFFFAA00Conversion updated: %s (now %dx)|r", outputName,
                     entry.recipe.outputAmount))
+
+                -- Synastria: CRITICAL - Save queue to database so conversion updates persist
+                self:SaveQueue(self.db.server.queues, self.currentTrade)
 
                 -- Clear craftability cache since conversion amounts changed
                 lib:ClearCraftabilityCache()
@@ -1577,18 +1719,19 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
         -- No existing conversion found - create new one
         local virtualRecipe = {
             name = string.format("%s (x%d)", neededName,
-                conversionType == "combine" and conversionsNeeded or outputAmount),
-            link = reagent.link,
+                conversionType == "combine" and conversionsNeeded or queueOutputAmount),
+            link = "item:" .. outputId,       -- Simple primitive string instead of reagent.link (which might be non-serializable)
             isVirtualConversion = true,
-            conversionType = conversionType, -- "combine" or "split"
-            sourceId = sourceId,             -- What we withdraw and use
-            outputId = outputId,             -- What we make
-            sourceNeeded = sourceNeeded,     -- How many to withdraw
-            outputAmount = outputAmount,     -- How many we'll make
+            conversionType = conversionType,  -- "combine" or "split"
+            sourceId = sourceId,              -- What we withdraw
+            outputId = outputId,              -- What we make
+            toolItemId = toolItemId,          -- What we use (may be source or a tool like Salt Shaker)
+            sourceNeeded = sourceNeeded,      -- How many to withdraw
+            outputAmount = queueOutputAmount, -- How many we'll make
             -- Backwards compatibility fields
             crystallizedId = conversionType == "combine" and sourceId or outputId,
             eternalId = conversionType == "combine" and outputId or sourceId,
-            crystallizedNeeded = conversionType == "combine" and sourceNeeded or outputAmount,
+            crystallizedNeeded = conversionType == "combine" and sourceNeeded or queueOutputAmount,
             eternalsToMake = conversionType == "combine" and conversionsNeeded or amountToConvert,
         }
 
@@ -1596,12 +1739,30 @@ function Skillet:QueueConversionsIfNeeded(reagent, needed)
             profession = "Conversion",
             index = 0,
             numcasts = 1,
+            -- Primitive fields for serialization & hydration
+            name = virtualRecipe.name,
+            link = virtualRecipe.link,
+            conversionType = conversionType,
+            sourceId = sourceId,
+            outputId = outputId,
+            toolItemId = toolItemId,
+            sourceNeeded = sourceNeeded,
+            outputAmount = queueOutputAmount,
+            -- Backward compat fields
+            crystallizedId = virtualRecipe.crystallizedId,
+            eternalId = virtualRecipe.eternalId,
+            crystallizedNeeded = virtualRecipe.crystallizedNeeded,
+            eternalsToMake = virtualRecipe.eternalsToMake,
+            -- Runtime object (does not serialize)
             recipe = virtualRecipe
         })
 
         local action = conversionType == "combine" and "Combine" or "Split"
-        self:Print(string.format("|cFFFFAA00Auto-queued: %s %s (x%d) → %s (x%d)|r",
-            action, convertibleName, sourceNeeded, neededName, outputAmount))
+        self:Print(string.format("|cFFFFAA00Auto-queued: %s %s (x%d) -> %s (x%d)|r",
+            action, convertibleName, sourceNeeded, neededName, queueOutputAmount))
+
+        -- Synastria: CRITICAL - Save queue to database so conversions persist through reloads
+        self:SaveQueue(self.db.server.queues, self.currentTrade)
 
         -- Clear craftability cache since we added a conversion
         lib:ClearCraftabilityCache()
@@ -1804,6 +1965,167 @@ function Skillet:DepositToResourceBank(itemIds, autoClose)
     return deposited > 0
 end
 
+-- Synastria: Trigger withdrawal for conversion (called by button click)
+---@param crystallizedId number The crystallized item ID to convert
+---@param eternalsNeeded number How many eternals are needed
+---@return boolean success True if withdrawal succeeded
+function Skillet:ConversionWithdraw(crystallizedId, eternalsNeeded)
+    -- Calculate how many crystallized we need (10 per eternal)
+    local crystallizedNeeded = eternalsNeeded * 10
+
+    -- Check how many we have in bags vs resource bank
+    local bagsCount = GetItemCount(crystallizedId, false) or 0
+    local bankCount = 0
+    if GetCustomGameData then
+        bankCount = GetCustomGameData(13, crystallizedId) or 0
+    end
+
+    local crystallizedName = GetItemInfo(crystallizedId) or "Crystallized item"
+
+    -- Only withdraw if we need more
+    if bagsCount >= crystallizedNeeded then
+        self:Print("|cFF00FF00Already have enough " .. crystallizedName .. " in bags|r")
+        return true
+    end
+
+    local neededFromBank = crystallizedNeeded - bagsCount
+
+    if bankCount < neededFromBank then
+        self:Print("|cFFFF6666Not enough " ..
+            crystallizedName .. " in Resource Bank (" .. bankCount .. "/" .. neededFromBank .. " needed)|r")
+        return false
+    end
+
+    -- Withdraw from resource bank
+    self:Print("|cFF66AAFFWithdrawing " .. neededFromBank .. "x " .. crystallizedName .. " from Resource Bank...|r")
+    if self:WithdrawFromResourceBank(crystallizedId, true) then
+        self:Print("|cFF00FF00Items withdrawn! Right-click them in bags to combine.|r")
+        return true
+    else
+        self:Print("|cFFFF0000Failed to withdraw from Resource Bank|r")
+        return false
+    end
+end
+
+-- Synastria: Deposit extras and continue queue (called by button click after user combines items)
+---@param crystallizedId number The crystallized item ID
+function Skillet:ConversionDepositAndContinue(crystallizedId)
+    -- Deposit any remaining crystallized items back to resource bank
+    if GetItemCount(crystallizedId, false) > 0 then
+        self:Print("|cFF66AAFFDepositing remaining items to Resource Bank...|r")
+        self:DepositToResourceBank(crystallizedId, true)
+    end
+
+    -- Conversion complete - remove from queue and continue
+    self:Print("|cFF00FF00Conversion complete!|r")
+    self.stitch:RemoveFromQueue(1)
+
+    -- Hide the conversion dialog
+    if self.conversionDialog then
+        self.conversionDialog:Hide()
+    end
+
+    if #self.stitch.queue > 0 then
+        self.stitch:ProcessQueue()
+    else
+        AceLibrary("AceEvent-2.0"):TriggerEvent("SkilletStitch_Queue_Complete")
+    end
+end
+
+-- Synastria: Process conversion with automated withdraw/use/deposit
+---@param virtualRecipe Recipe The conversion recipe data
+function Skillet:ProcessConversion(virtualRecipe)
+    if not virtualRecipe or not virtualRecipe.sourceId or not virtualRecipe.outputId then
+        self:Print("|cFFFF0000Invalid conversion recipe|r")
+        return
+    end
+
+    local sourceId = virtualRecipe.sourceId
+    local outputId = virtualRecipe.outputId
+    local sourceNeeded = virtualRecipe.sourceNeeded or 0
+    local conversionType = virtualRecipe.conversionType or "combine"
+
+    local sourceName = GetItemInfo(sourceId) or ("Item#" .. sourceId)
+    local outputName = GetItemInfo(outputId) or ("Item#" .. outputId)
+
+    -- Step 1: Withdraw source items from Resource Bank
+    local bagsCount = GetItemCount(sourceId, false) or 0
+    local bankCount = 0
+    if GetCustomGameData then
+        bankCount = GetCustomGameData(13, sourceId) or 0
+    end
+
+    if bagsCount < sourceNeeded then
+        local needFromBank = sourceNeeded - bagsCount
+        if bankCount >= needFromBank then
+            self:Print("|cFF66AAFFWithdrawing " .. needFromBank .. "x " .. sourceName .. " from Resource Bank...|r")
+            self:WithdrawFromResourceBank(sourceId, true)
+
+            -- Wait a moment for withdrawal to complete, then use item
+            self:ScheduleEvent("Skillet_ConversionUseItem", function()
+                self:UseConversionItem(sourceId, outputId, conversionType, virtualRecipe)
+            end, 0.5)
+        else
+            self:Print("|cFFFF6666Not enough " ..
+                sourceName .. " in Resource Bank (" .. bankCount .. "/" .. needFromBank .. " needed)|r")
+        end
+    else
+        -- Already have enough in bags - use directly
+        self:UseConversionItem(sourceId, outputId, conversionType, virtualRecipe)
+    end
+end
+
+-- Synastria: Use item to trigger conversion, then deposit
+---@param sourceId number Source item ID
+---@param outputId number Output item ID
+---@param conversionType string "combine" or "split"
+---@param virtualRecipe Recipe The conversion recipe data
+function Skillet:UseConversionItem(sourceId, outputId, conversionType, virtualRecipe)
+    local sourceName = GetItemInfo(sourceId) or ("Item#" .. sourceId)
+    local outputName = GetItemInfo(outputId) or ("Item#" .. outputId)
+
+    -- Determine which item to use (tool or source)
+    local toolItemId = virtualRecipe.toolItemId or sourceId -- Default to source for backward compatibility
+    local toolName = GetItemInfo(toolItemId) or ("Item#" .. toolItemId)
+
+    -- Step 2: Use the tool item (triggers combine/split)
+    self:Print("|cFF66AAFFConverting " .. sourceName .. " to " .. outputName .. "...|r")
+
+    if toolItemId ~= sourceId then
+        -- Using a tool (e.g., Salt Shaker for Deeprock Salt)
+        self:Print("|cFF66AAFFUsing " .. toolName .. " to convert...|r")
+    end
+
+    UseItemByName(toolName)
+
+    -- Step 3: Schedule deposit and queue continuation
+    self:ScheduleEvent("Skillet_ConversionDeposit", function()
+        -- Deposit both source and output items to clean up
+        local sourceCount = GetItemCount(sourceId, false) or 0
+        local outputCount = GetItemCount(outputId, false) or 0
+
+        if sourceCount > 0 then
+            self:Print("|cFF66AAFFDepositing " .. sourceCount .. "x " .. sourceName .. " to Resource Bank...|r")
+            self:DepositToResourceBank(sourceId, true)
+        end
+
+        if outputCount > 0 then
+            self:Print("|cFF66AAFFDepositing " .. outputCount .. "x " .. outputName .. " to Resource Bank...|r")
+            self:DepositToResourceBank(outputId, true)
+        end
+
+        -- Remove conversion from queue and continue
+        self:Print("|cFF00FF00Conversion complete!|r")
+        self.stitch:RemoveFromQueue(1)
+
+        if #self.stitch.queue > 0 then
+            self.stitch:ProcessQueue()
+        else
+            AceLibrary("AceEvent-2.0"):TriggerEvent("SkilletStitch_Queue_Complete")
+        end
+    end, 1.5) -- Wait for conversion animation to complete
+end
+
 -- Synastria: Test Resource Bank withdrawal
 function Skillet:TestResourceBank()
     -- Test withdrawing all crystallized elements by item ID
@@ -1927,10 +2249,10 @@ function Skillet:RescanTrade(forced)
         if forced_rescan and not need_rescan_on_open then
             -- only print this for first time and forced rescans
             -- not when a bag is changed
-            self:Print(L["Scanning tradeskill"] .. ": " .. trade);
+            self:Print(GetLocalizedString("Scanning tradeskill") .. ": " .. trade);
         end
 
-        self:UpdateScanningText(L["Scanning tradeskill"] .. " ...")
+        self:UpdateScanningText(GetLocalizedString("Scanning tradeskill") .. " ...")
 
         Skillet.stitch:ScanTrade()
     else
@@ -2499,17 +2821,23 @@ function Skillet:ShowStartCraftingPrompt()
         local canUseWindowlessCrafting = false
         if self.customApiAvailable and spellId then
             canUseWindowlessCrafting = true
-            DEFAULT_CHAT_FRAME:AddMessage(
-                "|cFF00FF00[ShowStartCraftingPrompt] Windowless crafting available - spell ID: " ..
-                tostring(spellId) .. "|r")
+            if self:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage(
+                    "|cFF00FF00[ShowStartCraftingPrompt] Windowless crafting available - spell ID: " ..
+                    tostring(spellId) .. "|r")
+            end
         else
-            DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[ShowStartCraftingPrompt] Windowless check: API=" ..
-                tostring(self.customApiAvailable) .. ", spellId=" .. tostring(spellId) .. "|r")
+            if self:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[ShowStartCraftingPrompt] Windowless check: API=" ..
+                    tostring(self.customApiAvailable) .. ", spellId=" .. tostring(spellId) .. "|r")
+            end
         end
 
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[ShowStartCraftingPrompt] canUseWindowlessCrafting=" ..
-            tostring(canUseWindowlessCrafting) ..
-            ", currentTrade=" .. tostring(currentTrade) .. ", profession=" .. tostring(profession) .. "|r")
+        if self:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF00FF[ShowStartCraftingPrompt] canUseWindowlessCrafting=" ..
+                tostring(canUseWindowlessCrafting) ..
+                ", currentTrade=" .. tostring(currentTrade) .. ", profession=" .. tostring(profession) .. "|r")
+        end
 
         -- Check if we need to switch professions (only if NOT using windowless crafting)
         if not canUseWindowlessCrafting and currentTrade ~= profession then
@@ -2571,6 +2899,7 @@ function Skillet:ShowStartCraftingPrompt()
 end
 
 -- Synastria: Show dialog for manual item conversion (Crystallized -> Eternal)
+---@param virtualRecipe Recipe The conversion recipe with crystallizedId, eternalId, etc.
 function Skillet:ShowConversionDialog(virtualRecipe)
     -- Create the dialog if it doesn't exist
     if not self.conversionDialog then
@@ -2635,47 +2964,29 @@ function Skillet:ShowConversionDialog(virtualRecipe)
 
         -- Withdraw button
         local withdrawButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        withdrawButton:SetWidth(100)
+        withdrawButton:SetWidth(120)
         withdrawButton:SetHeight(24)
-        withdrawButton:SetPoint("BOTTOM", frame, "BOTTOM", -110, 15)
+        withdrawButton:SetPoint("BOTTOM", frame, "BOTTOM", -65, 15)
         withdrawButton:SetText("Withdraw")
         withdrawButton:SetScript("OnClick", function()
-            if frame.crystallizedId then
-                Skillet:WithdrawFromResourceBank(frame.crystallizedId, true)
-                Skillet:Print("|cFF00FF00Items withdrawn. Right-click them to combine.|r")
+            if frame.crystallizedId and frame.eternalsNeeded then
+                Skillet:ConversionWithdraw(frame.crystallizedId, frame.eternalsNeeded)
             end
         end)
         frame.withdrawButton = withdrawButton
 
-        -- Deposit button
+        -- Deposit & Continue button
         local depositButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        depositButton:SetWidth(100)
+        depositButton:SetWidth(120)
         depositButton:SetHeight(24)
-        depositButton:SetPoint("BOTTOM", frame, "BOTTOM", 0, 15)
-        depositButton:SetText("Deposit")
+        depositButton:SetPoint("BOTTOM", frame, "BOTTOM", 65, 15)
+        depositButton:SetText("Deposit & Done")
         depositButton:SetScript("OnClick", function()
-            Skillet:DepositToResourceBank(true)
-            Skillet:Print("|cFF00FF00Remaining items deposited.|r")
-        end)
-        frame.depositButton = depositButton
-
-        -- Done button
-        local doneButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        doneButton:SetWidth(100)
-        doneButton:SetHeight(24)
-        doneButton:SetPoint("BOTTOM", frame, "BOTTOM", 110, 15)
-        doneButton:SetText("Done")
-        doneButton:SetScript("OnClick", function()
-            frame:Hide()
-            -- Remove the conversion from queue and continue
-            Skillet.stitch:RemoveFromQueue(1)
-            if #Skillet.stitch.queue > 0 then
-                Skillet.stitch:ProcessQueue()
-            else
-                AceLibrary("AceEvent-2.0"):TriggerEvent("SkilletStitch_Queue_Complete")
+            if frame.crystallizedId then
+                Skillet:ConversionDepositAndContinue(frame.crystallizedId)
             end
         end)
-        frame.doneButton = doneButton
+        frame.depositButton = depositButton
 
         frame:Hide()
         self.conversionDialog = frame
@@ -2692,6 +3003,7 @@ function Skillet:ShowConversionDialog(virtualRecipe)
         virtualRecipe.eternalsToMake, eternalName))
 
     frame.crystallizedId = virtualRecipe.crystallizedId
+    frame.eternalsNeeded = virtualRecipe.eternalsToMake
 
     -- Show the dialog
     frame:Show()
@@ -2749,6 +3061,33 @@ end
 
 -- Called when the queue has changed in some way
 function Skillet:QueueChanged()
+    -- OPTIMIZATION: Skip expensive operations during bulk queue operations
+    if self.suppressQueueUpdates then
+        return
+    end
+
+    -- Debug queue state (only in dev mode)
+    if self:IsDevMode() then
+        local queueCount = self.stitch.queue and #self.stitch.queue or 0
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE] QueueChanged() called! Queue count: " .. queueCount .. "|r")
+
+        -- Debug: Show first queue entry details
+        if self.stitch.queue and #self.stitch.queue > 0 then
+            local firstEntry = self.stitch.queue[1]
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE] First entry: spellId=" ..
+                tostring(firstEntry.spellId) ..
+                ", name='" .. tostring(firstEntry.name) .. "', profession='" .. tostring(firstEntry.profession) .. "'|r")
+
+            local lastEntry = self.stitch.queue[#self.stitch.queue]
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE] Last entry: spellId=" ..
+                tostring(lastEntry.spellId) ..
+                ", name='" .. tostring(lastEntry.name) .. "', profession='" .. tostring(lastEntry.profession) .. "'|r")
+        end
+    end
+
+    -- Synastria: Update the queue display immediately
+    self:UpdateQueueWindow()
+
     -- Synastria: Auto-export queue to ResourceTracker (if available)
     if self.AutoExportQueueToResourceTracker then
         self:AutoExportQueueToResourceTracker()
@@ -2756,14 +3095,42 @@ function Skillet:QueueChanged()
 
     -- Synastria: If queue is empty and start crafting prompt is visible, hide it and clear keybindings
     if self.stitch.queue and #self.stitch.queue == 0 then
+        if self:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[DIALOG] Queue is empty - checking for dialog to close...|r")
+        end
+
         -- Try using self reference first, then fall back to global
         local promptFrame = self.startCraftingPrompt or getglobal("SkilletStartCraftingPrompt")
+
+        if self:IsDevMode() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[DIALOG] promptFrame found: " ..
+                tostring(promptFrame ~= nil) .. ", visible: " ..
+                tostring(promptFrame and promptFrame:IsVisible() or false) .. "|r")
+        end
+
         if promptFrame and promptFrame:IsVisible() then
             promptFrame:Hide()
             -- Clear keybindings
             SetBinding("CTRL-MOUSEWHEELUP")
             SetBinding("CTRL-MOUSEWHEELDOWN")
             DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Queue complete! Dialog closed and keybindings cleared.|r")
+        elseif promptFrame then
+            -- Dialog exists but isn't visible - still hide it to be safe
+            promptFrame:Hide()
+            SetBinding("CTRL-MOUSEWHEELUP")
+            SetBinding("CTRL-MOUSEWHEELDOWN")
+            if self:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[DIALOG] Dialog existed but wasn't visible - hidden anyway|r")
+            end
+        else
+            if self:IsDevMode() then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[DIALOG] No dialog frame found to close|r")
+            end
+        end
+    else
+        -- Synastria: Queue still has items - refresh the prompt to show next item and re-enable button
+        if self.startCraftingPrompt and self.startCraftingPrompt:IsVisible() then
+            self:ShowStartCraftingPrompt()
         end
     end
 
@@ -2907,7 +3274,7 @@ function Skillet:AddItemNotesToTooltip(tooltip)
             local note = notes_table[id]                          --as string|nil
             if note then
                 if not header_added then
-                    tooltip:AddLine("Skillet " .. L["Notes"] .. ":")
+                    tooltip:AddLine("Skillet " .. GetLocalizedString("Notes") .. ":")
                     header_added = true
                 end
                 if currentPlayer and player ~= currentPlayer then
@@ -2928,7 +3295,7 @@ function Skillet:AddItemNotesToTooltip(tooltip)
             for i, name in ipairs(crafters) do
                 if not title_added then
                     title_added = true
-                    tooltip:AddDoubleLine(L["Crafted By"], name)
+                    tooltip:AddDoubleLine(GetLocalizedString("Crafted By"), name)
                 else
                     tooltip:AddDoubleLine(" ", name)
                 end
@@ -3736,7 +4103,7 @@ function Skillet:CheckMissingInGlobalDataset()
             if i <= 10 then
                 local profName = self:GetProfessionNameFromSkillId(item.actualProf)
                 DEFAULT_CHAT_FRAME:AddMessage(string.format(
-                    "  %d. %s → Listed under: %s (%d)",
+                    "  %d. %s -> Listed under: %s (%d)",
                     i, item.name, profName or "Unknown", item.actualProf
                 ))
             elseif i == 11 then
@@ -3789,5 +4156,18 @@ function Skillet:CheckMissingInGlobalDataset()
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFFWe can use professionId=-1 and filter client-side.|r")
     end
 
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
+end
+
+-- Synastria: Test event registration and firing
+function Skillet:TestEventSystem()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========== EVENT SYSTEM TEST ==========|r")
+
+    -- Test if we can receive events
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[TEST] Skillet addon has AceEvent-2.0: " ..
+        tostring(self.RegisterEvent ~= nil) .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[TEST] BAG_UPDATE and UNIT_SPELLCAST_SUCCEEDED are already registered|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TEST] Try:  Moving bag item → should trigger [DEBUG BAG_UPDATE]|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFFFF[TEST] Try:  Cast any spell → should trigger [DEBUG SPELLCAST]|r")
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
 end

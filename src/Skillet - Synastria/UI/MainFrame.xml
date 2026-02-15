@@ -141,13 +141,13 @@
 
     <Frame name="SkilletQueueItemButtonTemplate_Name" hidden="false" virtual="true">
         <Size>
-            <AbsDimension x="280" y="16"/>
+            <AbsDimension x="220" y="16"/>
         </Size>
         <Layers>
             <Layer level="OVERLAY">
                 <FontString name="$parentText" inherits="GameFontNormal" justifyH="LEFT">
                     <Size>
-                        <AbsDimension x="280" y="0"/>
+                        <AbsDimension x="220" y="0"/>
                     </Size>
                     <Anchors>
                         <Anchor point="LEFT">
@@ -161,7 +161,7 @@
 
     <Frame name="SkilletQueueItemButtonTemplate" hidden="true" virtual="true">
         <Size>
-            <AbsDimension x="290" y="16"/>
+            <AbsDimension x="270" y="16"/>
         </Size>
         <Frames>
             <Frame name="$parentCount" inherits="SkilletQueueItemButtonTemplate_Count">
@@ -184,12 +184,12 @@
             </Frame>
             <Button name="$parentDeleteButton" inherits="UIPanelButtonTemplate" text="D">
                 <Size>
-                    <AbsDimension x="20" y="22"/>
+                    <AbsDimension x="16" y="16"/>
                 </Size>
                 <Anchors>
-                    <Anchor point="LEFT" relativeTo="$parentName" relativePoint="RIGHT">
+                    <Anchor point="RIGHT">
                         <Offset>
-                            <AbsDimension x="8" y="0"/>
+                            <AbsDimension x="-2" y="0"/>
                         </Offset>
                     </Anchor>
                 </Anchors>
@@ -215,7 +215,7 @@
             <Layer level="OVERLAY">
                 <FontString name="$parentText" inherits="GameFontNormal" justifyH="LEFT" justifyV="MIDDLE">
                     <Size>
-                        <AbsDimension x="160" y="0"/>
+                        <AbsDimension x="140" y="0"/>
                     </Size>
                     <Anchors>
                         <Anchor point="TOPLEFT" relativeTo="$parent" relativePoint="TOPLEFT">
@@ -228,7 +228,7 @@
                 </FontString>
                 <FontString name="$parentCount" inherits="GameFontNormal" justifyH="RIGHT" justifyV="MIDDLE">
                     <Size>
-                        <AbsDimension x="40" y="0"/>
+                        <AbsDimension x="60" y="0"/>
                     </Size>
                     <Anchors>
                         <Anchor point="TOPRIGHT" relativeTo="$parent" relativePoint="TOPRIGHT">
@@ -264,13 +264,13 @@
             </OnLoad>
             <OnEnter>
                 GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-                Skillet:SetTradeSkillToolTip(SkilletFrame.selectedSkill, this:GetID())
-                Skillet:ReagentButtonOnEnter(this, SkilletFrame.selectedSkill, this:GetID())
+                Skillet:SetTradeSkillToolTip(Skillet.selectedSkill, this:GetID())
+                Skillet:ReagentButtonOnEnter(this, Skillet.selectedSkill, this:GetID())
                 GameTooltip:Show()
                 CursorUpdate();
             </OnEnter>
             <OnLeave>
-                Skillet:ReagentButtonOnLeave(this, SkilletFrame.selectedSkill, this:GetID())
+                Skillet:ReagentButtonOnLeave(this, Skillet.selectedSkill, this:GetID())
                 GameTooltip:Hide();
                 ResetCursor();
             </OnLeave>
@@ -1037,7 +1037,7 @@
                     <OnEnter>
                         if ( Skillet.selectedSkill ~= -1 ) then
                             GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT");
-                            Skillet:SetTradeSkillToolTip(SkilletFrame.selectedSkill);
+                            Skillet:SetTradeSkillToolTip(Skillet.selectedSkill);
                             GameTooltip:Show()
                             CursorUpdate();
                         end
@@ -1061,11 +1061,21 @@
                             <AbsDimension x="0" y="-16"/>
                         </Offset>
                     </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagentParent" relativePoint="TOPRIGHT">
+                        <Offset>
+                            <AbsDimension x="-10" y="-85"/>
+                        </Offset>
+                    </Anchor>
                 </Anchors>
             </Button>
             <Button name="SkilletReagent2" inherits="SkilletItemTemplate" id="2" parent="SkilletReagentParent">
                 <Anchors>
                     <Anchor point="TOPLEFT" relativeTo="SkilletReagent1" relativePoint="BOTTOMLEFT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent1" relativePoint="BOTTOMRIGHT">
                         <Offset>
                             <AbsDimension x="0" y="0"/>
                         </Offset>
@@ -1079,11 +1089,21 @@
                             <AbsDimension x="0" y="0"/>
                         </Offset>
                     </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent2" relativePoint="BOTTOMRIGHT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
                 </Anchors>
             </Button>
             <Button name="SkilletReagent4" inherits="SkilletItemTemplate" id="4" parent="SkilletReagentParent">
                 <Anchors>
                     <Anchor point="TOPLEFT" relativeTo="SkilletReagent3" relativePoint="BOTTOMLEFT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent3" relativePoint="BOTTOMRIGHT">
                         <Offset>
                             <AbsDimension x="0" y="0"/>
                         </Offset>
@@ -1097,11 +1117,21 @@
                             <AbsDimension x="0" y="0"/>
                         </Offset>
                     </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent4" relativePoint="BOTTOMRIGHT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
                 </Anchors>
             </Button>
             <Button name="SkilletReagent6" inherits="SkilletItemTemplate" id="6" parent="SkilletReagentParent">
                 <Anchors>
                     <Anchor point="TOPLEFT" relativeTo="SkilletReagent5" relativePoint="BOTTOMLEFT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent5" relativePoint="BOTTOMRIGHT">
                         <Offset>
                             <AbsDimension x="0" y="0"/>
                         </Offset>
@@ -1115,11 +1145,21 @@
                             <AbsDimension x="0" y="0"/>
                         </Offset>
                     </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent6" relativePoint="BOTTOMRIGHT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
                 </Anchors>
             </Button>
             <Button name="SkilletReagent8" inherits="SkilletItemTemplate" id="8" parent="SkilletReagentParent">
                 <Anchors>
                     <Anchor point="TOPLEFT" relativeTo="SkilletReagent7" relativePoint="BOTTOMLEFT">
+                        <Offset>
+                            <AbsDimension x="0" y="0"/>
+                        </Offset>
+                    </Anchor>
+                    <Anchor point="TOPRIGHT" relativeTo="SkilletReagent7" relativePoint="BOTTOMRIGHT">
                         <Offset>
                             <AbsDimension x="0" y="0"/>
                         </Offset>
@@ -1434,10 +1474,11 @@
 
             <!--
             #
-            # Synastria: A button that groups queue items by profession to minimize switches
+            # Synastria: Optimize queue button - sorts queue in dependency order
+            # Ensures subcrafts (materials) are queued before items that need them
             #
             -->
-            <Button name="SkilletGroupQueueButton" inherits="UIPanelButtonTemplate" text="Group" parent="SkilletFrame">
+            <Button name="SkilletGroupQueueButton" inherits="UIPanelButtonTemplate" text="Optimize" parent="SkilletFrame">
                 <Size>
                     <AbsDimension x="100" y="22"/>
                 </Size>
@@ -1450,8 +1491,19 @@
                 </Anchors>
                 <Scripts>
                     <OnClick>
-                        Skillet.stitch:GroupQueueByProfession()
+                        Skillet:OptimizeQueueOrder()
                     </OnClick>
+                    <OnEnter>
+                        GameTooltip:SetOwner(this, "ANCHOR_RIGHT");
+                        GameTooltip:SetText("Optimize Queue", 1, 1, 1);
+                        GameTooltip:AddLine("Recalculates all subcrafts for queued items based on current inventory and queue state.", nil, nil, nil, true);
+                        GameTooltip:AddLine(" ", nil, nil, nil, true);
+                        GameTooltip:AddLine("This ensures dependencies are crafted before items that need them and adjusts material needs when inventory changes.", 0.8, 0.8, 0.8, true);
+                        GameTooltip:Show();
+                    </OnEnter>
+                    <OnLeave>
+                        GameTooltip:Hide();
+                    </OnLeave>
                 </Scripts>
             </Button>
 

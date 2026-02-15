@@ -51,13 +51,25 @@ This is a meta file used by the language server for type checking only.
 ---@field SetAttribute fun(self: SecureActionButton, name: string, value: any): nil Set secure attribute
 ---@field RegisterForClicks fun(self: SecureActionButton, clicks: string): nil Register for click events
 
----@class ConversionPair : table
----Conversion recipe configuration (Crystallized ↔ Eternal)
----@field resultItem string Item link of result
----@field sourceItem string Item link of source material
+---@class ConversionGroupSource : table
+---Simplified conversion group source data (before UI transformation)
+---These are transformed by ExtractionFrame.lua into full ConversionGroup objects
+---@field label string Display label for the conversion group
+---@field resultItems number[] Item IDs of the results
+---@field sourceItems number[] Item IDs of the sources (paired with resultItems by index)
 ---@field bidirectional boolean Whether conversion works both ways
----@field ratio number Conversion ratio (source:result)
----@field type string Conversion type ("combine" or "split")
+---@field inputAmount number How many source items needed per conversion
+---@field outputAmount number How many result items produced per conversion
+---@field extended? boolean Whether to use extended layout for display
+
+---@class ConversionPair : table
+---Conversion recipe configuration with explicit conversion amounts
+---@field resultItem number Item ID of result
+---@field sourceItem number Item ID of source material
+---@field bidirectional boolean Whether conversion works both ways
+---@field inputAmount number How many source items needed per conversion
+---@field outputAmount number How many result items produced per conversion
+---@field type string Conversion type ("combine", "split", or "hardcoded")
 
 ---@class ExtractionPageData : table
 ---Extraction page layout configuration

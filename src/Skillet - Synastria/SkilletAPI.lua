@@ -269,6 +269,7 @@ function debugprofilestop() end
 ---@field forgeToggleTf CheckButton|nil
 ---@field forgeToggleWf CheckButton|nil
 ---@field forgeToggleLf CheckButton|nil
+---@field suppressQueueUpdates boolean|nil If true, skip UpdateQueueWindow() calls during bulk operations
 ---@field startCraftingPrompt SkilletStartCraftingPrompt|nil
 ---@field recipePromptDialog SkilletRecipePromptDialog|nil
 ---@field professionSwitchPrompt SkilletProfessionSwitchPromptFrame|nil
@@ -279,8 +280,9 @@ function debugprofilestop() end
 ---@field DebugLog fun(self: SkilletClass, message: string, color?: string)
 ---@field IsDevMode fun(self: SkilletClass): boolean
 ---@field GetItemIDFromLink fun(self: SkilletClass, link: string|nil): number|nil
----@field GetConversionInfo fun(self: SkilletClass, itemId: number): number|nil, number|nil, string|nil
+---@field GetConversionInfo fun(self: SkilletClass, itemId: number): number|nil, number|nil, number|nil, string|nil, number|nil
 ---@field GetQueuedReagentConsumption fun(self: SkilletClass, itemId: number|nil): number
+---@field GetQueuedItemProduction fun(self: SkilletClass, itemId: number|nil): number
 ---@field QueueConversionsIfNeeded fun(self: SkilletClass, reagent: Reagent, needed: number): boolean
 ---@field GetTradeSkillLine fun(self: SkilletClass): string|nil, number|nil, number|nil
 ---@field GetNumTradeSkills fun(self: SkilletClass, trade: string|nil): integer
@@ -318,6 +320,11 @@ function debugprofilestop() end
 ---@field WithdrawMultipleFromResourceBank fun(self: SkilletClass, itemIds: number[]): number, number
 ---@field CloseResourceBank fun(self: SkilletClass)
 ---@field DepositToResourceBank fun(self: SkilletClass, itemIds: number|number[]|nil, autoClose?: boolean): boolean
+---@field ConversionWithdraw fun(self: SkilletClass, crystallizedId: number, eternalsNeeded: number): boolean
+---@field ConversionDepositAndContinue fun(self: SkilletClass, crystallizedId: number)
+---@field ShowConversionDialog fun(self: SkilletClass, virtualRecipe: Recipe)
+---@field ProcessConversion fun(self: SkilletClass, virtualRecipe: Recipe)
+---@field UseConversionItem fun(self: SkilletClass, sourceId: number, outputId: number, conversionType: string, virtualRecipe: Recipe)
 ---@field AddItemNotesToTooltip fun(self: SkilletClass, tooltip: Tooltip): boolean|nil
 ---@field IsItemAttuned fun(self: SkilletClass, itemLink: string|nil): boolean|nil
 ---@field GetItemAttunementProgress fun(self: SkilletClass, itemLink: string|nil): number|nil
@@ -538,13 +545,5 @@ SkilletExtraDetailText = nil
 ---@type table|nil
 color = nil
 
--- Helper function to safely get player name, always returns a string
+-- Helper function to safely get player name: defined in Skillet.lua
 ---@return string playerName The player's name, or "Unknown" if not available
-function GetSafePlayerName()
-    local nameFromAPI = UnitName("player")
-    if nameFromAPI then
-        return nameFromAPI
-    else
-        return "Unknown"
-    end
-end

@@ -19,3 +19,6 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+# Release archives
+/releases/
+Planning/Skillet/Scoots ID Upgradables.xlsx

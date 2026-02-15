@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Ark Inventory Rules [AttuneHelper]
+## Notes: Adds the ahset() rule to ArkInventory for AttuneHelper integration
+## Author: Tech Priest of the Adeptus Mechanicus
+## Version: 1.0
+## RequiredDeps: ArkInventoryRules, AttuneHelper
+
+ArkInventoryRules_AttuneHelper.lua

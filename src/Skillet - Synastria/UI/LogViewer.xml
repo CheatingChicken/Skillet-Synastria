@@ -1,0 +1,220 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\..\FrameXML\UI.xsd">
+
+	<!--
+	Skillet: A tradeskill window replacement.
+	Copyright (c) 2007 Robert Clark <nogudnik@gmail.com>
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	-->
+
+	<!--
+	#
+	# Log Viewer Frame - Displays SkilletLog entries with copy functionality
+	#
+	-->
+	<Frame name="SkilletLogViewerFrame" toplevel="true" frameStrata="DIALOG" movable="true" enableMouse="true" hidden="true">
+		<Size>
+			<AbsDimension x="600" y="400"/>
+		</Size>
+		<Anchors>
+			<Anchor point="CENTER"/>
+		</Anchors>
+		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+			<BackgroundInsets>
+				<AbsInset left="11" right="12" top="12" bottom="11"/>
+			</BackgroundInsets>
+			<TileSize>
+				<AbsValue val="32"/>
+			</TileSize>
+			<EdgeSize>
+				<AbsValue val="32"/>
+			</EdgeSize>
+		</Backdrop>
+		
+		<Layers>
+			<Layer level="ARTWORK">
+				<!-- Title -->
+				<Texture name="$parentHeaderTexture" file="Interface\DialogFrame\UI-DialogBox-Header">
+					<Size>
+						<AbsDimension x="256" y="64"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOP">
+							<Offset>
+								<AbsDimension x="0" y="12"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+				<FontString name="$parentTitle" inherits="GameFontNormal" text="Skillet Debug Log">
+					<Anchors>
+						<Anchor point="TOP" relativeTo="$parentHeaderTexture">
+							<Offset>
+								<AbsDimension x="0" y="-14"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				
+				<!-- Group Name Label -->
+				<FontString name="SkilletLogViewerGroupLabel" inherits="GameFontHighlightLarge" text="Main">
+					<Anchors>
+						<Anchor point="TOP" relativeTo="SkilletLogViewerFrame" relativePoint="TOP">
+							<Offset>
+								<AbsDimension x="0" y="-45"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+					<Color r="1" g="0.82" b="0" a="1"/>
+				</FontString>
+			</Layer>
+		</Layers>
+
+		<Frames>
+			<!-- Close Button -->
+			<Button name="$parentCloseButton" inherits="UIPanelCloseButton">
+				<Anchors>
+					<Anchor point="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="-5" y="-5"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						SkilletLogViewerFrame:Hide();
+					</OnClick>
+				</Scripts>
+			</Button>
+			
+			<!-- Previous Group Button -->
+			<Button name="SkilletLogViewerPrevButton" inherits="UIPanelButtonTemplate" text="&lt;">
+				<Size>
+					<AbsDimension x="30" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOP" relativeTo="SkilletLogViewerFrame">
+						<Offset>
+							<AbsDimension x="-100" y="-55"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						Skillet:LogViewer_PrevGroup();
+					</OnClick>
+				</Scripts>
+			</Button>
+			
+			<!-- Next Group Button -->
+			<Button name="SkilletLogViewerNextButton" inherits="UIPanelButtonTemplate" text="&gt;">
+				<Size>
+					<AbsDimension x="30" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOP" relativeTo="SkilletLogViewerFrame">
+						<Offset>
+							<AbsDimension x="100" y="-55"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						Skillet:LogViewer_NextGroup();
+					</OnClick>
+				</Scripts>
+			</Button>
+
+			<!-- Multi-line EditBox for log display -->
+			<ScrollFrame name="SkilletLogViewerScrollFrame" inherits="UIPanelScrollFrameTemplate">
+				<Size>
+					<AbsDimension x="550" y="270"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOP">
+						<Offset>
+							<AbsDimension x="0" y="-75"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<ScrollChild>
+					<EditBox name="SkilletLogViewerEditBox" multiLine="true" autoFocus="false">
+						<Size>
+							<AbsDimension x="530" y="280"/>
+						</Size>
+						<FontString inherits="ChatFontNormal"/>
+						<Scripts>
+							<OnEscapePressed>
+								this:ClearFocus();
+								SkilletLogViewerFrame:Hide();
+							</OnEscapePressed>
+						</Scripts>
+					</EditBox>
+				</ScrollChild>
+			</ScrollFrame>
+
+			<!-- Copy Button -->
+			<Button name="SkilletLogViewerCopyButton" inherits="UIPanelButtonTemplate" text="Copy All">
+				<Size>
+					<AbsDimension x="100" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOM" relativeTo="SkilletLogViewerFrame">
+						<Offset>
+							<AbsDimension x="-60" y="20"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						Skillet:LogViewer_CopyAll();
+					</OnClick>
+				</Scripts>
+			</Button>
+
+			<!-- Clear Button -->
+			<Button name="SkilletLogViewerClearButton" inherits="UIPanelButtonTemplate" text="Clear Log">
+				<Size>
+					<AbsDimension x="100" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOM" relativeTo="SkilletLogViewerFrame">
+						<Offset>
+							<AbsDimension x="60" y="20"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						Skillet:LogViewer_ClearLog();
+					</OnClick>
+				</Scripts>
+			</Button>
+		</Frames>
+
+		<Scripts>
+			<OnShow>
+				Skillet:LogViewer_OnShow();
+			</OnShow>
+			<OnMouseDown>
+				this:StartMoving();
+			</OnMouseDown>
+			<OnMouseUp>
+				this:StopMovingOrSizing();
+			</OnMouseUp>
+		</Scripts>
+	</Frame>
+
+</Ui>

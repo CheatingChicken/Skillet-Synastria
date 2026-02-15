@@ -1,0 +1,20 @@
+- Slots selector broken ✅
+
+- Turn forge levels into toggles ✅
+ 
+- Find solution for account/char✅
+
+- Fix extraction UI
+	- Instruction text✅
+	- Group borders (Issue with expanded group size UI?)
+	- scroll bar limitation
+
+- Add Combinin System to Extrraction menu✅
+
+- Prospecting doesn't work, (probably becasue we've swapped sources and results)✅
+
+- Ctrl+Scroll doesn'T work for combining✅
+
+- Find out what leatherworking and salt is all about
+
+- cans your learned patterns for attunable items you can craft, and can spit out a total list of materials needed to craft everything

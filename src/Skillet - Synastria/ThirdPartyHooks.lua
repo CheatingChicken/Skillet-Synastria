@@ -407,6 +407,342 @@ function Skillet:UpdateTradeSkillWindow()
 end
 
 --
+-- Updates the queue window display (scrolling list of queued recipes)
+--
+---@return nil
+function Skillet:UpdateQueueWindow()
+    -- OPTIMIZATION: Skip UI updates during bulk queue operations
+    if self.suppressQueueUpdates then
+        return
+    end
+
+    -- Refresh queue display: show/hide buttons and populate with data
+    -- This is called when the queue list scrolls or changes
+    if not SkilletQueueList then
+        return
+    end
+
+    -- Get queue data from SkilletStitch - simple array of queue entries
+    if not self.stitch or not self.stitch.queue then
+        return
+    end
+
+    ---@type table
+    local queues = self.stitch.queue
+    local queueCount = #queues
+
+    local buttonHeight = SKILLET_TRADE_SKILL_HEIGHT or 16
+    local listHeight = SkilletQueueList:GetHeight()
+
+    -- Calculate how many items can fit, with minimum of 1
+    local numVisible = math.max(1, math.floor(listHeight / buttonHeight))
+    local offset = FauxScrollFrame_GetOffset(SkilletQueueList)
+
+    -- Update the scroll frame with total queue count
+    FauxScrollFrame_Update(SkilletQueueList, queueCount, numVisible, buttonHeight)
+
+    -- Ensure button 1 exists and has correct parent
+    local button1 = getglobal("SkilletQueueButton1") --[[@as Frame|nil]]
+    if button1 then
+        button1:SetParent(SkilletQueueParent)
+
+        -- IMPORTANT: Fix the template-created FontStrings to match dynamic button properties
+        -- The XML template has wrong defaults (height=0, anchor=LEFT, justifyH=LEFT)
+        local count1Text = getglobal("SkilletQueueButton1CountText") --[[@as FontString|nil]]
+        if count1Text then
+            count1Text:SetHeight(16)
+            count1Text:SetPoint("RIGHT", getglobal("SkilletQueueButton1Count"), "RIGHT", 0, 0)
+            count1Text:SetJustifyH("RIGHT")
+            count1Text:Show() -- Ensure FontString is visible
+        end
+
+        local name1Text = getglobal("SkilletQueueButton1NameText") --[[@as FontString|nil]]
+        if name1Text then
+            name1Text:SetHeight(16)
+            name1Text:SetPoint("CENTER", getglobal("SkilletQueueButton1Name"), "CENTER", 0, 0)
+            name1Text:SetJustifyH("LEFT")
+            name1Text:Show() -- Ensure FontString is visible
+        end
+
+        -- Show parent frames explicitly
+        local count1Frame = getglobal("SkilletQueueButton1Count") --[[@as Frame|nil]]
+        if count1Frame then count1Frame:Show() end
+
+        local name1Frame = getglobal("SkilletQueueButton1Name") --[[@as Frame|nil]]
+        if name1Frame then name1Frame:Show() end
+    end
+
+    -- Create buttons 2+ on first load (only when needed)
+    for i = 2, numVisible do
+        local button = getglobal("SkilletQueueButton" .. i)
+        if not button then
+            -- CRITICAL: parent is SkilletQueueParent (container), not SkilletQueueList (scroll frame)!
+            button = CreateFrame("Frame", "SkilletQueueButton" .. i, SkilletQueueParent) --[[@as Frame]]
+            button:SetParent(SkilletQueueParent)
+            button:SetWidth(270)
+            button:SetHeight(16)
+            button:SetPoint("TOPLEFT", "SkilletQueueButton" .. (i - 1), "BOTTOMLEFT", 0, 0)
+            button:SetFrameLevel((SkilletQueueParent:GetFrameLevel() or 0) + 1)
+
+            -- Add backdrop
+            button:SetBackdrop({
+                bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+                edgeFile = nil,
+                tile = true,
+                tileSize = 16,
+                edgeSize = 0,
+                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+            })
+            button:SetBackdropColor(0, 0, 0, 0.5)
+
+            -- Create Count frame with text right-aligned and vertically centered
+            local countFrame = CreateFrame("Frame", "SkilletQueueButton" .. i .. "Count", button)
+            countFrame:SetWidth(30)
+            countFrame:SetHeight(16)
+            countFrame:SetPoint("LEFT", 0, 0)
+            countFrame:Show() -- Ensure visibility
+            local countText = countFrame:CreateFontString("SkilletQueueButton" .. i .. "CountText", "OVERLAY",
+                "GameFontNormal")
+            countText:SetWidth(30)
+            countText:SetHeight(16)
+            countText:SetPoint("RIGHT", countFrame, "RIGHT", 0, 0)
+            countText:SetJustifyH("RIGHT")
+            countText:SetTextColor(1, 1, 1, 1)
+            countText:Show() -- Ensure visibility
+
+            -- Create Name frame with text centered vertically
+            local nameFrame = CreateFrame("Frame", "SkilletQueueButton" .. i .. "Name", button)
+            nameFrame:SetWidth(220)
+            nameFrame:SetHeight(16)
+            nameFrame:SetPoint("LEFT", 34, 0)
+            nameFrame:Show() -- Ensure visibility
+            local nameText = nameFrame:CreateFontString("SkilletQueueButton" .. i .. "NameText", "OVERLAY",
+                "GameFontNormal")
+            nameText:SetWidth(220)
+            nameText:SetHeight(16)
+            nameText:SetPoint("CENTER", nameFrame, "CENTER", 0, 0)
+            nameText:SetJustifyH("LEFT")
+            nameText:SetTextColor(1, 1, 1, 1)
+            nameText:Show() -- Ensure visibility
+
+            -- Create Delete button
+            local deleteButton = CreateFrame("Button", "SkilletQueueButton" .. i .. "DeleteButton", button,
+                "UIPanelButtonTemplate")
+            deleteButton:SetWidth(16)
+            deleteButton:SetHeight(16)
+            deleteButton:SetPoint("RIGHT", -2, 0)
+            deleteButton:SetText("D")
+            deleteButton:SetScript("OnClick", function()
+                Skillet:RemoveQueuedItem(deleteButton:GetID())
+            end)
+
+            -- Create Primary toggle button (dev mode only)
+            local primaryButton = CreateFrame("Button", "SkilletQueueButton" .. i .. "PrimaryButton", button,
+                "UIPanelButtonTemplate")
+            primaryButton:SetWidth(16)
+            primaryButton:SetHeight(16)
+            primaryButton:SetPoint("RIGHT", deleteButton, "LEFT", -2, 0)
+            primaryButton:SetText("P")
+            primaryButton:SetScript("OnClick", function()
+                local queueIdx = primaryButton:GetID()
+                if Skillet.stitch.queue and Skillet.stitch.queue[queueIdx] then
+                    local entry = Skillet.stitch.queue[queueIdx]
+                    -- Toggle isPrimary status
+                    entry.isPrimary = not entry.isPrimary
+                    -- Save and refresh
+                    Skillet:SaveQueue(Skillet.db.server.queues, Skillet.currentTrade)
+                    Skillet:UpdateQueueWindow()
+                end
+            end)
+        end
+    end
+
+    -- Show/Hide and populate buttons based on queue data
+    for i = 1, numVisible do
+        local buttonIndex = i + offset
+        local button = getglobal("SkilletQueueButton" .. i) --[[@as Frame|nil]]
+
+        if button then
+            if buttonIndex <= queueCount then
+                -- Show and populate this button
+                ---@type table
+                local queueItem = queues[buttonIndex]
+
+                -- Populate count FontString (number of crafts)
+                local countText = getglobal(button:GetName() .. "CountText") --[[@as FontString|nil]]
+                if countText then
+                    countText:SetText(tostring(queueItem.numcasts or 0))
+                    countText:Show()
+                end
+
+                -- Show count parent frame
+                local countFrame = getglobal(button:GetName() .. "Count") --[[@as Frame|nil]]
+                if countFrame then countFrame:Show() end
+
+                -- Populate name FontString (profession + recipe name)
+                local nameText = getglobal(button:GetName() .. "NameText") --[[@as FontString|nil]]
+                if nameText then
+                    local professionTag = queueItem.profession or "???"
+                    local displayName = "Unknown Recipe"
+
+                    -- Handle conversion entries (special case - no spellId)
+                    if professionTag == "Conversion" then
+                        displayName = queueItem.name or "Conversion"
+
+                        -- Handle normal profession recipes
+                    else
+                        -- Use stored .name field (persists across sessions)
+                        displayName = queueItem.name or "Unknown Recipe"
+
+                        -- Fallback: Try API if name field missing (backward compat with old saves)
+                        if displayName == "Unknown Recipe" and queueItem.spellId and Custom_GetProfessionRecipeInfo then
+                            local skillId, name = Custom_GetProfessionRecipeInfo(queueItem.spellId)
+                            if name then
+                                displayName = name
+                            end
+                        end
+                    end
+
+                    local finalText = ""
+                    if professionTag == "Conversion" then
+                        finalText = "[CON] " .. displayName
+                    elseif professionTag == "UNKNOWN" then
+                        finalText = displayName
+                    else
+                        finalText = "[" .. professionTag .. "] " .. displayName
+                    end
+
+                    -- Synastria: Calculate craftability and apply color coding
+                    -- Green = fully craftable, Yellow = partially craftable, Red = not craftable
+                    ---@type number
+                    local craftable = 0
+                    ---@type number, number, number
+                    local r, g, b = 1, 1, 1 -- Default white
+
+                    -- Skip coloring for conversions (they use different logic)
+                    if professionTag ~= "Conversion" and professionTag ~= "UNKNOWN" then
+                        -- Try to get recipe object for craftability calculation
+                        ---@type Recipe|nil
+                        local recipeObj = nil
+
+                        -- Method 1: Use spellId if available (fast Custom API lookup)
+                        if queueItem.spellId and self.stitch.GetItemDataBySpellId then
+                            recipeObj = self.stitch:GetItemDataBySpellId(queueItem.spellId)
+                        end
+
+                        -- Method 2: Fallback to name lookup (slower but works for all recipes)
+                        if not recipeObj and queueItem.name then
+                            recipeObj = self.stitch:GetItemDataByName(queueItem.name, queueItem.profession)
+                        end
+
+                        -- Calculate craftability if recipe found
+                        if recipeObj and self.CraftCalc and self.CraftCalc.CalculateRecipeCraftability then
+                            -- Use synchronous calculation (it's fast with our optimizations!)
+                            -- includeBank=true to match UI display (bags+bank+resbank)
+                            craftable = self.CraftCalc:CalculateRecipeCraftability(
+                                recipeObj, self.stitch, true, false, 0, true
+                            ) or 0
+
+                            -- Divide by nummade to get number of CRAFTS (not items)
+                            if recipeObj.nummade and recipeObj.nummade > 1 then
+                                craftable = math.floor(craftable / recipeObj.nummade)
+                            end
+                        end
+
+                        -- Apply color based on craftability vs queued amount
+                        ---@type number
+                        local numQueued = queueItem.numcasts or 0
+
+                        if craftable >= numQueued then
+                            -- Fully craftable - GREEN
+                            r, g, b = 0, 1, 0
+                        elseif craftable > 0 then
+                            -- Partially craftable - YELLOW
+                            r, g, b = 1, 1, 0
+                        else
+                            -- Not craftable - RED
+                            r, g, b = 1, 0, 0
+                        end
+                    end
+
+                    -- Apply color to both name and count for visual consistency
+                    nameText:SetTextColor(r, g, b, 1)
+                    nameText:SetText(finalText)
+                    nameText:Show() -- Ensure visibility
+
+                    -- Also color the count text to match
+                    if countText then
+                        countText:SetTextColor(r, g, b, 1)
+                    end
+                end
+
+                -- Show name parent frame
+                local nameFrame = getglobal(button:GetName() .. "Name") --[[@as Frame|nil]]
+                if nameFrame then nameFrame:Show() end
+
+                -- Set button ID for delete button and show it
+                local deleteBtn = getglobal(button:GetName() .. "DeleteButton") --[[@as Button|nil]]
+                if deleteBtn then
+                    deleteBtn:SetID(buttonIndex)
+                    deleteBtn:Show()
+                end
+
+                -- Set button ID for primary button and show/color based on dev mode and status
+                local primaryBtn = getglobal(button:GetName() .. "PrimaryButton") --[[@as Button|nil]]
+                if primaryBtn then
+                    primaryBtn:SetID(buttonIndex)
+
+                    -- Only show in dev mode
+                    if self:IsDevMode() then
+                        -- Color based on isPrimary status
+                        ---@type FontString|nil
+                        local fontString = primaryBtn:GetFontString()
+                        if fontString then
+                            if queueItem.isPrimary then
+                                -- Green for primary items
+                                fontString:SetTextColor(0, 1, 0, 1)
+                            else
+                                -- Red for auto-generated subcrafts
+                                fontString:SetTextColor(1, 0, 0, 1)
+                            end
+                        end
+                        primaryBtn:Show()
+                    else
+                        primaryBtn:Hide()
+                    end
+                end
+
+                -- Show the button
+                button:Show()
+            else
+                -- Hide this button and all its children
+                button:Hide()
+
+                local countText = getglobal(button:GetName() .. "CountText") --[[@as FontString|nil]]
+                if countText then
+                    countText:Hide()
+                end
+
+                local nameText = getglobal(button:GetName() .. "NameText") --[[@as FontString|nil]]
+                if nameText then
+                    nameText:Hide()
+                end
+
+                local deleteBtn = getglobal(button:GetName() .. "DeleteButton") --[[@as Button|nil]]
+                if deleteBtn then
+                    deleteBtn:Hide()
+                end
+
+                local primaryBtn = getglobal(button:GetName() .. "PrimaryButton") --[[@as Button|nil]]
+                if primaryBtn then
+                    primaryBtn:Hide()
+                end
+            end
+        end
+    end
+end
+
+--
 -- Hides any and all Skillet windows that are open
 --
 -- Refer to the notes at the top of this file for how to hook this method.

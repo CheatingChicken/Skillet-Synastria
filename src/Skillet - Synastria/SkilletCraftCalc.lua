@@ -39,6 +39,12 @@ local TimingStats = {
     apiCallCount = 0, -- Number of times Custom API path was used
 }
 
+-- Queue net reservation cache - built ONCE per calculation run
+-- Maps itemId -> net amount reserved (consumption - production)
+-- Positive = resource consumed (reserved), Negative = resource produced (available)
+---@type table<number, number>|nil
+local queueNetReservationCache = nil
+
 function SkilletCraftCalc:ResetTimingStats()
     TimingStats.apiTime = 0
     TimingStats.apiCallCount = 0
@@ -54,6 +60,7 @@ local craftabilityCache = {}
 
 function SkilletCraftCalc:ClearCache()
     craftabilityCache = {}
+    queueNetReservationCache = nil -- Clear queue net reservation cache
 end
 
 function SkilletCraftCalc:GetCachedCraftability(profession, recipeIndex, includeBank, includeResBank, includeAlts)
@@ -76,12 +83,85 @@ function SkilletCraftCalc:SetCachedCraftability(profession, recipeIndex, include
     craftabilityCache[key] = value
 end
 
+-- Build queue net reservation map ONCE for entire calculation run
+-- Accounts for both consumption (negative) and production (positive)
+---@return table<number, number> netReservationMap Maps itemId -> net reserved amount
+function SkilletCraftCalc:BuildQueueNetReservationMap()
+    ---@type table<number, number>
+    local netResMap = {}
+
+    ---@type SkilletStitch
+    local lib = AceLibrary("SkilletStitch-1.1")
+    if not lib or not lib.queue then
+        return netResMap
+    end
+
+    -- Synastria: Calculate net consumption for each queue entry
+    if Custom_GetProfessionRecipeReagents and Custom_GetProfessionRecipeInfo then
+        for i = 1, #lib.queue do
+            local entry = lib.queue[i]
+            if entry.spellId then
+                local numCasts = entry.numcasts or 1
+
+                -- Track consumption (what this recipe needs)
+                local reagents = Custom_GetProfessionRecipeReagents(entry.spellId)
+                if reagents then
+                    for itemId, neededPerCraft in pairs(reagents) do
+                        local consumed = neededPerCraft * numCasts
+                        netResMap[itemId] = (netResMap[itemId] or 0) + consumed
+                    end
+                end
+
+                -- Track production (what this recipe creates)
+                local skillId, name, craftedItemId, craftedCount = Custom_GetProfessionRecipeInfo(entry.spellId)
+                if craftedItemId and craftedItemId > 0 then
+                    local produced = (craftedCount or 1) * numCasts
+                    netResMap[craftedItemId] = (netResMap[craftedItemId] or 0) - produced
+                end
+            end
+        end
+    else
+        -- Fallback to recipe.reagents array
+        for i = 1, #lib.queue do
+            local entry = lib.queue[i]
+            if entry.recipe then
+                local numCasts = entry.numcasts or 1
+
+                -- Track consumption
+                if entry.recipe.reagents then
+                    for _, reagent in ipairs(entry.recipe.reagents) do
+                        local itemId = Skillet:GetItemIDFromLink(reagent.link)
+                        if itemId then
+                            local consumed = (reagent.needed or 1) * numCasts
+                            netResMap[itemId] = (netResMap[itemId] or 0) + consumed
+                        end
+                    end
+                end
+
+                -- Track production
+                if entry.recipe.link then
+                    local craftedItemId = tonumber(entry.recipe.link:match("item:(%d+)"))
+                    if craftedItemId and craftedItemId > 0 then
+                        local produced = (entry.recipe.nummade or 1) * numCasts
+                        netResMap[craftedItemId] = (netResMap[craftedItemId] or 0) - produced
+                    end
+                end
+            end
+        end
+    end
+
+    return netResMap
+end
+
 -- Background calculation (now SYNCHRONOUS - no coroutine needed with 10ms runtime!)
 function SkilletCraftCalc:CalculateCraftability(profession, yieldInterval)
     -- yieldInterval is now ignored since we run synchronously
     local lastProgressReport = 0
 
-    Skillet:DebugLog("[Calc] Starting SYNCHRONOUS calculation for " .. (profession or "nil"), "|cFF00FFFF")
+    -- Skillet:DebugLog("[Calc] Starting SYNCHRONOUS calculation for " .. (profession or "nil"), "|cFF00FFFF")
+
+    -- Build queue net reservation cache ONCE at start of calculation
+    queueNetReservationCache = self:BuildQueueNetReservationMap()
 
     ---@type SkilletStitch
     local lib = AceLibrary("SkilletStitch-1.1")
@@ -98,11 +178,12 @@ function SkilletCraftCalc:CalculateCraftability(profession, yieldInterval)
     -- Count total recipes first
     for index, recipeData in pairs(recipes) do
         if type(recipeData) == "table" then
+            ---@type number
             totalRecipes = totalRecipes + 1
         end
     end
 
-    Skillet:DebugLog("[Calc] Found " .. totalRecipes .. " recipes to process", "|cFF00FFFF")
+    -- Skillet:DebugLog("[Calc] Found " .. totalRecipes .. " recipes to process", "|cFF00FFFF")
 
     -- Iterate through all recipes in the profession
     for index, recipeData in pairs(recipes) do
@@ -137,20 +218,11 @@ function SkilletCraftCalc:CalculateCraftability(profession, yieldInterval)
                 end
 
                 count = count + 1
-
-                -- Report progress every 25% (no yielding needed)
-                local progressPercent = math.floor((count / totalRecipes) * 100)
-                if progressPercent >= lastProgressReport + 25 then
-                    lastProgressReport = progressPercent
-                    Skillet:DebugLog(
-                        "[Calc] Progress: " .. progressPercent .. "% (" .. count .. "/" .. totalRecipes .. ")",
-                        "|cFF00FFFF")
-                end
             end
         end
     end
 
-    Skillet:DebugLog("[Calc] SYNCHRONOUS calculation complete! Processed " .. count .. " recipes", "|cFF00FF00")
+    -- Skillet:DebugLog("[Calc] SYNCHRONOUS calculation complete! Processed " .. count .. " recipes", "|cFF00FF00")
     return count
 end
 
@@ -171,6 +243,11 @@ function SkilletCraftCalc:CalculateRecipeCraftabilityCustomAPI(spellId, includeB
     ---@type table<string, number>
     cache = cache or {}
     local indent = string.rep("  ", depth)
+
+    -- Build queue net reservation cache at top level (depth 0)
+    if depth == 0 and not queueNetReservationCache then
+        queueNetReservationCache = self:BuildQueueNetReservationMap()
+    end
 
     -- Maximum recursion depth safety check
     if depth > 50 then
@@ -210,35 +287,46 @@ function SkilletCraftCalc:CalculateRecipeCraftabilityCustomAPI(spellId, includeB
         return 0
     end
 
+    -- Get the recipe object to access reagent details AND nummade
+    local recipeObj = Skillet.stitch:GetItemDataBySpellId(spellId)
+
+    -- Synastria: Use recipeObj.nummade (from window scanning) as it's more reliable than Custom API's craftCount
+    -- Custom API's craftCount can be nil for some recipes, but window scanning always captures GetTradeSkillNumMade()
+    ---@type number
+    local itemsPerCraft = (recipeObj and recipeObj.nummade) or craftCount or 1
+
     -- Calculate total items (API returns crafts, multiply by items-per-craft)
-    local totalCraftable = canCraft * (craftCount or 1)
+    local totalCraftable = canCraft * itemsPerCraft
 
     if verbose then
         DEFAULT_CHAT_FRAME:AddMessage(
             indent .. "|cFF00FFFF[API] " .. (name or ("Recipe " .. spellId)) ..
-            ": " .. canCraft .. " crafts * " .. (craftCount or 1) .. " = " .. totalCraftable .. "|r"
+            ": " .. canCraft .. " crafts * " .. itemsPerCraft .. " = " .. totalCraftable .. "|r"
         )
     end
 
-    -- If we can craft directly, return immediately
-    if totalCraftable > 0 then
-        cache[cacheKey] = totalCraftable
-        return totalCraftable
-    end
+    -- IMPORTANT: API only reports DIRECT craftability (with current inventory)
+    -- It does NOT account for crafting reagents, so we ALWAYS need to check sub-recipes
+    -- Do depth-first recursive calculation for accurate result
 
-    -- We can't craft with current materials - need to check sub-recipes AND inventory
-    -- Get the recipe object to access reagent inventory counts
-    local recipeObj = Skillet.stitch:GetItemDataBySpellId(spellId)
     if not recipeObj or not recipeObj.reagents or #recipeObj.reagents == 0 then
-        -- Can't find recipe or no reagents
-        cache[cacheKey] = 0
-        return 0
+        -- No reagents - API result is accurate
+        if totalCraftable > 0 then
+            cache[cacheKey] = totalCraftable
+            return totalCraftable
+        else
+            cache[cacheKey] = 0
+            return 0
+        end
     end
 
-    if verbose then
+    if verbose and totalCraftable == 0 then
         DEFAULT_CHAT_FRAME:AddMessage(indent ..
             "|cFFFFAA00[API] Can't craft directly, checking inventory + sub-recipes...|r")
     end
+
+    -- Type assertion: recipeObj is guaranteed non-nil here (checked above)
+    ---@cast recipeObj -nil
 
     -- Track the limiting reagent - start with "infinite" and reduce to minimum
     local maxCraftable = math.huge
@@ -255,19 +343,108 @@ function SkilletCraftCalc:CalculateRecipeCraftabilityCustomAPI(spellId, includeB
             end
         else
             -- Check how many we have in inventory
-            local available = includeBank and reagent.numwbank or reagent.num
+            -- Synastria: Use numraw/numwbankraw to get RAW inventory without OLD queue subtraction
+            -- We apply NEW NET queue reservation (consumption - production) below
+            ---@type number
+            local available = includeBank and reagent.numwbankraw or reagent.numraw
             local needed = reagent.needed
+
+            -- Synastria: Adjust available based on net queue reservation (consumption - production)
+            local reagentItemId = tonumber(reagent.link:match("|Hitem:(%d+)"))
+            if reagentItemId then
+                -- Use cached queue net reservation (O(1) lookup!)
+                -- Positive = reserved (use), Negative = available (produce)
+                local netReservation = (queueNetReservationCache and queueNetReservationCache[reagentItemId]) or 0
+                if netReservation ~= 0 then
+                    local availableBeforeQueue = available
+                    available = math.max(0, available - netReservation)
+                    if verbose then
+                        local action = netReservation > 0 and "reserved" or "produced"
+                        DEFAULT_CHAT_FRAME:AddMessage(
+                            indent .. "  |cFFAA88FF[QUEUE] " .. reagent.name .. ": " .. action .. " " ..
+                            math.abs(netReservation) ..
+                            ", adjusted from " .. availableBeforeQueue .. " to " .. available .. "|r"
+                        )
+                    end
+                end
+            end
 
             if available >= needed then
                 -- We have enough of this reagent in inventory
+                ---@type number
                 local timesFromInventory = math.floor(available / needed)
                 maxCraftable = math.min(maxCraftable, timesFromInventory)
 
                 if verbose then
-                    DEFAULT_CHAT_FRAME:AddMessage(
-                        indent .. "  |cFF88FF88" .. reagent.name .. ": have " ..
-                        available .. ", need " .. needed .. " → " .. timesFromInventory .. " crafts|r"
-                    )
+                    -- Synastria: Show detailed breakdown of where materials come from
+                    if reagentItemId then
+                        -- Get raw counts for breakdown
+                        local bagsOnly = GetItemCount("item:" .. reagentItemId, false) or 0
+                        local bagsAndBank = GetItemCount("item:" .. reagentItemId, true) or 0
+                        local bankOnly = bagsAndBank - bagsOnly
+                        ---@type number
+                        local rbCount = 0
+                        if GetCustomGameData then
+                            rbCount = GetCustomGameData(13, reagentItemId) or 0
+                        end
+
+                        -- Check conversions
+                        local targetId, inputAmount, outputAmount, conversionType = Skillet:GetConversionInfo(
+                            reagentItemId)
+                        local hasConversion = false
+                        local conversionAmount = 0
+                        local sourceName = ""
+
+                        if targetId and inputAmount and outputAmount then
+                            ---@type number
+                            local sourceAvailable = GetItemCount("item:" .. targetId, includeBank) or 0
+                            if GetCustomGameData then
+                                ---@type number
+                                local sourceRbCount = GetCustomGameData(13, targetId) or 0
+                                ---@type number
+                                sourceAvailable = sourceAvailable + sourceRbCount
+                            end
+
+                            if sourceAvailable > 0 then
+                                -- Calculate conversion: e.g., 100 Crystallized / 10 * 1 = 10 Eternal
+                                -- Works for both combine (10→1) and split (1→10)
+                                conversionAmount = math.floor(sourceAvailable / inputAmount) * outputAmount
+
+                                if conversionAmount > 0 then
+                                    hasConversion = true
+                                    sourceName = GetItemInfo(targetId) or ("Item#" .. targetId)
+                                end
+                            end
+                        end
+
+                        -- Show detailed breakdown
+                        if hasConversion or rbCount > 0 or bankOnly > 0 then
+                            local parts = {}
+                            if bagsOnly > 0 then table.insert(parts, bagsOnly .. " bags") end
+                            if bankOnly > 0 then table.insert(parts, bankOnly .. " bank") end
+                            if rbCount > 0 then table.insert(parts, rbCount .. " resbank") end
+                            if hasConversion then
+                                table.insert(parts, conversionAmount .. " from " .. sourceName)
+                            end
+
+                            local breakdown = table.concat(parts, " + ")
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                                indent .. "  |cFF00FFFF" .. reagent.name .. ": " .. breakdown ..
+                                " = " .. available .. " total, need " .. needed ..
+                                " -> " .. timesFromInventory .. " crafts|r"
+                            )
+                        else
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                                indent .. "  |cFF88FF88" .. reagent.name .. ": have " ..
+                                available .. ", need " .. needed .. " -> " .. timesFromInventory .. " crafts|r"
+                            )
+                        end
+                    else
+                        DEFAULT_CHAT_FRAME:AddMessage(
+                            indent .. "  |cFF88FF88" .. reagent.name .. ": have " ..
+                            available .. ", need " .. needed .. " -> " .. timesFromInventory .. " crafts|r"
+                        )
+                    end
                 end
             else
                 -- Don't have enough - check if it's craftable
@@ -280,7 +457,7 @@ function SkilletCraftCalc:CalculateRecipeCraftabilityCustomAPI(spellId, includeB
                     if verbose then
                         DEFAULT_CHAT_FRAME:AddMessage(
                             indent .. "  |cFFFFAA00" .. reagent.name .. ": have " ..
-                            available .. ", need " .. needed .. " → trying to craft (spell " .. reagentSpellId .. ")|r"
+                            available .. ", need " .. needed .. " -> trying to craft (spell " .. reagentSpellId .. ")|r"
                         )
                     end
 
@@ -298,29 +475,209 @@ function SkilletCraftCalc:CalculateRecipeCraftabilityCustomAPI(spellId, includeB
                             DEFAULT_CHAT_FRAME:AddMessage(
                                 indent .. "    |cFF00FF00Can craft " .. craftableReagents ..
                                 " + have " .. available .. " = " .. totalReagents ..
-                                " → " .. timesFromCrafting .. " crafts|r"
+                                " -> " .. timesFromCrafting .. " crafts|r"
                             )
                         end
                     else
-                        -- Can't craft this reagent and don't have enough - recipe is blocked
+                        -- Can't craft via recipe - try conversion before giving up
+                        -- Synastria: Check for conversion (Crystallized <-> Eternal, Mote <-> Primal)
+                        if verbose then
+                            DEFAULT_CHAT_FRAME:AddMessage(
+                                indent .. "    |cFFFFAA00Can't craft " .. reagent.name .. ", checking conversion...|r"
+                            )
+                        end
+
+                        if reagentItemId then
+                            local targetId, inputAmount, outputAmount, conversionType = Skillet:GetConversionInfo(
+                                reagentItemId)
+
+                            if targetId and inputAmount and outputAmount then
+                                -- Conversion available! Check if we have the source material
+                                ---@type number
+                                local sourceAvailable = GetItemCount("item:" .. targetId, includeBank) or 0
+                                if GetCustomGameData then
+                                    ---@type number
+                                    local rbSource = GetCustomGameData(13, targetId) or 0
+                                    sourceAvailable = sourceAvailable + rbSource
+                                end
+
+                                -- Calculate how much we can convert
+                                -- Example: 100 Crystallized (source) with 10→1 conversion = floor(100/10)*1 = 10 Eternal
+                                -- Example: 5 Eternal (source) with 1→10 conversion = floor(5/1)*10 = 50 Crystallized
+                                ---@type number
+                                local convertibleAmount = math.floor(sourceAvailable / inputAmount) * outputAmount
+
+                                -- Calculate how much source material we need for the required amount
+                                -- Example: Need 5 Eternal with 10→1 conversion = ceil(5*10/1) = 50 Crystallized
+                                -- Example: Need 50 Crystallized with 1→10 conversion = ceil(50*1/10) = 5 Eternal
+                                ---@type number
+                                local sourceNeeded = math.ceil(needed * inputAmount / outputAmount)
+
+                                if convertibleAmount > 0 then
+                                    -- Can convert! Include converted amount
+                                    local totalReagents = available + convertibleAmount
+                                    local timesFromConversion = math.floor(totalReagents / needed)
+                                    maxCraftable = math.min(maxCraftable, timesFromConversion)
+
+                                    if verbose then
+                                        -- Get source material name
+                                        local sourceName = GetItemInfo(targetId) or ("Item#" .. targetId)
+
+                                        -- Show conversion operation name
+                                        local conversionName = conversionType == "combine" and "Combine " or "Split "
+                                        conversionName = conversionName .. sourceName
+                                        DEFAULT_CHAT_FRAME:AddMessage(indent .. "    " .. conversionName)
+
+                                        -- Show source material availability
+                                        local maxConversions = math.floor(sourceAvailable / sourceNeeded)
+                                        DEFAULT_CHAT_FRAME:AddMessage(
+                                            indent .. "      " .. sourceName .. ": " .. sourceAvailable .. "/" ..
+                                            sourceNeeded .. " -> max " .. maxConversions
+                                        )
+
+                                        -- Show final result
+                                        DEFAULT_CHAT_FRAME:AddMessage(
+                                            indent .. "      |cFF00FF00Can convert " .. convertibleAmount ..
+                                            " + have " .. available .. " = " .. totalReagents ..
+                                            " -> " .. timesFromConversion .. " crafts [Convertible]|r"
+                                        )
+                                    end
+                                else
+                                    -- Can't convert enough - blocked
+                                    maxCraftable = 0
+                                    if verbose then
+                                        local sourceName = GetItemInfo(targetId) or ("Item#" .. targetId)
+                                        DEFAULT_CHAT_FRAME:AddMessage(
+                                            indent .. "    |cFFFF0000" .. reagent.name .. ": have " ..
+                                            available ..
+                                            ", need " .. needed .. " (conversion available but insufficient " ..
+                                            sourceName ..
+                                            ": " .. sourceAvailable .. "/" .. sourceNeeded .. ") - blocked!|r"
+                                        )
+                                    end
+                                    break
+                                end
+                            else
+                                -- No conversion available - truly blocked
+                                maxCraftable = 0
+                                if verbose then
+                                    DEFAULT_CHAT_FRAME:AddMessage(
+                                        indent ..
+                                        "    |cFFFF0000Can't craft or convert " .. reagent.name .. " - blocked!|r"
+                                    )
+                                end
+                                break
+                            end
+                        else
+                            -- reagentItemId is nil - can't check conversion
+                            maxCraftable = 0
+                            if verbose then
+                                DEFAULT_CHAT_FRAME:AddMessage(
+                                    indent .. "    |cFFFF0000" .. reagent.name .. " (invalid item link) - blocked!|r"
+                                )
+                            end
+                            break
+                        end
+                    end
+                else
+                    -- Not craftable via recipe - check if it's convertible
+                    -- Synastria: Check for conversion (Crystallized <-> Eternal, Mote <-> Primal)
+                    if reagentItemId then
+                        local targetId, inputAmount, outputAmount, conversionType = Skillet:GetConversionInfo(
+                            reagentItemId)
+
+                        if targetId and inputAmount and outputAmount then
+                            -- Conversion available! Check if we have the source material
+                            ---@type number
+                            local sourceAvailable = GetItemCount("item:" .. targetId, includeBank) or 0
+                            if GetCustomGameData then
+                                ---@type number
+                                local rbSource = GetCustomGameData(13, targetId) or 0
+                                sourceAvailable = sourceAvailable + rbSource
+                            end
+
+                            -- Calculate how much we can convert
+                            -- Example: 100 Crystallized (source) with 10→1 conversion = floor(100/10)*1 = 10 Eternal
+                            -- Example: 5 Eternal (source) with 1→10 conversion = floor(5/1)*10 = 50 Crystallized
+                            ---@type number
+                            local convertibleAmount = math.floor(sourceAvailable / inputAmount) * outputAmount
+
+                            -- Calculate how much source material we need for the required amount
+                            -- Example: Need 5 Eternal with 10→1 conversion = ceil(5*10/1) = 50 Crystallized
+                            -- Example: Need 50 Crystallized with 1→10 conversion = ceil(50*1/10) = 5 Eternal
+                            ---@type number
+                            local sourceNeeded = math.ceil(needed * inputAmount / outputAmount)
+
+                            if convertibleAmount > 0 then
+                                -- Can convert! Include converted amount
+                                local totalReagents = available + convertibleAmount
+                                local timesFromConversion = math.floor(totalReagents / needed)
+                                maxCraftable = math.min(maxCraftable, timesFromConversion)
+
+                                if verbose then
+                                    -- Get source material name
+                                    local sourceName = GetItemInfo(targetId) or ("Item#" .. targetId)
+
+                                    -- Show initial conversion check
+                                    DEFAULT_CHAT_FRAME:AddMessage(
+                                        indent .. "  |cFFFFAA00" .. reagent.name .. ": have " ..
+                                        available .. ", need " .. needed .. " -> checking conversion|r"
+                                    )
+
+                                    -- Show conversion operation name
+                                    local conversionName = conversionType == "combine" and "Combine " or "Split "
+                                    conversionName = conversionName .. sourceName
+                                    DEFAULT_CHAT_FRAME:AddMessage(indent .. "  " .. conversionName)
+
+                                    -- Show source material availability
+                                    local maxConversions = math.floor(sourceAvailable / sourceNeeded)
+                                    DEFAULT_CHAT_FRAME:AddMessage(
+                                        indent .. "    " .. sourceName .. ": " .. sourceAvailable .. "/" ..
+                                        sourceNeeded .. " -> max " .. maxConversions
+                                    )
+
+                                    -- Show final result
+                                    DEFAULT_CHAT_FRAME:AddMessage(
+                                        indent .. "    |cFF00FF00Can convert " .. convertibleAmount ..
+                                        " + have " .. available .. " = " .. totalReagents ..
+                                        " -> " .. timesFromConversion .. " crafts [Convertible]|r"
+                                    )
+                                end
+                            else
+                                -- Can't convert enough - blocked
+                                maxCraftable = 0
+                                if verbose then
+                                    local sourceName = GetItemInfo(targetId) or ("Item#" .. targetId)
+                                    DEFAULT_CHAT_FRAME:AddMessage(
+                                        indent .. "  |cFFFF0000" .. reagent.name .. ": have " ..
+                                        available .. ", need " .. needed .. " (conversion available but insufficient " ..
+                                        sourceName .. ": " .. sourceAvailable .. "/" .. sourceNeeded .. ") - blocked!|r"
+                                    )
+                                end
+                                break
+                            end
+                        else
+                            -- No conversion available - blocked
+                            maxCraftable = 0
+                            if verbose then
+                                DEFAULT_CHAT_FRAME:AddMessage(
+                                    indent .. "  |cFFFF0000" .. reagent.name .. ": have " ..
+                                    available .. ", need " .. needed .. " (not craftable) - blocked!|r"
+                                )
+                            end
+                            break
+                        end
+                    else
+                        -- reagentItemId is nil - can't check conversion
                         maxCraftable = 0
                         if verbose then
                             DEFAULT_CHAT_FRAME:AddMessage(
-                                indent .. "    |cFFFF0000Can't craft " .. reagent.name .. " - blocked!|r"
+                                indent .. "  |cFFFF0000" .. reagent.name .. ": have " ..
+                                available .. ", need " .. needed .. " (invalid item link) - blocked!|r"
                             )
                         end
                         break
                     end
-                else
-                    -- Not craftable and don't have enough - recipe is blocked
-                    maxCraftable = 0
-                    if verbose then
-                        DEFAULT_CHAT_FRAME:AddMessage(
-                            indent .. "  |cFFFF0000" .. reagent.name .. ": have " ..
-                            available .. ", need " .. needed .. " (not craftable) - blocked!|r"
-                        )
-                    end
-                    break
                 end
             end
         end
@@ -458,7 +815,28 @@ function SkilletCraftCalc:CalculateRecipeCraftability(recipe, lib, includeBank, 
             -- Skip vendor items, they don't limit craftability
         else
             -- Non-vendor reagent - check availability and craftability
-            local available = includeBank and reagent.numwbank or reagent.num
+            -- Synastria: Use numraw/numwbankraw to get RAW inventory without OLD queue subtraction
+            -- We apply NEW NET queue reservation (consumption - production) below
+            ---@type number
+            local available = includeBank and reagent.numwbankraw or reagent.numraw
+
+            -- Synastria: Adjust available based on net queue reservation (consumption - production)
+            local itemId = Skillet:GetItemIDFromLink(reagent.link)
+            if itemId then
+                -- Use cached queue net reservation (O(1) lookup!)
+                local netReservation = (queueNetReservationCache and queueNetReservationCache[itemId]) or 0
+                if netReservation ~= 0 then
+                    local availableBeforeQueue = available
+                    available = math.max(0, available - netReservation)
+                    if verbose then
+                        Skillet:DebugLog(indent ..
+                            "  [QUEUE] " ..
+                            reagent.name ..
+                            ": net reservation " ..
+                            netReservation .. ", adjusted from " .. availableBeforeQueue .. " to " .. available)
+                    end
+                end
+            end
 
             if verbose then
                 Skillet:DebugLog(indent .. "  [REAGENT] " .. reagent.name .. ": " .. available .. "/" .. reagent.needed)
@@ -541,7 +919,7 @@ end
 
 -- Start calculation (now SYNCHRONOUS - completes immediately!)
 function SkilletCraftCalc:StartBackgroundCalculation(profession, finishCallback, yieldInterval)
-    Skillet:DebugLog("[Calc] StartSYNCHRONOUSCalculation called for " .. (profession or "nil"), "|cFF00FFFF")
+    -- Skillet:DebugLog("[Calc] StartSYNCHRONOUSCalculation called for " .. (profession or "nil"), "|cFF00FFFF")
 
     if CalcUpdateFrame.running then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00[Skillet] Craftability calculation already in progress|r")
@@ -572,12 +950,11 @@ function SkilletCraftCalc:StartBackgroundCalculation(profession, finishCallback,
     CalcUpdateFrame.profession = nil
 
     if count then
-        Skillet:DebugLog("[Calc] SYNCHRONOUS calculation completed in " .. string.format("%.2f", elapsed) .. "ms",
-            "|cFF00FF00")
+        -- Skillet:DebugLog("[Calc] SYNCHRONOUS calculation completed in " .. string.format("%.2f", elapsed) .. "ms", "|cFF00FF00")
 
         -- Call finish callback if provided
         if finishCallback then
-            Skillet:DebugLog("[Calc] Executing finish callback", "|cFF00FF00")
+            -- Skillet:DebugLog("[Calc] Executing finish callback", "|cFF00FF00")
             finishCallback(count)
         end
 
@@ -587,6 +964,12 @@ function SkilletCraftCalc:StartBackgroundCalculation(profession, finishCallback,
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet] Error in craftability calculation|r")
         return false
     end
+end
+
+-- Get the current queue consumption cache
+---@return table<number, number>|nil
+function SkilletCraftCalc:GetQueueNetReservationCache()
+    return queueNetReservationCache
 end
 
 function SkilletCraftCalc:IsCalculationRunning()
@@ -894,7 +1277,7 @@ function SkilletCraftCalc:BenchmarkAllRecipes(includeBank)
                 Skillet.stitch:ClearCraftabilityCache()
                 local resultOld = self:CalculateRecipeCraftability(mismatch.recipe, Skillet.stitch, includeBank, true, 0,
                     true, true)
-                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00  → Result: " .. resultOld .. "|r")
+                DEFAULT_CHAT_FRAME:AddMessage("|cFFFFAA00  -> Result: " .. resultOld .. "|r")
 
                 DEFAULT_CHAT_FRAME:AddMessage("|cFFFF8800----------------------------------------|r")
 
@@ -903,7 +1286,7 @@ function SkilletCraftCalc:BenchmarkAllRecipes(includeBank)
                 Skillet.stitch:ClearCraftabilityCache()
                 local resultNew = self:CalculateRecipeCraftability(mismatch.recipe, Skillet.stitch, includeBank, true, 0,
                     true, false)
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  → Result: " .. resultNew .. "|r")
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00  -> Result: " .. resultNew .. "|r")
 
                 DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF========================================|r")
             end

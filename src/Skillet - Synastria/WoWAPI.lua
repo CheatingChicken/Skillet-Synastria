@@ -544,6 +544,9 @@ function GetItemQualityColor(quality) end
 ---@param slot number The slot index
 function UseContainerItem(containerIndex, slot) end
 
+---@param itemName string The item name or item link
+function UseItemByName(itemName) end
+
 -- Math Functions (Lua standard library)
 ---@param x number The number to floor
 ---@return number floored The floored value
@@ -715,6 +718,15 @@ SkilletExtractionContainer = nil
 
 ---@type Frame|nil
 SkilletExtractionScrollFrame = nil
+
+---@type Frame|nil
+SkilletLogViewerFrame = nil
+
+---@type EditBox|nil
+SkilletLogViewerEditBox = nil
+
+---@type FontString|nil
+SkilletLogViewerGroupLabel = nil
 
 ---@class HighlightFontColor
 ---@field r number Red component

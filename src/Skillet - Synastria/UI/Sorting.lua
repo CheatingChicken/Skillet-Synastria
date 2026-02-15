@@ -94,8 +94,21 @@ local function sort_recipe_by_difficulty(tradeskill, a, b, stitch_left, stitch_r
         return true
     end
 
-    local left  = skill_style_type[left_skillType].level
-    local right = skill_style_type[right_skillType].level
+    -- Ensure skillType exists in table before accessing level
+    local left_style = skill_style_type[left_skillType]
+    local right_style = skill_style_type[right_skillType]
+
+    if not left_style and right_style then
+        return false
+    elseif not right_style and left_style then
+        return true
+    elseif not left_style and not right_style then
+        -- Both unknown, sort by name
+        return sort_recipe_by_name(tradeskill, a, b, stitch_left, stitch_right)
+    end
+
+    local left  = left_style.level
+    local right = right_style.level
 
     -- hardest recipes at the top
     if left == right then
@@ -300,11 +313,11 @@ function Skillet:InitializeSorting()
     -- Default sorting methods
     -- We don't go through the public API for this as we want our methods
     -- to appear first in the list, no matter what.
-    table.insert(sorters, 1, { ["name"] = L["None"], ["sorter"] = NOSORT })
-    table.insert(sorters, 2, { ["name"] = L["By Name"], ["sorter"] = sort_recipe_by_name })
-    table.insert(sorters, 3, { ["name"] = L["By Difficulty"], ["sorter"] = sort_recipe_by_difficulty })
-    table.insert(sorters, 4, { ["name"] = L["By Level"], ["sorter"] = sort_by_required_level })
-    table.insert(sorters, 5, { ["name"] = L["By Quality"], ["sorter"] = sort_by_item_quality })
+    table.insert(sorters, 1, { ["name"] = GetLocalizedString("None"), ["sorter"] = NOSORT })
+    table.insert(sorters, 2, { ["name"] = GetLocalizedString("By Name"), ["sorter"] = sort_recipe_by_name })
+    table.insert(sorters, 3, { ["name"] = GetLocalizedString("By Difficulty"), ["sorter"] = sort_recipe_by_difficulty })
+    table.insert(sorters, 4, { ["name"] = GetLocalizedString("By Level"), ["sorter"] = sort_by_required_level })
+    table.insert(sorters, 5, { ["name"] = GetLocalizedString("By Quality"), ["sorter"] = sort_by_item_quality })
 
     recipe_sort_method = NOSORT
 
@@ -318,7 +331,7 @@ function Skillet:InitializeSorting()
     SkilletSortAscButton:SetScript("OnEnter", function()
         ---@diagnostic disable-next-line: param-type-mismatch
         GameTooltip:SetOwner(SkilletSortAscButton, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["SORTASC"])
+        GameTooltip:SetText(GetLocalizedString("SORTASC"))
     end)
     SkilletSortAscButton:SetScript("OnLeave", function()
         GameTooltip:Hide()
@@ -334,7 +347,7 @@ function Skillet:InitializeSorting()
     SkilletSortDescButton:SetScript("OnEnter", function()
         ---@diagnostic disable-next-line: param-type-mismatch
         GameTooltip:SetOwner(SkilletSortDescButton, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["SORTDESC"])
+        GameTooltip:SetText(GetLocalizedString("SORTDESC"))
     end)
     SkilletSortDescButton:SetScript("OnLeave", function()
         GameTooltip:Hide()

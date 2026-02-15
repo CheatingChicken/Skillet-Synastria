@@ -69,21 +69,18 @@ function Skillet:ExportShoppingListToResourceTracker(playername, includeBank, si
                 end
 
                 if currentAmount < totalNeeded then
-                    -- Check if we can convert to get this item (e.g., Crystallized → Eternal)
+                    -- Check if we can convert to get this item (e.g., Crystallized -> Eternal)
                     local canConvert = false
-                    local targetId, ratio, conversionType = self:GetConversionInfo(itemId)
-                    if targetId then
+                    local targetId, inputAmount, outputAmount, conversionType = self:GetConversionInfo(itemId)
+                    if targetId and inputAmount and outputAmount then
                         local convertibleAmount = GetItemCount(targetId, includeBank) or 0
                         if GetCustomGameData then
                             convertibleAmount = convertibleAmount + (GetCustomGameData(13, targetId) or 0)
                         end
 
-                        local convertedAmount = 0
-                        if conversionType == "combine" then
-                            convertedAmount = math.floor(convertibleAmount / (1 / ratio))
-                        elseif conversionType == "split" then
-                            convertedAmount = convertibleAmount * (1 / ratio)
-                        end
+                        -- Calculate how much we can convert
+                        -- Example: 100 Crystallized (source) with 10→1 conversion = floor(100/10)*1 = 10 Eternal
+                        local convertedAmount = math.floor(convertibleAmount / inputAmount) * outputAmount
 
                         if currentAmount + convertedAmount >= totalNeeded then
                             canConvert = true
@@ -116,9 +113,10 @@ function Skillet:ExportShoppingListToResourceTracker(playername, includeBank, si
 
                 if shouldAdd then
                     -- Mark as externally controlled (5th parameter = true)
-                    _G.ResourceTracker.QueueItemAdd(itemId, nil, shortage, true, true)
+                    -- Synastria: Use totalNeeded as goal, not shortage - we want to track toward full requirement
+                    _G.ResourceTracker.QueueItemAdd(itemId, nil, totalNeeded, true, true)
                     itemsAdded = itemsAdded + 1
-                    totalGoal = totalGoal + shortage
+                    totalGoal = totalGoal + totalNeeded
                 end
             end
         end

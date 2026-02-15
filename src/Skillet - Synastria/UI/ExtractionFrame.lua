@@ -464,6 +464,12 @@ local function buildMillingMap()
 	---@type table<number, {type: string, herbs: number[], rarePigments: number[]}>
 	local pigmentToHerbs = {}
 
+	-- CRITICAL: Check if database is loaded
+	if not Skillet.MILLING_DATA then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet] ERROR: MILLING_DATA not loaded!|r")
+		return pigmentToHerbs -- Return empty table
+	end
+
 	for herbId, data in pairs(Skillet.MILLING_DATA) do
 		-- Only process common pigments (rare pigments are attached to them)
 		if data.commonPigments then
@@ -555,7 +561,7 @@ end
 
 -- Perform the actual item conversion by USING the items
 -- Conversions work by right-clicking items in your inventory
-local function performActualConversion(sourceItemId, targetItemId, ratio, sourceItemName, targetItemName, isReverse)
+local function performActualConversion(sourceItemId, targetItemId, inputAmount, sourceItemName, targetItemName, isReverse)
 	-- Find the first stack of source items
 	local sourceBag, sourceSlot = nil, nil
 
@@ -568,7 +574,7 @@ local function performActualConversion(sourceItemId, targetItemId, ratio, source
 					local foundItemId = Skillet:GetItemIDFromLink(link)
 					if foundItemId and foundItemId == sourceItemId then
 						local _, count = GetContainerItemInfo(bag, slot)
-						if count and count >= ratio then
+						if count and count >= inputAmount then
 							sourceBag = bag
 							sourceSlot = slot
 							break
@@ -581,7 +587,7 @@ local function performActualConversion(sourceItemId, targetItemId, ratio, source
 	end
 
 	if not sourceBag or not sourceSlot then
-		Skillet:Print("|cFFFF6666Could not find " .. ratio .. "x " .. sourceItemName .. " in a single stack|r")
+		Skillet:Print("|cFFFF6666Could not find " .. inputAmount .. "x " .. sourceItemName .. " in a single stack|r")
 		return
 	end
 
@@ -589,15 +595,15 @@ local function performActualConversion(sourceItemId, targetItemId, ratio, source
 	-- For essences/eternals/primals, right-clicking them performs the conversion
 	UseContainerItem(sourceBag, sourceSlot)
 
-	local targetCount = isReverse and ratio or 1
+	local outputAmount = 1 -- Default output is 1 item
 	Skillet:Print("|cFF66FF66Converting " ..
-		ratio .. "x " .. sourceItemName .. " -> " .. targetCount .. "x " .. targetItemName .. "|r")
+		inputAmount .. "x " .. sourceItemName .. " -> " .. outputAmount .. "x " .. targetItemName .. "|r")
 end
 
 -- Perform conversion between items
 ---
 ---@param clickedItemId number The item ID that was clicked
----@param conversionPair { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number } The conversion definition for this pair
+---@param conversionPair { resultItem: number, sourceItem: number, bidirectional: boolean, inputAmount?: number, outputAmount?: number } The conversion definition for this pair
 ---@param itemName string The name of the clicked item
 local function performConversion(clickedItemId, conversionPair, itemName)
 	if not conversionPair then return end
@@ -609,7 +615,8 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	---@type boolean|nil
 	local isReverse
 	---@type number
-	local ratio = conversionPair.ratio or 10
+	local inputAmount = conversionPair.inputAmount or 10
+	local outputAmount = conversionPair.outputAmount or 1
 
 	-- Determine conversion direction based on clicked item
 	if clickedItemId == conversionPair.resultItem then
@@ -661,13 +668,14 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	local targetItemName = GetItemInfo(targetItemId) or ("Item " .. tostring(targetItemId))
 
 	-- Check if we have enough resources for at least one conversion
-	if totalAvailable < ratio then
-		Skillet:Print("|cFFFF6666Not enough " .. sourceItemName .. " (" .. totalAvailable .. "/" .. ratio .. " needed)|r")
+	if totalAvailable < inputAmount then
+		Skillet:Print("|cFFFF6666Not enough " ..
+		sourceItemName .. " (" .. totalAvailable .. "/" .. inputAmount .. " needed)|r")
 		return
 	end
 
 	-- If we have enough in bags, convert immediately
-	if bagsCount >= ratio then
+	if bagsCount >= inputAmount then
 		-- Check if we have inventory space for the result
 		---@type number|nil
 		local targetBag, targetSlot = findEmptySlotOrStack(targetItemId)
@@ -676,13 +684,13 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 			return
 		end
 
-		performActualConversion(sourceItemId, targetItemId, ratio, sourceItemName, targetItemName, isReverse)
+		performActualConversion(sourceItemId, targetItemId, inputAmount, sourceItemName, targetItemName, isReverse)
 		return
 	end
 
 	-- Not enough in bags - withdraw from resource bank (no conversion yet)
 	---@type number
-	local neededFromBank = ratio - bagsCount
+	local neededFromBank = inputAmount - bagsCount
 	if bankCount >= neededFromBank then
 		if Skillet and Skillet.WithdrawFromResourceBank then
 			Skillet:Print("|cFF66AAFF Withdrawing " ..
@@ -728,9 +736,13 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 
 				-- Show conversion ratio and direction
 				if pair.bidirectional then
-					GameTooltip:AddLine("Bidirectional " .. pair.ratio .. ":1 conversion", 0.8, 0.8, 0.8, true)
+					GameTooltip:AddLine(
+					"Bidirectional " .. (pair.inputAmount or 10) .. ":" .. (pair.outputAmount or 1) .. " conversion", 0.8,
+						0.8, 0.8, true)
 				else
-					GameTooltip:AddLine("One-way " .. pair.ratio .. ":1 conversion", 1, 0.6, 0.6, true)
+					GameTooltip:AddLine(
+					"One-way " .. (pair.inputAmount or 10) .. ":" .. (pair.outputAmount or 1) .. " conversion", 1, 0.6,
+						0.6, true)
 				end
 
 				GameTooltip:AddLine("Left-click: Convert (or Withdraw if needed)", 0.6, 1, 0.6, true)
@@ -766,7 +778,7 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 		self = self
 		if not self.conversionPair then return end
 
-		---@type { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number }
+		---@type { resultItem: number, sourceItem: number, bidirectional: boolean, inputAmount?: number, outputAmount?: number }
 		local pair = self.conversionPair
 		---@type string
 		local itemName = GetItemInfo(itemId) or ("Item " .. tostring(itemId))
@@ -781,7 +793,7 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			---@type boolean|nil
 			local isReverse
 			---@type number
-			local ratio = pair.ratio or 10
+			local inputAmount = pair.inputAmount or 10
 
 			if itemId == pair.resultItem then
 				-- Clicked result item - check if bidirectional for reverse conversion
@@ -829,17 +841,17 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			---@type string
 			local sourceItemName = GetItemInfo(sourceId) or ("Item " .. tostring(sourceId))
 
-			-- Need at least ratio items for conversion
-			if totalAvailable < ratio then
+			-- Need at least inputAmount items for conversion
+			if totalAvailable < inputAmount then
 				Skillet:Print("|cFFFF6666Not enough " ..
-					sourceItemName .. " (" .. totalAvailable .. "/" .. ratio .. " needed)|r")
+					sourceItemName .. " (" .. totalAvailable .. "/" .. inputAmount .. " needed)|r")
 				return "block" -- Prevent SecureActionButton from running
 			end
 
 			-- If not enough in bags, withdraw from bank first
-			if bagsCount < ratio then
+			if bagsCount < inputAmount then
 				---@type number
-				local neededFromBank = ratio - bagsCount
+				local neededFromBank = inputAmount - bagsCount
 				if bankCount >= neededFromBank and Skillet.WithdrawFromResourceBank then
 					Skillet:Print("|cFF66AAFFWithdrawing " ..
 						neededFromBank .. "x " .. sourceItemName .. " from Resource Bank. Click again to convert.|r")
@@ -858,7 +870,7 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 		self = self
 		if not self.conversionPair then return end
 
-		---@type { resultItem: number, sourceItem: number, bidirectional: boolean, ratio?: number }
+		---@type { resultItem: number, sourceItem: number, bidirectional: boolean, inputAmount?: number, outputAmount?: number }
 		local pair = self.conversionPair
 		---@type string
 		local itemName = GetItemInfo(itemId) or ("Item " .. tostring(itemId))
@@ -872,9 +884,11 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			---@type boolean|nil
 			local isReverse
 			---@type number
-			local ratio = pair.ratio or 10
+			local inputAmount = pair.inputAmount or 10
+			---@type number
+			local outputAmount = pair.outputAmount or 1
 
-			if itemId == pair.resultItem and pair.bidirectional then
+			if itemId == pair.resultItem then
 				sourceId = pair.resultItem
 				targetId = pair.sourceItem
 				isReverse = true
@@ -889,10 +903,10 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 			---@type string
 			local targetItemName = GetItemInfo(targetId) or ("Item " .. tostring(targetId))
 			---@type number
-			local targetCount = isReverse and ratio or 1
+			local targetCount = isReverse and outputAmount or outputAmount
 
 			Skillet:Print("|cFF66FF66Converting " ..
-				ratio .. "x " .. sourceItemName .. " -> " .. targetCount .. "x " .. targetItemName .. "|r")
+				inputAmount .. "x " .. sourceItemName .. " -> " .. targetCount .. "x " .. targetItemName .. "|r")
 		elseif mouseButton == "RightButton" then
 			-- Right click: Deposit all stacks to resource bank
 			if Skillet and Skillet.Print and Skillet.DepositToResourceBank then
@@ -1287,6 +1301,12 @@ end
 local function createProspectingScrollData()
 	local data = {}
 
+	-- CRITICAL: Check if database is loaded
+	if not Skillet.PROSPECTING_DATA then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[Skillet] ERROR: PROSPECTING_DATA not loaded!|r")
+		return data -- Return empty table
+	end
+
 	-- Define ore tier groups
 	-- IMPORTANT: Only group ores that share ALL their output gems (even if drop rates differ)
 	-- IMPORTANT: Titanium separate because it has 18 possible gems (needs special layout)
@@ -1449,7 +1469,8 @@ local function createConversionsScrollData()
 				resultItem = resultItem,
 				sourceItem = sourceItem, -- Single source item for compatibility
 				bidirectional = group.bidirectional,
-				ratio = group.ratio,
+				inputAmount = (group.inputAmount or 10) --[[@as number]],
+				outputAmount = (group.outputAmount or 1) --[[@as number]],
 				type = "hardcoded" -- Mark as using new system
 			})
 		end

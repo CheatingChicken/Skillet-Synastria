@@ -248,20 +248,20 @@ function Skillet:CreateTradeSkillWindow()
     titletext:SetShadowColor(0, 0, 0)
     titletext:SetShadowOffset(1, -1)
     titletext:SetTextColor(1, 1, 1)
-    titletext:SetText(L["Skillet Trade Skills"]);
+    titletext:SetText(GetLocalizedString("Skillet Trade Skills"));
 
-    local label = getglobal("SkilletFilterLabel");
-    label:SetText(L["Filter"]);
+    local label = getglobal("SkilletFilterLabel")
+    if label then label:SetText(GetLocalizedString("Filter")) end
 
-    SkilletCreateAllButton:SetText(L["Create All"])
-    SkilletQueueAllButton:SetText(L["Queue All"])
-    SkilletCreateButton:SetText(L["Create"])
-    SkilletQueueButton:SetText(L["Queue"])
-    SkilletStartQueueButton:SetText(L["Start"])
-    SkilletEmptyQueueButton:SetText(L["Clear"])
-    SkilletShowOptionsButton:SetText(L["Options"])
-    SkilletRescanButton:SetText(L["Rescan"])
-    SkilletRecipeNotesButton:SetText(L["Notes"])
+    if _G.SkilletCreateAllButton then _G.SkilletCreateAllButton:SetText(GetLocalizedString("Create All")) end
+    if _G.SkilletQueueAllButton then _G.SkilletQueueAllButton:SetText(GetLocalizedString("Queue All")) end
+    if _G.SkilletCreateButton then _G.SkilletCreateButton:SetText(GetLocalizedString("Create")) end
+    if _G.SkilletQueueButton then _G.SkilletQueueButton:SetText(GetLocalizedString("Queue")) end
+    if _G.SkilletStartQueueButton then _G.SkilletStartQueueButton:SetText(GetLocalizedString("Start")) end
+    if _G.SkilletEmptyQueueButton then _G.SkilletEmptyQueueButton:SetText(GetLocalizedString("Clear")) end
+    if _G.SkilletShowOptionsButton then _G.SkilletShowOptionsButton:SetText(GetLocalizedString("Options")) end
+    if _G.SkilletRescanButton then _G.SkilletRescanButton:SetText(GetLocalizedString("Rescan")) end
+    if _G.SkilletRecipeNotesButton then _G.SkilletRecipeNotesButton:SetText(GetLocalizedString("Notes")) end
 
     -- Synastria: Create Debug button below Notes button
     if not SkilletDebugButton then
@@ -275,25 +275,15 @@ function Skillet:CreateTradeSkillWindow()
             Skillet:DebugSelectedRecipe()
         end)
     end
+    if _G.SkilletRecipeNotesButton then _G.SkilletRecipeNotesButton:SetNormalFontObject("GameFontNormalSmall") end
+    if _G.SkilletRecipeNotesFrameLabel then _G.SkilletRecipeNotesFrameLabel:SetText(GetLocalizedString("Notes")) end
+    if _G.SkilletShoppingListButton then _G.SkilletShoppingListButton:SetText(GetLocalizedString("Shopping List")) end
 
-    -- Synastria: Create Resource Bank Test button below Debug button
-    if not SkilletRBankTestButton then
-        local rbankButton = CreateFrame("Button", "SkilletRBankTestButton", SkilletFrame, "UIPanelButtonTemplate")
-        rbankButton:SetWidth(60)
-        rbankButton:SetHeight(22)
-        rbankButton:SetPoint("TOP", SkilletDebugButton, "BOTTOM", 0, -5)
-        rbankButton:SetText("RBank")
-        rbankButton:SetNormalFontObject("GameFontNormalSmall")
-        rbankButton:SetScript("OnClick", function()
-            Skillet:TestResourceBank()
-        end)
+    if _G.SkilletHideUncraftableRecipesText then
+        _G.SkilletHideUncraftableRecipesText:SetText(GetLocalizedString(
+            "Hide uncraftable"))
     end
-    SkilletRecipeNotesButton:SetNormalFontObject("GameFontNormalSmall")
-    SkilletRecipeNotesFrameLabel:SetText(L["Notes"])
-    SkilletShoppingListButton:SetText(L["Shopping List"])
-
-    SkilletHideUncraftableRecipesText:SetText(L["Hide uncraftable"])
-    SkilletHideTrivialRecipesText:SetText(L["Hide trivial"])
+    if _G.SkilletHideTrivialRecipesText then _G.SkilletHideTrivialRecipesText:SetText(GetLocalizedString("Hide trivial")) end
     -- SkilletEquipmentOnlyRecipesText:SetText(L["Equipment only"])  -- COMMENTED: Now controlled by forge toggles
 
     -- Always want these visible.
@@ -324,6 +314,15 @@ function Skillet:CreateTradeSkillWindow()
         self:SetValue(newValue)
         Skillet:UpdateNumItemsSlider(newValue, true)
     end)
+
+    -- Set Clear button handler
+    if SkilletEmptyQueueButton then
+        SkilletEmptyQueueButton:SetScript("OnClick", function()
+            Skillet:EmptyQueue()
+            Skillet:UpdateQueueWindow()
+            Skillet:Print("|cFFFFAA00Queue cleared!|r")
+        end)
+    end
 
     -- Progression status bar
     SkilletRankFrame:SetStatusBarColor(0.2, 0.2, 1.0, 1.0);
@@ -524,6 +523,7 @@ end
 
 -- Called when the list of queued items is scrolled
 function Skillet:QueueList_OnScroll()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE] QueueList_OnScroll triggered|r")
     Skillet:UpdateQueueWindow()
 end
 
@@ -665,6 +665,80 @@ local function get_recipe_button(i)
     return button
 end
 
+-- Get attunement status indicator for a recipe's crafted item
+-- Returns colored indicator like [U], [A], [T], [W], or [L] for equippable items
+-- Returns spacing for non-equippable items to preserve recipe name alignment
+-- @param itemLink The item link of the crafted item
+-- @return string Color-coded attunement indicator, or spacing for alignment
+local function get_attunement_indicator(itemLink)
+    if not itemLink then
+        return "    " -- 4 spaces to match indicator width: [X]
+    end
+
+    -- Only show attunement for equippable items
+    local itemId = Skillet:GetItemIDFromLink(itemLink)
+    if not itemId then
+        return "    " -- 4 spaces to match indicator width: [X]
+    end
+
+    local isEquippable = IsEquippableItem(itemId) or IsEquippableItem(itemLink)
+    if not isEquippable then
+        return "    " -- 4 spaces to match indicator width: [X]
+    end
+
+    -- Exclude bags/containers - they can't be attuned despite being "equippable"
+    local _, _, _, _, _, _, _, _, _, _, _, itemClassID = GetItemInfo(itemId)
+    if itemClassID == 1 then -- Container/Bag
+        return "    "        -- 4 spaces to match indicator width: [X]
+    end
+
+    -- Get forge level
+    ---@type number|nil
+    local forgeLevel = nil
+    if GetItemAttuneForge then
+        forgeLevel = GetItemAttuneForge(itemId)
+    end
+
+    -- Determine indicator and color based on forge level
+    ---@type string
+    local indicator = ""
+    ---@type number, number, number
+    local r, g, b = 1, 1, 1
+
+    if not forgeLevel or forgeLevel == -1 then
+        -- Unattuned (nil or -1)
+        indicator = "[U]"
+        r, g, b = 0.8, 0.8, 0.8
+    elseif forgeLevel == 0 then
+        -- Attuned (Baseline)
+        indicator = "[A]"
+        r, g, b = 0.65, 1, 0.5
+    elseif forgeLevel == 1 then
+        -- Titanforged
+        indicator = "[T]"
+        r, g, b = 0.5, 0.5, 1
+    elseif forgeLevel == 2 then
+        -- Warforged
+        indicator = "[W]"
+        r, g, b = 1, 0.65, 0.5
+    elseif forgeLevel >= 3 then
+        -- Lightforged
+        indicator = "[L]"
+        r, g, b = 1, 1, 0.65
+    else
+        -- Default to unattuned for any unexpected value
+        indicator = "[U]"
+        r, g, b = 0.8, 0.8, 0.8
+    end
+
+    -- Return colored indicator with trailing space (appears before recipe name)
+    return string.format("|cff%02x%02x%02x%s|r ",
+        math.floor(r * 255),
+        math.floor(g * 255),
+        math.floor(b * 255),
+        indicator)
+end
+
 -- shows a recipe button (in the scrolling list) after doing the
 -- required callbacks.
 local function show_button(button, trade, skill, index)
@@ -780,7 +854,7 @@ function Skillet:internal_UpdateTradeSkillWindow()
     -- Window Title
     local title = getglobal("SkilletTitleText");
     if title then
-        title:SetText(L["Skillet Trade Skills"] .. ": " .. self.currentTrade)
+        title:SetText(GetLocalizedString("Skillet Trade Skills") .. ": " .. self.currentTrade)
     end
 
     local numTradeSkills = self:GetNumTradeSkills()
@@ -916,8 +990,10 @@ function Skillet:internal_UpdateTradeSkillWindow()
                 button:UnlockHighlight() -- headers never get highlighted
 
                 local button_width = button:GetTextWidth()
+                ---@type string
+                local text = skillName --[[@as string]]
                 while button_width > max_text_width do
-                    local text = string.sub(text, 0, -2)
+                    text = string.sub(text, 0, -2)
                     buttonText:SetText(text .. "..")
                     button_width = button:GetTextWidth()
                 end
@@ -953,8 +1029,12 @@ function Skillet:internal_UpdateTradeSkillWindow()
                         levelText:SetWidth(10)
                     end
 
+                    -- Synastria: Add attunement indicator before recipe name (includes trailing space)
+                    text = text .. get_attunement_indicator(s.link)
+
                     ---@type string
                     text = text .. s.name
+
                     -- Synastria: num already includes resource bank
                     local num, numwbank, numwalts = get_craftable_counts(s)
                     -- Only show counts if the primary count (bags+resbank) is > 0
@@ -1120,13 +1200,13 @@ function Skillet:DisplayTradeskillTooltip(id)
     -- how many can be created with the reagents in your inventory (includes resource bank)
     if num > 0 then
         ---@type string
-        local text = "\n" .. num .. " " .. L["can be created from reagents in your inventory"];
+        local text = "\n" .. num .. " " .. GetLocalizedString("can be created from reagents in your inventory");
         tooltip:AddLine(text, 1, 1, 1, 0); -- (text, r, g, b, wrap)
     end
     -- how many can be created with the reagent in your inv + bank + resource bank
     if self.db.profile.show_bank_alt_counts and numwbank > 0 and numwbank ~= num then
         ---@type string
-        local text = numwbank .. " " .. L["can be created from reagents in your inventory and bank"];
+        local text = numwbank .. " " .. GetLocalizedString("can be created from reagents in your inventory and bank");
         if num == 0 then
             text = "\n" .. text;
         end
@@ -1135,7 +1215,7 @@ function Skillet:DisplayTradeskillTooltip(id)
     -- how many can be crafted with reagents on *all* alts, including this one.
     if self.db.profile.show_bank_alt_counts and numwalts and numwalts > 0 and numwalts ~= num then
         ---@type string
-        local text = numwalts .. " " .. L["can be created from reagents on all characters"];
+        local text = numwalts .. " " .. GetLocalizedString("can be created from reagents on all characters");
         if num and numwbank == 0 then
             text = "\n" .. text;
         end
@@ -1166,20 +1246,21 @@ function Skillet:DisplayTradeskillTooltip(id)
         end
         reagent_counts = reagent_counts .. ")" .. FONT_COLOR_CODE_CLOSE
         if reagent and reagent.vendor == true then
-            text = text .. GRAY_FONT_COLOR_CODE .. "  (" .. L["buyable"] .. ")" .. FONT_COLOR_CODE_CLOSE;
+            text = text .. GRAY_FONT_COLOR_CODE .. "  (" .. GetLocalizedString("buyable") .. ")" .. FONT_COLOR_CODE_CLOSE;
         end
 
         tooltip:AddDoubleLine(text, reagent_counts, 1, 1, 1);
     end
 
     -- The legend at the bottom
-    text = "(" .. L["reagents in inventory"] .. " / " .. L["bank"]
+    ---@type string
+    local text = "(" .. GetLocalizedString("reagents in inventory") .. " / " .. GetLocalizedString("bank")
     -- Synastria: Add resource bank to legend
     if s.numcraftablewresbank ~= nil then
-        text = text .. " / " .. L["resbank"]
+        text = text .. " / " .. GetLocalizedString("resbank")
     end
     if s.numcraftablewalts ~= nil then
-        text = text .. " / " .. L["alts"]
+        text = text .. " / " .. GetLocalizedString("alts")
     end
     text = text .. ")"
     tooltip:AddDoubleLine("\n", text)
@@ -1199,6 +1280,7 @@ function Skillet:SetTradeSkillToolTip(skill, index)
     ---@type Tooltip
     GameTooltip:ClearLines();
 
+    -- Call SetTradeSkillItem to populate the tooltip
     if index then
         GameTooltip:SetTradeSkillItem(skill, index)
     else
@@ -1214,12 +1296,176 @@ function Skillet:SetTradeSkillToolTip(skill, index)
 
     -- Can the item be obtained from a vendor? Let the user know!
     if index and reagents[index] and reagents[index].vendor == true then
-        GameTooltip:AppendText(GRAY_FONT_COLOR_CODE .. " (" .. L["buyable"] .. ")" .. FONT_COLOR_CODE_CLOSE);
+        GameTooltip:AppendText(GRAY_FONT_COLOR_CODE ..
+            " (" .. GetLocalizedString("buyable") .. ")" .. FONT_COLOR_CODE_CLOSE);
     end
 end
 
 -- Updates the details window with information about the currently selected skill
 function Skillet:UpdateDetailsWindow(skill_index)
+    -- If no skill is selected, just hide content but keep panel background visible
+    if not skill_index then
+        -- Hide the content but keep the frame itself visible (for background)
+        if SkilletSkillName then SkilletSkillName:Hide() end
+        if SkilletRequirementLabel then SkilletRequirementLabel:Hide() end
+        if SkilletRequirementText then SkilletRequirementText:Hide() end
+        if SkilletSkillCooldown then SkilletSkillCooldown:Hide() end
+        if SkilletReagentLabel then SkilletReagentLabel:Hide() end
+        if SkilletSkillIcon then SkilletSkillIcon:Hide() end
+        if _G.SkilletRecipeNotesButton then _G.SkilletRecipeNotesButton:Hide() end
+        if _G.SkilletDebugButton then _G.SkilletDebugButton:Hide() end
+
+        -- Hide all reagent buttons
+        for i = 1, 8 do
+            ---@type Button|nil
+            local button = _G["SkilletReagent" .. i]
+            if button then
+                button:Hide()
+            end
+        end
+        return
+    end
+
+    -- Show the content since a recipe is selected
+    if SkilletSkillName then SkilletSkillName:Show() end
+    if SkilletReagentLabel then SkilletReagentLabel:Show() end
+    if SkilletSkillIcon then SkilletSkillIcon:Show() end
+    if _G.SkilletRecipeNotesButton then _G.SkilletRecipeNotesButton:Show() end
+    if _G.SkilletDebugButton then _G.SkilletDebugButton:Show() end
+
+    -- Get the recipe data
+    ---@type table|nil
+    local recipe = self.stitch:GetItemDataByIndex(self.currentTrade, skill_index)
+    if not recipe then
+        -- Hide content if recipe data not available
+        if SkilletSkillName then SkilletSkillName:Hide() end
+        if SkilletRequirementLabel then SkilletRequirementLabel:Hide() end
+        if SkilletRequirementText then SkilletRequirementText:Hide() end
+        if SkilletSkillCooldown then SkilletSkillCooldown:Hide() end
+        if SkilletReagentLabel then SkilletReagentLabel:Hide() end
+        if SkilletSkillIcon then SkilletSkillIcon:Hide() end
+        if _G.SkilletRecipeNotesButton then _G.SkilletRecipeNotesButton:Hide() end
+        if _G.SkilletDebugButton then _G.SkilletDebugButton:Hide() end
+        return
+    end
+
+    -- Update skill name
+    if SkilletSkillName then
+        SkilletSkillName:SetText(recipe.name or "")
+    end
+
+    -- Update requirement text (for tools, etc)
+    if SkilletRequirementLabel then
+        SkilletRequirementLabel:SetText("")
+    end
+    if SkilletRequirementText then
+        SkilletRequirementText:SetText("")
+    end
+
+    -- Update reagent list display
+    if SkilletReagentLabel then
+        SkilletReagentLabel:SetText(GetLocalizedString("Reagents:"))
+        SkilletReagentLabel:Show()
+    end
+
+    -- Update skill icon
+    if SkilletSkillIcon then
+        if recipe.link then
+            local icon = GetItemIcon(recipe.link)
+            if icon then
+                SkilletSkillIcon:SetNormalTexture(icon)
+            end
+        end
+        SkilletSkillIcon:Show()
+    end
+
+    -- Populate reagent buttons with reagent data
+    ---@type table[]
+    local reagents = recipe.reagents or {}
+    for i = 1, 8 do
+        ---@type Button|nil
+        local button = _G["SkilletReagent" .. i]
+        if button then
+            ---@type table|nil
+            local reagent = reagents[i]
+            if reagent then
+                -- Update reagent name text (left side) with "Nx " prefix
+                ---@type FontString|nil
+                local text_frame = getglobal(button:GetName() .. "Text")
+                if text_frame then
+                    local needed = reagent.needed or 0
+                    local display_text = needed .. " x " .. (reagent.name or "?")
+                    text_frame:SetText(display_text)
+                    text_frame:Show()
+                end
+
+                -- Update count display (right side): "needed / available / craftable"
+                ---@type FontString|nil
+                local count_frame = getglobal(button:GetName() .. "Count")
+                if count_frame then
+                    -- Display format: needed / available / craftable
+                    -- num = bags+resbank, numwbank = bags+bank+resbank
+                    local needed = reagent.needed or 0
+                    local available = (reagent.num or 0)
+
+                    -- Check if reagent is craftable and calculate how many we can craft
+                    local craftable_count = 0
+                    local reagent_item = self.stitch:GetItemDataByName(reagent.name or "")
+                    if reagent_item and reagent_item.numcraftable then
+                        craftable_count = reagent_item.numcraftable
+                    end
+
+                    -- Determine color based on availability
+                    local total_with_craftable = available + craftable_count
+                    if available >= needed then
+                        -- Have enough in inventory - show in green
+                        count_frame:SetTextColor(0.25, 0.75, 0.25)
+                    elseif total_with_craftable >= needed then
+                        -- Have enough including craftable - show in soft light blue
+                        count_frame:SetTextColor(0.5, 0.75, 1.0)
+                    elseif available > 0 then
+                        -- Have some but not enough - show in yellow/orange
+                        count_frame:SetTextColor(1.0, 1.0, 0.0)
+                    else
+                        -- Have none - show in red
+                        count_frame:SetTextColor(1.0, 0.25, 0.25)
+                    end
+
+                    -- Build display text
+                    ---@type string
+                    local display_text
+                    if craftable_count > 0 then
+                        display_text = needed .. " / " .. available .. " / " .. craftable_count
+                    else
+                        display_text = needed .. " / " .. available
+                    end
+
+                    count_frame:SetText(display_text)
+                    count_frame:Show()
+                end
+
+                -- Update icon texture
+                ---@type Button|nil
+                local icon_button = getglobal(button:GetName() .. "Icon")
+                if icon_button then
+                    if reagent.link then
+                        local icon = GetItemIcon(reagent.link)
+                        if icon then
+                            icon_button:SetNormalTexture(icon)
+                        end
+                    end
+                    icon_button:Show()
+                end
+
+                button:Show()
+            else
+                -- Hide unused reagent buttons
+                if button then
+                    button:Hide()
+                end
+            end
+        end
+    end
 end
 
 -- When one of the skill buttons in the left scroll pane is clicked
@@ -1282,6 +1528,16 @@ function Skillet:ReagentButtonOnEnter(button, skill, index)
         return
     end
 
+    -- Validate parameters
+    if not skill or not index or type(skill) ~= "number" or type(index) ~= "number" then
+        return
+    end
+
+    -- Validate currentTrade is set
+    if not self.currentTrade or type(self.currentTrade) ~= "string" then
+        return
+    end
+
     ---@type table|nil
     local s = self.stitch:GetItemDataByIndex(self.currentTrade, skill)
     if not s then return end
@@ -1291,11 +1547,14 @@ function Skillet:ReagentButtonOnEnter(button, skill, index)
     ---@type table|nil
     local reagent = reagents[index]
 
-    local can_craft = self.stitch:GetItemDataByName(reagent and reagent.name or "")
-    if can_craft then
+    if not reagent or not reagent.name then return end
+
+    local can_craft = self.stitch:GetItemDataByName(reagent.name)
+    if can_craft and gearTexture then
         ---@type Texture|nil
         local icon = getglobal(button:GetName() .. "Icon")
-        if gearTexture and icon then
+        if icon then
+            -- Show gear texture overlay to indicate craftable
             gearTexture:SetParent(icon)
             gearTexture:ClearAllPoints()
             gearTexture:SetPoint("TOPLEFT", icon)
@@ -1359,9 +1618,21 @@ function Skillet:StartQueue_OnClick(button)
         self.stitch:CancelCast() -- next update will reset the text
         button:Disable()
     else
-        -- Synastria: Show the unified crafting prompt dialog
-        -- It will handle both profession switching and crafting
+        -- Synastria: Check if first queue item is a conversion
         if self.stitch.queue and self.stitch.queue[1] then
+            local queueItem = self.stitch.queue[1]
+
+            -- Handle conversion recipes with automated withdraw/use/deposit
+            if queueItem.profession == "Conversion" or (queueItem.recipe and queueItem.recipe.isVirtualConversion) then
+                if queueItem.recipe and queueItem.recipe.sourceId and queueItem.recipe.outputId then
+                    self:ProcessConversion(queueItem.recipe)
+                else
+                    self:Print("|cFFFF0000Invalid conversion data|r")
+                end
+                return
+            end
+
+            -- Normal crafting: show the unified crafting prompt dialog
             self:ShowStartCraftingPrompt()
         end
     end
@@ -1424,6 +1695,23 @@ local function restore_blizz(frame, settings)
     frame:ClearAllPoints()
 end
 
+-- Updates all UI button labels and text with localized strings
+---@return nil
+function Skillet:UpdateUILabels()
+    -- Button labels
+    if _G.SkilletRescanButton then _G.SkilletRescanButton:SetText(GetLocalizedString("Rescan")) end
+    if _G.SkilletScanAllButton then _G.SkilletScanAllButton:SetText(GetLocalizedString("Scan All")) end
+    if _G.SkilletRecipeNotesButton then _G.SkilletRecipeNotesButton:SetText(GetLocalizedString("Notes")) end
+    if _G.SkilletGroupQueueButton then _G.SkilletGroupQueueButton:SetText(GetLocalizedString("Optimize")) end
+    if _G.SkilletShoppingListButton then _G.SkilletShoppingListButton:SetText(GetLocalizedString("Shopping List")) end
+    if _G.SkilletShowExtractionButton then _G.SkilletShowExtractionButton:SetText(GetLocalizedString("Extraction")) end
+    if _G.SkilletShowOptionsButton then _G.SkilletShowOptionsButton:SetText(GetLocalizedString("Options")) end
+
+    -- FontString labels
+    if _G.SkilletRequirementLabel then _G.SkilletRequirementLabel:SetText(GetLocalizedString("Requires:")) end
+    if _G.SkilletReagentLabel then _G.SkilletReagentLabel:SetText(GetLocalizedString("Reagents:")) end
+end
+
 -- Called when the trade skill window is shown
 function Skillet:Tradeskill_OnShow()
     -- Get rid of Blizzards windows. This can happen when the user
@@ -1448,6 +1736,15 @@ end
 
 -- Called when the trade skill window is hidden
 function Skillet:Tradeskill_OnHide()
+    -- Clear reagent buttons when closing window
+    for i = 1, 8 do
+        ---@type Button|nil
+        local button = _G["SkilletReagent" .. i]
+        if button then
+            button:Hide()
+        end
+    end
+
     if TradeSkillFrame then
         restore_blizz(TradeSkillFrame, orig_tradeskill_settings)
     end

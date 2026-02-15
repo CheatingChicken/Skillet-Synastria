@@ -25,7 +25,8 @@ SKILLET_NOTES_ITEM_HEIGHT    = SKILLET_TRADE_SKILL_HEIGHT * 3
 local L                      = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 ---@type string
-local NO_NOTE                = GRAY_FONT_COLOR_CODE .. L["click here to add a note"] .. FONT_COLOR_CODE_CLOSE
+local NO_NOTE                = GRAY_FONT_COLOR_CODE ..
+GetLocalizedString("click here to add a note") .. FONT_COLOR_CODE_CLOSE
 
 ---@type Frame|nil
 local editbox
@@ -164,7 +165,7 @@ function Skillet:UpdateNotesWindow()
 		editbox:Hide()
 	end
 
-	SkilletRecipeNotesFrameLabel:SetText(L["Notes"]);
+	SkilletRecipeNotesFrameLabel:SetText(GetLocalizedString("Notes"));
 
 	local reagents = s.reagents or {}
 	local numItems = 1 + #reagents
@@ -172,10 +173,10 @@ function Skillet:UpdateNotesWindow()
 	-- Update the scroll frame
 	---@type Frame
 	local scrollFrame = SkilletNotesList or CreateFrame("Frame")
-	FauxScrollFrame_Update(scrollFrame,               -- frame
-		numItems,                                     -- num items
-		SKILLET_NOTES_ITEM_DISPLAYED,                 -- num to display
-		SKILLET_NOTES_ITEM_HEIGHT)                    -- value step (item height)
+	FauxScrollFrame_Update(scrollFrame, -- frame
+		numItems,                    -- num items
+		SKILLET_NOTES_ITEM_DISPLAYED, -- num to display
+		SKILLET_NOTES_ITEM_HEIGHT)   -- value step (item height)
 
 	-- Where in the list of skill to start counting.
 	---@type integer

@@ -92,9 +92,9 @@ local function createShoppingListFrame(self)
     titletext:SetShadowColor(0, 0, 0)
     titletext:SetShadowOffset(1, -1)
     titletext:SetTextColor(1, 1, 1)
-    titletext:SetText("Skillet: " .. L["Shopping List"])
+    titletext:SetText("Skillet: " .. GetLocalizedString("Shopping List"))
 
-    SkilletShowQueuesFromAllAltsText:SetText(L["Include alts"])
+    SkilletShowQueuesFromAllAltsText:SetText(GetLocalizedString("Include alts"))
     SkilletShowQueuesFromAllAlts:SetChecked(Skillet.db.char.include_alts)
 
     -- The frame enclosing the scroll list needs a border and a background .....
@@ -107,7 +107,7 @@ local function createShoppingListFrame(self)
     end
 
     -- Button to retrieve items needed from the bank
-    SkilletShoppingListRetrieveButton:SetText(L["Retrieve"])
+    SkilletShoppingListRetrieveButton:SetText(GetLocalizedString("Retrieve"))
 
     -- Synastria: Show/hide Export to ResourceTracker button based on availability
     if SkilletShoppingListExportRTButton then
@@ -117,6 +117,18 @@ local function createShoppingListFrame(self)
             SkilletShoppingListExportRTButton:Hide()
         end
     end
+
+    -- Synastria: Debug button (only visible in developer mode)
+    local debugButton = CreateFrame("Button", "SkilletShoppingListDebugButton", frame, "UIPanelButtonTemplate")
+    debugButton:SetWidth(80)
+    debugButton:SetHeight(24)
+    debugButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 10)
+    debugButton:SetText("Debug")
+    debugButton:SetScript("OnClick", function()
+        self:DebugShoppingListCalculation()
+    end)
+    debugButton:Hide() -- Hidden by default, shown when dev mode active
+    frame.debugButton = debugButton
 
     -- Ace Window manager library, allows the window position (and size)
     -- to be automatically saved
@@ -242,6 +254,7 @@ function Skillet:GetShoppingList(playername, includeBank)
     -- decrease counts by what we have on hand.
     -- work backwards so that removing items form the table
     -- does not screw up our indexing.
+    -- ONLY show items where we have an actual shortage (count > 0)
     for i = #list, 1, -1 do
         ---@type table
         local item = list[i]
@@ -260,7 +273,7 @@ function Skillet:GetShoppingList(playername, includeBank)
             have = have + (GetCustomGameData(13, itemId) or 0)
         end
 
-        -- Synastria: Subtract items being crafted in queue
+        -- Account for items being crafted in the queue that we also need as reagents
         if queuedCrafts[link] then
             have = have + queuedCrafts[link]
         end
@@ -300,40 +313,43 @@ function Skillet:GetShoppingList(playername, includeBank)
         local totalAvailable = have + canConvert
 
         if totalAvailable >= count then
-            -- have enough between direct and conversion
+            -- We have enough between direct inventory and conversions - remove from shopping list
             table.remove(list, i)
         else
+            -- Calculate actual shortfall
             ---@type number
             local stillNeed = count - totalAvailable
-            item.count = stillNeed
 
-            -- If we could partially cover with conversion, add the convertible item to the list
-            if canConvert > 0 and itemId then
-                local convertibleId = ETERNAL_TO_CRYSTALLIZED_MAP[itemId] or CRYSTALLIZED_TO_ETERNAL_MAP[itemId]
-                if convertibleId then
-                    local convertibleLink = select(2, GetItemInfo(convertibleId))
-                    local convertibleName = select(1, GetItemInfo(convertibleId))
-                    if convertibleLink and convertibleName then
-                        -- Calculate how many of the convertible we need
-                        ---@type number
-                        local convertibleNeeded = 0
-                        if ETERNAL_TO_CRYSTALLIZED_MAP[itemId] then
-                            -- Need Eternal, show Crystallized needed
-                            convertibleNeeded = math.ceil((stillNeed) * 10)
-                        else
-                            -- Need Crystallized, show Eternal needed
-                            convertibleNeeded = math.ceil(stillNeed / 10)
-                        end
-
-                        -- Add to list
-                        table.insert(list, {
-                            ["link"] = convertibleLink,
-                            ["name"] = convertibleName,
-                            ["count"] = convertibleNeeded,
-                        })
-                    end
+            -- Synastria: Replace Eternals with Crystallized equivalents (show base ingredients only)
+            ---@type number|nil
+            local crystallizedId = ETERNAL_TO_CRYSTALLIZED_MAP[itemId]
+            if crystallizedId then
+                -- This is an Eternal - replace with Crystallized equivalent
+                local crystallizedLink = select(2, GetItemInfo(crystallizedId))
+                local crystallizedName = select(1, GetItemInfo(crystallizedId))
+                if crystallizedLink and crystallizedName then
+                    item.link = crystallizedLink
+                    item.name = crystallizedName
+                    item.count = stillNeed * 10 -- 1 Eternal = 10 Crystallized
+                else
+                    -- Fallback if item info not available yet
+                    item.count = stillNeed
                 end
+            else
+                -- Not an Eternal - use as-is
+                item.count = stillNeed
             end
+
+            -- Note: We no longer add conversion alternatives - we show only the base ingredient (Crystallized)
+        end
+    end
+
+    -- Final safety filter: Remove any items with count <= 0 (shouldn't be any, but let's be safe)
+    for i = #list, 1, -1 do
+        ---@type table
+        local item = list[i]
+        if item and (not item.count or item.count <= 0) then
+            table.remove(list, i)
         end
     end
 
@@ -348,7 +364,7 @@ local function cache_list(self)
         name = UnitName("player")
     end
     ---@type table[]|nil
-    self.cachedShoppingList = self:GetShoppingList(name)
+    self.cachedShoppingList = self:GetShoppingList(name, true) -- true = include bank!
 end
 
 -- Called when the bank frame is opened
@@ -517,7 +533,7 @@ local function getItemFromBank(item_id, bag, slot, count)
     local targetBag = findBagForItem(link, num_moved)
 
     if not targetBag then
-        Skillet:Print(L["Could not find bag space for"] .. ": " .. link)
+        Skillet:Print(GetLocalizedString("Could not find bag space for") .. ": " .. link)
         return 0
     end
 
@@ -719,14 +735,46 @@ function Skillet:internal_DisplayShoppingList(atBank)
         end
     end
 
+    -- Synastria: Show/hide debug button based on developer mode
+    if frame and frame.debugButton then
+        if self:IsDevMode() then
+            frame.debugButton:Show()
+        else
+            frame.debugButton:Hide()
+        end
+    end
+
     cache_list(self)
 
     if frame and not frame:IsVisible() then
         ShowUIPanel(frame)
+
+        -- Register BAG_UPDATE to refresh shopping list while window is open
+        if not self.shoppingListBagUpdateRegistered then
+            self:RegisterEvent("BAG_UPDATE", "ShoppingList_OnBagUpdate")
+            self.shoppingListBagUpdateRegistered = true
+        end
     end
 
     -- true == use cached recipes, we just loaded them after all
     self:UpdateShoppingListWindow(true)
+end
+
+-- Refresh shopping list cache when bags update (while window is visible)
+---@return nil
+function Skillet:ShoppingList_OnBagUpdate()
+    -- Only refresh if shopping list window is visible
+    if not self.shoppingList or not self.shoppingList:IsVisible() then
+        return
+    end
+
+    -- Recalculate the shopping list with current inventory
+    cache_list(self)
+
+    -- Refresh the display
+    if self.shoppingList and self.shoppingList:IsVisible() then
+        self:UpdateShoppingListWindow(true) -- true = use cached list
+    end
 end
 
 -- Hides the shopping list window
@@ -735,6 +783,103 @@ function Skillet:internal_HideShoppingList()
     if self.shoppingList then
         HideUIPanel(self.shoppingList)
     end
+
+    -- Unregister BAG_UPDATE handler when window is hidden
+    if self.shoppingListBagUpdateRegistered then
+        self:UnregisterEvent("BAG_UPDATE", "ShoppingList_OnBagUpdate")
+        self.shoppingListBagUpdateRegistered = false
+    end
+
     ---@type table[]|nil
     self.cachedShoppingList = nil
+end
+
+-- Synastria: Debug function to log detailed shopping list calculation breakdown
+---@return nil
+function Skillet:DebugShoppingListCalculation()
+    local group = "Shopping List"
+
+    SkilletLog:Add("========== SHOPPING LIST DEBUG ==========", "INFO", group)
+
+    local name = nil
+    if not self.db.char.include_alts then
+        name = UnitName("player")
+    end
+
+    -- Get raw reagent list
+    local rawList = self:GetReagentsForQueuedRecipes(name) or {}
+    SkilletLog:Add("Raw reagent list has " .. #rawList .. " items", "SUCCESS", group)
+
+    -- Build queued crafts table
+    ---@type table<string, number>
+    local queuedCrafts = {}
+    for player, playerqueues in pairs(self:GetAllQueues()) do
+        if not name or name == player then
+            local queue = playerqueues["AllProfessions"]
+            if queue and #queue > 0 then
+                for i = 1, #queue, 1 do
+                    local queueItem = queue[i]
+                    local count = queueItem.numcasts
+                    local spellId = queueItem.spellId
+
+                    if spellId and Custom_GetProfessionRecipeInfo then
+                        local skillId, recipeName, itemId, craftCount = Custom_GetProfessionRecipeInfo(spellId)
+                        if itemId then
+                            local link = select(2, GetItemInfo(itemId))
+                            if link then
+                                ---@type number
+                                local currentCount = queuedCrafts[link] or 0
+                                queuedCrafts[link] = currentCount + count
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Process each item
+    for i, item in ipairs(rawList) do
+        local link = item.link
+        local needed = item.count
+        local itemId = tonumber(string.match(link, "item:(%d+)"))
+        local itemName = item.name or "Unknown"
+
+        SkilletLog:Add("--- " .. itemName .. " (ID:" .. tostring(itemId) .. ") ---", "WARN", group)
+        SkilletLog:Add("  Total Needed: " .. needed, "INFO", group)
+
+        -- Inventory check
+        local bags = GetItemCount(link, false) or 0
+        local bagsAndBank = GetItemCount(link, true) or 0
+        local resBank = 0
+        if GetCustomGameData and itemId then
+            resBank = GetCustomGameData(13, itemId) or 0
+        end
+
+        SkilletLog:Add("  Bags Only: " .. bags, "INFO", group)
+        SkilletLog:Add("  Bags+Bank: " .. bagsAndBank, "INFO", group)
+        SkilletLog:Add("  Resource Bank: " .. resBank, "INFO", group)
+        SkilletLog:Add("  Total Have: " .. (bagsAndBank + resBank), "INFO", group)
+
+        -- Queued crafts
+        local queuedCount = queuedCrafts[link] or 0
+        if queuedCount > 0 then
+            SkilletLog:Add("  Items Being Crafted: " .. queuedCount, "INFO", group)
+            SkilletLog:Add("  Adjusted Have: " .. (bagsAndBank + resBank + queuedCount), "INFO", group)
+        end
+
+        -- Final shortage
+        local totalAvailable = bagsAndBank + resBank + queuedCount
+        local shortage = needed - totalAvailable
+        if shortage > 0 then
+            SkilletLog:Add("  SHORTAGE: " .. shortage, "ERROR", group)
+        else
+            SkilletLog:Add("  COVERED (excess: " .. (-shortage) .. ")", "SUCCESS", group)
+        end
+    end
+
+    SkilletLog:Add("=========================================", "INFO", group)
+
+    -- Open log viewer automatically and switch to Shopping List group
+    self:ShowLogViewer("Shopping List")
 end
