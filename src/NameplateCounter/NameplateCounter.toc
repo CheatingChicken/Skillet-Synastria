@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Nameplate Counter
+## Notes: Displays visible nameplate counts, optionally filtered by mob name. Integrates with ElvUI nameplates.
+## Author: Priest
+## Version: 1.0.0
+## SavedVariables: NameplateCounterDB
+
+NameplateCounter.lua

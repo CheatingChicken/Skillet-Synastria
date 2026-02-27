@@ -125,6 +125,7 @@ Skillet = {}
 
 ---@class SkilletDBChar
 ---@field recipes table<string, any>?  -- Generalized for legacy/ambiguous data
+---@field include_alts boolean?
 ---@field vendor_buy_button boolean?
 ---@field vendor_auto_buy boolean?
 ---@field show_item_notes_tooltip boolean?

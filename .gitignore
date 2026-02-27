@@ -21,4 +21,6 @@ Thumbs.db
 *.sublime-workspace
 # Release archives
 /releases/
-Planning/Skillet/Scoots ID Upgradables.xlsx
+
+# Planning documents (local only)
+Planning/

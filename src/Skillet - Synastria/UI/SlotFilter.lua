@@ -149,15 +149,16 @@ function Skillet:MatchesSlotFilter(recipeIndex)
     end
 
     if not equipSlot or equipSlot == "" then
-        -- DEBUG: Print what we got
-        self:Print("DEBUG: No equipSlot for itemId=" .. tostring(itemId) .. " link=" .. tostring(itemLink))
+        if self:IsDevMode() then
+            self:Print("DEBUG: No equipSlot for itemId=" .. tostring(itemId) .. " link=" .. tostring(itemLink))
+        end
         return false -- Hide if we can't determine slot
     end
 
     -- Special handling for "All Weapons" filter
     if filterValue == "WEAPONS_ALL" then
         local isWeapon = WEAPON_SLOTS[equipSlot]
-        if not isWeapon then
+        if not isWeapon and self:IsDevMode() then
             self:Print("DEBUG: Not a weapon - equipSlot='" .. tostring(equipSlot) .. "' itemId=" .. tostring(itemId))
         end
         return isWeapon or false

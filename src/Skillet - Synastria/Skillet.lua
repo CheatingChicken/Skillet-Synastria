@@ -3088,6 +3088,14 @@ function Skillet:QueueChanged()
     -- Synastria: Update the queue display immediately
     self:UpdateQueueWindow()
 
+    -- Synastria: Persist queue state after every craft/change so that cancelling
+    -- mid-session and reloading preserves the remaining queue entries.
+    -- Note: SaveQueue ignores the tradeskill arg (always writes "AllProfessions"),
+    -- so we pass currentTrade (may be nil) purely for API compatibility.
+    if self.db and self.db.server and self.db.server.queues then
+        self:SaveQueue(self.db.server.queues, self.currentTrade)
+    end
+
     -- Synastria: Auto-export queue to ResourceTracker (if available)
     if self.AutoExportQueueToResourceTracker then
         self:AutoExportQueueToResourceTracker()

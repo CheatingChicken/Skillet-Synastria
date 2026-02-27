@@ -184,12 +184,14 @@ end
 local L = AceLibrary("AceLocale-2.2"):new("Skillet")
 
 -- DEBUG: Check if CONVERSION_GROUPS exists at file load time
-if Skillet and Skillet.CONVERSION_GROUPS then
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS exists with " ..
-		#Skillet.CONVERSION_GROUPS .. " groups")
-else
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS NOT FOUND! Skillet=" ..
-		tostring(Skillet))
+if Skillet and Skillet:IsDevMode() then
+	if Skillet.CONVERSION_GROUPS then
+		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS exists with " ..
+			#Skillet.CONVERSION_GROUPS .. " groups")
+	else
+		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ExtractionFrame.lua loaded - CONVERSION_GROUPS NOT FOUND! Skillet=" ..
+			tostring(Skillet))
+	end
 end
 
 -- Stolen from the Waterfall Ace2 addon.
@@ -670,7 +672,7 @@ local function performConversion(clickedItemId, conversionPair, itemName)
 	-- Check if we have enough resources for at least one conversion
 	if totalAvailable < inputAmount then
 		Skillet:Print("|cFFFF6666Not enough " ..
-		sourceItemName .. " (" .. totalAvailable .. "/" .. inputAmount .. " needed)|r")
+			sourceItemName .. " (" .. totalAvailable .. "/" .. inputAmount .. " needed)|r")
 		return
 	end
 
@@ -737,11 +739,13 @@ local function setupConversionButtonClicks(button, itemId, conversionPair)
 				-- Show conversion ratio and direction
 				if pair.bidirectional then
 					GameTooltip:AddLine(
-					"Bidirectional " .. (pair.inputAmount or 10) .. ":" .. (pair.outputAmount or 1) .. " conversion", 0.8,
+						"Bidirectional " .. (pair.inputAmount or 10) .. ":" .. (pair.outputAmount or 1) .. " conversion",
+						0.8,
 						0.8, 0.8, true)
 				else
 					GameTooltip:AddLine(
-					"One-way " .. (pair.inputAmount or 10) .. ":" .. (pair.outputAmount or 1) .. " conversion", 1, 0.6,
+						"One-way " .. (pair.inputAmount or 10) .. ":" .. (pair.outputAmount or 1) .. " conversion", 1,
+						0.6,
 						0.6, true)
 				end
 
@@ -1445,8 +1449,10 @@ local function createConversionsScrollData()
 		return data
 	end
 
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Creating conversion scroll data, found " ..
-		#Skillet.CONVERSION_GROUPS .. " groups")
+	if Skillet:IsDevMode() then
+		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Creating conversion scroll data, found " ..
+			#Skillet.CONVERSION_GROUPS .. " groups")
+	end
 
 	-- Use hardcoded conversion groups directly
 	---@type ConversionGroup[]
@@ -1484,7 +1490,9 @@ local function createConversionsScrollData()
 		})
 	end
 
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Created " .. #data .. " conversion groups for display")
+	if Skillet:IsDevMode() then
+		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Created " .. #data .. " conversion groups for display")
+	end
 
 	return data
 end
@@ -1583,7 +1591,9 @@ local function generatePages(scrollData, currentTab)
 end
 
 function Skillet:UpdateExtractionList()
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] UpdateExtractionList called for tab: " .. tostring(currentTab))
+	if Skillet:IsDevMode() then
+		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] UpdateExtractionList called for tab: " .. tostring(currentTab))
+	end
 
 	if currentTab == "MILLING" then
 		scrollData = createMillingScrollData()
@@ -1596,7 +1606,9 @@ function Skillet:UpdateExtractionList()
 		scrollData = createMillingScrollData()
 	end
 
-	DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ScrollData has " .. #scrollData .. " entries")
+	if Skillet:IsDevMode() then
+		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] ScrollData has " .. #scrollData .. " entries")
+	end
 
 	-- Use the single scroll frame for all layouts
 	local scrollFrame = getglobal("SkilletExtractionScrollFrame")
@@ -1604,7 +1616,9 @@ function Skillet:UpdateExtractionList()
 		-- Generate page-based data structure
 		local pages = generatePages(scrollData, currentTab)
 
-		DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Generated " .. #pages .. " pages")
+		if Skillet:IsDevMode() then
+			DEFAULT_CHAT_FRAME:AddMessage("[Skillet] Generated " .. #pages .. " pages")
+		end
 
 		-- Store pages for display function (declare as local to avoid global warning)
 		-- EmmyLua: pages is local, _G.scrollPages is global for cross-function access, intentional design

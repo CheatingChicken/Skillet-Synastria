@@ -20,8 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 local AceEvent = AceLibrary("AceEvent-2.0")
 
-local QUEUE_DEBUG = false
-
 -- Synastria: Helper function to find which profession a recipe belongs to
 local function find_profession_for_recipe(item)
     if not item or not item.index then
@@ -73,7 +71,7 @@ local function add_items_to_queue(spellId, recipe, count, profession, addToTop, 
     -- if we need mats that are not in the inventory, but are craftable, add
     -- the mats to the queue first
 
-    if QUEUE_DEBUG then
+    if Skillet:IsDevMode() then
         Skillet:Print("Adding " .. count .. "x" .. recipe.link)
     end
 
@@ -189,7 +187,7 @@ local function add_items_to_queue(spellId, recipe, count, profession, addToTop, 
                                     local cooldown = GetTradeSkillCooldown(item_check.index)
                                     if cooldown and cooldown > 0 then
                                         shouldSkip = true
-                                        if QUEUE_DEBUG then
+                                        if Skillet:IsDevMode() then
                                             Skillet:Print("Skipping transmute with cooldown as subcraft: " ..
                                                 item_check.name)
                                         end
@@ -197,7 +195,7 @@ local function add_items_to_queue(spellId, recipe, count, profession, addToTop, 
                                 else
                                     -- Conservative: assume transmutes have cooldowns if we can't check
                                     shouldSkip = true
-                                    if QUEUE_DEBUG then
+                                    if Skillet:IsDevMode() then
                                         Skillet:Print("Skipping transmute (can't verify cooldown): " .. item_check.name)
                                     end
                                 end
@@ -635,11 +633,15 @@ end
 function Skillet:OptimizeQueueOrder()
     local queue = self.stitch.queue
     if not queue or #queue == 0 then
-        self:Print("Queue is empty - nothing to optimize")
+        if self:IsDevMode() then
+            self:Print("Queue is empty - nothing to optimize")
+        end
         return
     end
 
-    self:Print("|cFF00FF00Optimizing queue order...|r")
+    if self:IsDevMode() then
+        self:Print("|cFF00FF00Optimizing queue order...|r")
+    end
 
     -- OPTIMIZATION: Suppress UI updates during bulk operations
     local startTime = GetTime()
@@ -664,11 +666,15 @@ function Skillet:OptimizeQueueOrder()
 
     if #primaryItems == 0 then
         self.suppressQueueUpdates = false
-        self:Print("|cFFFFAA00No primary items found - queue may contain only auto-generated subcrafts|r")
+        if self:IsDevMode() then
+            self:Print("|cFFFFAA00No primary items found - queue may contain only auto-generated subcrafts|r")
+        end
         return
     end
 
-    self:Print(string.format("|cFF00FFFF Found %d primary items, clearing subcrafts...|r", #primaryItems))
+    if self:IsDevMode() then
+        self:Print(string.format("|cFF00FFFF Found %d primary items, clearing subcrafts...|r", #primaryItems))
+    end
 
     -- TIMING: Step 2 - Clear queue and cache
     local t2_start = GetTime()
@@ -777,7 +783,7 @@ function Skillet:OptimizeQueueOrder()
                         local spellId = Custom_GetProfessionRecipeFromCraftedItem(itemId)
                         if spellId and Custom_GetProfessionRecipeInfo then
                             local skillId, name, craftedItemId, craftedItemCount = Custom_GetProfessionRecipeInfo(
-                            spellId)
+                                spellId)
                             if craftedItemId == itemId then
                                 -- Build recipe
                                 craftableRecipe = {
@@ -887,8 +893,11 @@ function Skillet:OptimizeQueueOrder()
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00================================================|r")
     end
 
-    self:Print(string.format("|cFF00FF00Queue optimized in %.2fs! All subcrafts recalculated with current inventory.|r",
-        totalElapsed))
+    if self:IsDevMode() then
+        self:Print(string.format(
+            "|cFF00FF00Queue optimized in %.2fs! All subcrafts recalculated with current inventory.|r",
+            totalElapsed))
+    end
 end
 
 -- Removes an item from the queue

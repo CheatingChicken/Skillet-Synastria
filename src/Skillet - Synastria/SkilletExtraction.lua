@@ -82,4 +82,6 @@ function Skillet:GetMillingResults(herbId)
 	return results
 end
 
-Skillet:Print("SkilletExtraction module loaded")
+if Skillet and Skillet:IsDevMode() then
+	Skillet:Print("SkilletExtraction module loaded")
+end

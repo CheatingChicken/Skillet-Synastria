@@ -202,4 +202,4 @@ function SkilletLog:GetEntryCount()
 end
 
 -- Initialize
-SkilletLog:Add("SkilletLog.lua loaded", "INFO", "Main")
+SkilletLog:Add("SkilletLog.lua loaded", "INFO", "Debug")

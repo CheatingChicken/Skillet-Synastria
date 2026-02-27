@@ -523,7 +523,9 @@ end
 
 -- Called when the list of queued items is scrolled
 function Skillet:QueueList_OnScroll()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE] QueueList_OnScroll triggered|r")
+    if Skillet:IsDevMode() then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[QUEUE] QueueList_OnScroll triggered|r")
+    end
     Skillet:UpdateQueueWindow()
 end
 
@@ -1498,7 +1500,9 @@ function Skillet:SkillButton_OnClick(button)
                 if recipe then
                     -- Queue 1 of this item
                     self:QueueItems()
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Added to queue: " .. (recipe.name or "Unknown") .. "|r")
+                    if self:IsDevMode() then
+                        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Added to queue: " .. (recipe.name or "Unknown") .. "|r")
+                    end
                 end
                 -- if it was shift-left clicked *and* there is a chat edit
                 -- window open, insert the recipe link.

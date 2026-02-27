@@ -741,3 +741,18 @@ HIGHLIGHT_FONT_COLOR = { r = 1, g = 1, b = 1 }
 ---@param includeBank boolean? Whether to include bank items (default false)
 ---@return number count The number of items found
 function GetItemCount(itemId, includeBank) end
+
+-- WorldFrame: the root frame that contains all nameplates
+---@type Frame
+WorldFrame = CreateFrame("Frame")
+
+--- Hooks a named method on a table securely so the original still fires.
+---@param tbl table The table containing the method
+---@param funcName string The method name to hook
+---@param hook function Callback invoked after the original function
+function hooksecurefunc(tbl, funcName, hook) end
+
+-- Extend C_Timer with NewTicker
+---@class C_Timer
+---@field After fun(duration: number, callback: function)
+---@field NewTicker fun(duration: number, callback: function, iterations?: number): table
