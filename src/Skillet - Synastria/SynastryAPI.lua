@@ -1,54 +1,13 @@
 ---@meta
-
--- ========================================
--- Synastria Custom Server API Type Definitions
--- ========================================
--- This file provides type information for custom APIs added by the Synastria server
--- These are extensions to the standard WoW 3.3.5 API
--- It is not executed, only used for type checking (---@meta directive)
-
--- Attunement APIs
----@param itemId number The item ID
----@param forge? number The forge level to check, or -1 for highest across all forges (default: -1)
----@return number|nil percentage The highest attunement percentage (0-100), or nil if not attunable
-function GetHighestAttunePct(itemId, forge) end
-
--- Item Inspection APIs (Bag/Slot Based)
----@param nativeBagId number The bag ID (0-4 for bags, -1 for bank, etc.)
----@param nativeSlotId number The slot ID within the bag
----@return number|nil isSoulbound Returns 1 if soulbound, nil if not soulbound
-function Custom_IsItemSoulbound(nativeBagId, nativeSlotId) end
-
----@param nativeBagId number The bag ID (0-4 for bags, -1 for bank, etc.)
----@param nativeSlotId number The slot ID within the bag
----@return number|nil isInEquipMgr Returns 1 if in equipment manager sets, nil if not
-function Custom_IsItemEquipMgr(nativeBagId, nativeSlotId) end
-
----@param nativeBagId number The bag ID (0-4 for bags, -1 for bank, etc.)
----@param nativeSlotId number The slot ID within the bag
----@return number|nil lowGuid The low 32 bits of the item GUID
----@return number|nil highGuid The high 32 bits of the item GUID
-function Custom_GetItemGuid(nativeBagId, nativeSlotId) end
-
----@param nativeBagId number The bag ID (0-4 for bags, -1 for bank, etc.)
----@param nativeSlotId number The slot ID within the bag
----@return string|nil itemLink The item link, or nil if slot is empty
-function Custom_GetItemLinkBySlot(nativeBagId, nativeSlotId) end
-
--- Link Parsing
----@param wowLink string Any WoW hyperlink (item, spell, quest, etc.)
----@return number|nil id The ID extracted from the link
----@return number|nil type The object type (corresponds to link type)
-function Custom_GetIdFromLink(wowLink) end
-
--- Location/Position APIs
----@param mapId number The map ID to check
----@param x number The X coordinate
----@param y number The Y coordinate
----@param z? number The Z coordinate (optional, if nil then 2D distance only)
----@param dist? number The maximum distance in yards (default: 30)
----@return number|nil isNear Returns 1 if player is within distance, nil if not
-function Custom_IsPlayerNear(mapId, x, y, z, dist) end
+-- ====================================================================
+-- SynastryAPI.lua — Skillet-Specific Synastria Server API Definitions
+-- ====================================================================
+-- Type stubs for Synastria profession-recipe APIs used exclusively by
+-- the Skillet addon. Common Synastria APIs (GetCustomGameData,
+-- GetHighestAttunePct, Custom_Is*, Custom_Get*, etc.) live in:
+--   src/Shared/SynastryCommonAPI.lua
+-- NEVER loaded by the WoW client (---@meta file, annotation-only).
+-- ====================================================================
 
 -- Profession Recipe APIs
 ---@class ProfessionRecipeFilters
@@ -76,7 +35,8 @@ function Custom_IsPlayerNear(mapId, x, y, z, dist) end
 ---@param itemInvTypeId? number Inventory slot filter, negative to ignore (default: -1)
 ---@return number[]|nil spellIds Array of spell IDs matching the filters, or nil on error
 function Custom_GetProfessionRecipes(professionId, mustFilter, notFilter, sort, filterString, forge, itemClassId,
-                                     itemSubClassId, itemInvTypeId) end
+                                     itemSubClassId, itemInvTypeId)
+end
 
 ---@param spellId number The crafting spell ID
 ---@return number|nil skillId The profession skill ID (e.g., 164 for Blacksmithing)

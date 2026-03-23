@@ -694,6 +694,9 @@ function Skillet:OnDisable()
 
     self:UnregisterAllEvents()
 
+    -- Reset any "is registered" flags since UnregisterAllEvents() cleared everything
+    self.shoppingListBagUpdateRegistered = false
+
     AceLibrary("Waterfall-1.0"):Close("Skillet")
     AceLibrary("Waterfall-1.0"):UnRegister("Skillet")
 end

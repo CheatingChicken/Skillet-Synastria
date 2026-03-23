@@ -1,0 +1,28 @@
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/lua-language-server/main/doc/.vscode/settings.json",
+    "runtime": {
+        "version": "Lua 5.1"
+    },
+    "workspace": {
+        "library": [
+            "src/Shared"
+        ],
+        "ignoreDir": [
+            "src/Skillet - Synastria/Libs",
+            ".github",
+            "releases"
+        ]
+    },
+    "diagnostics": {
+        "globals": [
+            "DEFAULT_CHAT_FRAME",
+            "UIParent",
+            "UISpecialFrames",
+            "SlashCmdList",
+            "this",
+            "arg1", "arg2", "arg3", "arg4", "arg5", "arg6",
+            "ReloadUI",
+            "SendChatMessage"
+        ]
+    }
+}

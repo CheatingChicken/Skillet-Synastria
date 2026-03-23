@@ -52,6 +52,9 @@ local PickupContainerItem = _G.PickupContainerItem
 ---@type function | nil
 local PickupInventoryItem = _G.PickupInventoryItem
 
+---@type function | nil
+local hooksecurefunc = _G.hooksecurefunc
+
 ---@diagnostic enable: undefined-global
 ---@diagnostic disable: need-check-nil
 
@@ -89,17 +92,91 @@ function rule:OnEnable()
     RegisterRules()
 end
 
+-- ʕ •ᴥ•ʔ✿ ArkInventory refresh helper ✿ ʕ •ᴥ•ʔ
+-- Clears ArkInventory's rule-result cache and triggers a full re-sort so changes to
+-- AHSetList are reflected immediately without a /reload.
+---@return nil
+local function TriggerArkInventoryRefresh()
+    if ArkInventory and ArkInventory.ItemCacheClear and ArkInventory.Frame_Main_Generate then
+        DebugPrint("Triggering ArkInventory refresh after AHSetList change")
+        ArkInventory.ItemCacheClear()
+        ArkInventory.Frame_Main_Generate(nil, ArkInventory.Const.Window.Draw.Recalculate)
+    end
+end
+
+-- ʕ •ᴥ•ʔ✿ Hook AttuneHelper's /ahset command ✿ ʕ •ᴥ•ʔ
+-- Wraps SlashCmdList["AHSET"] so ArkInventory re-sorts every time the set changes,
+-- and adds a "replace" subcommand that clears all other items on the same slot first.
+-- Must be called after AttuneHelper has finished loading.
+---@return nil
+local function HookAHSet()
+    local orig = SlashCmdList["AHSET"]
+    if not orig then
+        DebugPrint("SlashCmdList[AHSET] not found, cannot hook")
+        return
+    end
+    SlashCmdList["AHSET"] = function(msg)
+        -- /ahset replace <itemlink> [slot]  →  clear same-slot items, then add
+        ---@type string | nil
+        local inner = msg:match("^%s*replace%s+(.+)$")
+        if inner then
+            -- Snapshot current list before AttuneHelper mutates it
+            ---@type table<string, string>
+            local before = {}
+            for k, v in pairs(AHSetList or {}) do
+                before[k] = v
+            end
+
+            orig(inner) -- let AttuneHelper do its normal add/toggle
+
+            -- Find what was newly added or re-slotted
+            for addedItem, addedSlot in pairs(AHSetList or {}) do
+                if before[addedItem] ~= addedSlot then
+                    -- Collect every OTHER item designated for the same slot
+                    ---@type string[]
+                    local toRemove = {}
+                    for otherItem, otherSlot in pairs(AHSetList) do
+                        if otherItem ~= addedItem and otherSlot == addedSlot then
+                            table.insert(toRemove, otherItem)
+                        end
+                    end
+                    for _, name in ipairs(toRemove) do
+                        AHSetList[name] = nil
+                        print("|cffffd200[ArkInventoryRules_AttuneHelper]|r Replaced: '" ..
+                            name .. "' removed from " .. addedSlot)
+                    end
+                    break -- only one item can have changed
+                end
+            end
+        else
+            orig(msg)
+        end
+
+        TriggerArkInventoryRefresh()
+    end
+    DebugPrint("/ahset command hooked (replace subcommand active); ArkInventory will refresh on every AHSetList change")
+end
+
 -- ʕ •ᴥ•ʔ✿ Fallback registration via event ✿ ʕ •ᴥ•ʔ
 ---@type Frame
 local frame = CreateFrame("Frame") or error("Failed to create frame")
 frame:RegisterEvent("ADDON_LOADED")
+---@type boolean
+local ahsetHooked = false
 frame:SetScript("OnEvent", function(self, event, addonName)
     if addonName == "ArkInventoryRules" or addonName == "ArkInventoryRules_AttuneHelper" then
         -- Try registration after a short delay to ensure everything is loaded
         if ArkInventoryRules and ArkInventoryRules.Register then
             RegisterRules()
-            frame:UnregisterEvent("ADDON_LOADED")
         end
+    end
+    if addonName == "AttuneHelper" and not ahsetHooked then
+        HookAHSet()
+        ahsetHooked = true
+    end
+    -- Unregister once both tasks are done
+    if ahsetHooked and (ArkInventoryRules and ArkInventoryRules.Register) then
+        frame:UnregisterEvent("ADDON_LOADED")
     end
 end)
 
@@ -237,6 +314,7 @@ StaticPopupDialogs["ARKINV_AH_CLEAR_AHSET_CONFIRM"] = {
 
         AHSetList = {}
         print("|cffffd200[ArkInventoryRules_AttuneHelper]|r Cleared " .. itemCount .. " item(s) from AHSetList.")
+        TriggerArkInventoryRefresh()
     end,
     OnCancel = function()
         print("|cffffd200[ArkInventoryRules_AttuneHelper]|r AHSet clear cancelled.")
@@ -388,4 +466,110 @@ SlashCmdList["ARKINV_AHSETEQUIPALL"] = function()
     if notFoundCount > 0 then
         print("|cffffd200[ArkInventoryRules_AttuneHelper]|r Not found: " .. notFoundCount)
     end
+end
+
+-- /ahsetset command - Like /ahset, but clears every other item assigned to the same slot first.
+-- This lets you swap out your BiS choice for a slot without leftover entries.
+-- Usage: /ahsetset <itemlink> [slot]
+SLASH_ARKINV_AHSETSET1 = "/ahsetset"
+SlashCmdList["ARKINV_AHSETSET"] = function(msg)
+    if not SlashCmdList["AHSET"] then
+        print("|cffff0000[ArkInventoryRules_AttuneHelper]|r AttuneHelper's /ahset command is not available yet.")
+        return
+    end
+
+    if not msg or msg:match("^%s*$") then
+        print("|cffffd200[ArkInventoryRules_AttuneHelper]|r Usage: /ahsetset <itemlink> [slot]")
+        return
+    end
+
+    -- Snapshot before delegating to AttuneHelper
+    ---@type table<string, string>
+    local before = {}
+    for k, v in pairs(AHSetList or {}) do
+        before[k] = v
+    end
+
+    SlashCmdList["AHSET"](msg) -- this already triggers TriggerArkInventoryRefresh via our hook
+
+    -- If AttuneHelper toggled the item OFF (item was already set to that slot), restore it.
+    -- /ahsetset must never remove — it only adds/replaces.
+    for itemName, oldSlot in pairs(before) do
+        if AHSetList[itemName] == nil then
+            AHSetList[itemName] = oldSlot
+            DebugPrint("Prevented toggle-off for '" .. itemName .. "' on slot " .. oldSlot)
+        end
+    end
+
+    -- Detect which item was added / moved to a (new) slot
+    for addedItem, addedSlot in pairs(AHSetList or {}) do
+        if before[addedItem] ~= addedSlot then
+            -- Remove every other item designated for the same slot
+            ---@type string[]
+            local toRemove = {}
+            for otherItem, otherSlot in pairs(AHSetList) do
+                if otherItem ~= addedItem and otherSlot == addedSlot then
+                    table.insert(toRemove, otherItem)
+                end
+            end
+            for _, name in ipairs(toRemove) do
+                AHSetList[name] = nil
+                print("|cffffd200[ArkInventoryRules_AttuneHelper]|r Replaced: '" ..
+                name .. "' removed from " .. addedSlot)
+            end
+            if #toRemove > 0 then
+                TriggerArkInventoryRefresh()
+            end
+            break -- only one item can have changed per call
+        end
+    end
+end
+
+-- ʕ •ᴥ•ʔ✿ Tooltip Integration ✿ ʕ •ᴥ•ʔ
+-- Shows the designated slot for any item that is in AHSetList when hovering its tooltip.
+
+---@class AHTooltip : Frame
+---@field AddLine fun(self: AHTooltip, text: string, r?: number, g?: number, b?: number)
+---@field Show fun(self: AHTooltip)
+
+-- Convert an internal slot name like "MainHandSlot" to "Main Hand" for display.
+---@param slotName string Raw WoW inventory slot name
+---@return string
+local function FormatSlotName(slotName)
+    local name = slotName:gsub("Slot$", "")
+    name = name:gsub("(%l)(%u)", "%1 %2")
+    return name
+end
+
+-- Append the AHSet line to `tooltip` for the given item link, if applicable.
+---@param tooltip AHTooltip
+---@param itemLink string | nil
+---@return nil
+local function AddAHSetTooltipLine(tooltip, itemLink)
+    if not itemLink then return end
+    if not AHSetList then return end
+    ---@type string | nil
+    local itemName = GetItemInfo(itemLink)
+    if not itemName then return end
+    ---@type string | nil
+    local designatedSlot = AHSetList[itemName]
+    if not designatedSlot then return end
+    tooltip:AddLine("|cffffd200AHSet:|r " .. FormatSlotName(designatedSlot), 1, 1, 1)
+    tooltip:Show()
+end
+
+-- Hook the three most common tooltip population paths.
+if hooksecurefunc then
+    -- Bag slot hover
+    hooksecurefunc(GameTooltip, "SetBagItem", function(tooltip, bag, slot)
+        AddAHSetTooltipLine(tooltip, GetContainerItemLink and GetContainerItemLink(bag, slot) or nil)
+    end)
+    -- Equipped item hover
+    hooksecurefunc(GameTooltip, "SetInventoryItem", function(tooltip, unit, slot)
+        AddAHSetTooltipLine(tooltip, GetInventoryItemLink and GetInventoryItemLink(unit, slot) or nil)
+    end)
+    -- Chat link / ArkInventory hover
+    hooksecurefunc(GameTooltip, "SetHyperlink", function(tooltip, link)
+        AddAHSetTooltipLine(tooltip, link)
+    end)
 end

@@ -529,6 +529,40 @@ function Skillet:QueueList_OnScroll()
     Skillet:UpdateQueueWindow()
 end
 
+-- Scans tooltip lines of a crafted item link for a given filter string.
+-- Lazily creates a hidden reusable scan tooltip on first call.
+-- Returns true if any tooltip line contains the filter text.
+---@param link string The item link to scan
+---@param filter string Lowercase filter string
+---@return boolean matched Whether any tooltip line contains the filter
+local function scan_tooltip_for_filter(link, filter)
+    ---@type Tooltip
+    local scanTooltip = (getglobal("SkilletFilterScanTooltip") or
+        CreateFrame("GameTooltip", "SkilletFilterScanTooltip", nil, "GameTooltipTemplate")) --[[@as Tooltip]]
+    scanTooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
+    scanTooltip:SetHyperlink(link)
+    for i = 1, scanTooltip:NumLines() do
+        local leftText = getglobal("SkilletFilterScanTooltipTextLeft" .. i) --[[@as FontString|nil]]
+        if leftText then
+            local text = leftText:GetText()
+            if text and string.find(string.lower(text), filter, 1, true) ~= nil then
+                scanTooltip:Hide()
+                return true
+            end
+        end
+        local rightText = getglobal("SkilletFilterScanTooltipTextRight" .. i) --[[@as FontString|nil]]
+        if rightText then
+            local text = rightText:GetText()
+            if text and string.find(string.lower(text), filter, 1, true) ~= nil then
+                scanTooltip:Hide()
+                return true
+            end
+        end
+    end
+    scanTooltip:Hide()
+    return false
+end
+
 -- Figures out whether or not the section a recipe
 -- is in has been hidden (collapsed or filtered).
 -- Headers are, by definition never hidden
@@ -568,7 +602,10 @@ local function is_hidden_skill(parent, skill_index)
                     end
                 end
                 if not matched then
-                    return true
+                    -- Last resort: scan the crafted item's tooltip text
+                    if not (s.link and scan_tooltip_for_filter(s.link, filter)) then
+                        return true
+                    end
                 end
             end
         else
@@ -586,7 +623,10 @@ local function is_hidden_skill(parent, skill_index)
                 end
             end
             if not matched then
-                return true
+                -- Last resort: scan the crafted item's tooltip text
+                if not (s.link and scan_tooltip_for_filter(s.link, filter)) then
+                    return true
+                end
             end
         end
     end

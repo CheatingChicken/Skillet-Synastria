@@ -9,12 +9,12 @@ Skillet = Skillet or {}
 SkilletLog:Add("ConversionData.lua: Starting load...", "INFO")
 
 --#region Eternal Elements - Wrath
-local ETERNAL_WATER = 35623
+local ETERNAL_AIR = 35623
 local ETERNAL_EARTH = 35624
 local ETERNAL_FIRE = 36860
 local ETERNAL_LIFE = 35625
 local ETERNAL_SHADOW = 35627
-local ETERNAL_AIR = 35622
+local ETERNAL_WATER = 35622
 local CRYSTALLIZED_WATER = 37705
 local CRYSTALLIZED_EARTH = 37701
 local CRYSTALLIZED_FIRE = 37702
@@ -169,20 +169,20 @@ Skillet.CONVERSION_GROUPS = {
 
 Skillet.CONVERSION_DEFINITIONS = {
     -- ===== WRATH: Crystallized -> Eternal (combine 10 into 1) =====
-    { source = CRYSTALLIZED_AIR,        target = ETERNAL_AIR,             inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_AIR,        name = "Crystallized Air -> Eternal Air" },
+    { source = CRYSTALLIZED_AIR,        target = ETERNAL_WATER,           inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_AIR,        name = "Crystallized Air -> Eternal Air" },
     { source = CRYSTALLIZED_EARTH,      target = ETERNAL_EARTH,           inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_EARTH,      name = "Crystallized Earth -> Eternal Earth" },
     { source = CRYSTALLIZED_FIRE,       target = ETERNAL_FIRE,            inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_FIRE,       name = "Crystallized Fire -> Eternal Fire" },
     { source = CRYSTALLIZED_LIFE,       target = ETERNAL_LIFE,            inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_LIFE,       name = "Crystallized Life -> Eternal Life" },
     { source = CRYSTALLIZED_SHADOW,     target = ETERNAL_SHADOW,          inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_SHADOW,     name = "Crystallized Shadow -> Eternal Shadow" },
-    { source = CRYSTALLIZED_WATER,      target = ETERNAL_WATER,           inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_WATER,      name = "Crystallized Water -> Eternal Water" },
+    { source = CRYSTALLIZED_WATER,      target = ETERNAL_AIR,             inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = CRYSTALLIZED_WATER,      name = "Crystallized Water -> Eternal Water" },
 
     -- ===== WRATH: Eternal -> Crystallized (split 1 into 10) =====
-    { source = ETERNAL_AIR,             target = CRYSTALLIZED_AIR,        inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_AIR,             name = "Eternal Air -> Crystallized Air" },
+    { source = ETERNAL_WATER,           target = CRYSTALLIZED_AIR,        inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_WATER,           name = "Eternal Air -> Crystallized Air" },
     { source = ETERNAL_EARTH,           target = CRYSTALLIZED_EARTH,      inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_EARTH,           name = "Eternal Earth -> Crystallized Earth" },
     { source = ETERNAL_FIRE,            target = CRYSTALLIZED_FIRE,       inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_FIRE,            name = "Eternal Fire -> Crystallized Fire" },
     { source = ETERNAL_LIFE,            target = CRYSTALLIZED_LIFE,       inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_LIFE,            name = "Eternal Life -> Crystallized Life" },
     { source = ETERNAL_SHADOW,          target = CRYSTALLIZED_SHADOW,     inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_SHADOW,          name = "Eternal Shadow -> Crystallized Shadow" },
-    { source = ETERNAL_WATER,           target = CRYSTALLIZED_WATER,      inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_WATER,           name = "Eternal Water -> Crystallized Water" },
+    { source = ETERNAL_AIR,             target = CRYSTALLIZED_WATER,      inputAmount = 1,  outputAmount = 10, type = "split",   toolItemId = ETERNAL_AIR,             name = "Eternal Water -> Crystallized Water" },
 
     -- ===== TBC: Mote -> Primal (combine 10 into 1) =====
     { source = MOTE_OF_AIR,             target = PRIMAL_AIR,              inputAmount = 10, outputAmount = 1,  type = "combine", toolItemId = MOTE_OF_AIR,             name = "Mote of Air -> Primal Air" },
